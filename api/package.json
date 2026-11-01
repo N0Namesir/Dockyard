@@ -1,0 +1,12 @@
+{
+  "name": "@dockyard/api",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Área 2: API Fastify y datos SQLite",
+  "type": "module",
+  "scripts": {
+    "dev": "echo \"api: pendiente (Área 2, Isaac)\"",
+    "build": "echo \"api: pendiente (Área 2, Isaac)\"",
+    "start": "echo \"api: pendiente (Área 2, Isaac)\""
+  }
+}

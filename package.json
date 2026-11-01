@@ -1,0 +1,26 @@
+{
+  "name": "dockyard",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Plataforma local para alojar y ejecutar proyectos de estudiantes con Docker Compose",
+  "type": "module",
+  "workspaces": [
+    "core",
+    "api",
+    "web"
+  ],
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev": "npm run dev -w api & npm run dev -w web & wait",
+    "build": "npm run build -w core && npm run build -w api && npm run build -w web",
+    "start": "npm run start -w api",
+    "test": "npm test -w core",
+    "typecheck": "npm run typecheck --workspaces --if-present"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.2",
+    "typescript": "^7.0.2"
+  }
+}

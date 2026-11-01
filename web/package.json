@@ -1,0 +1,12 @@
+{
+  "name": "@dockyard/web",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Área 3: interfaz con Astro y Tailwind",
+  "type": "module",
+  "scripts": {
+    "dev": "echo \"web: pendiente (Área 3, Isaac)\"",
+    "build": "echo \"web: pendiente (Área 3, Isaac)\"",
+    "start": "echo \"web: pendiente (Área 3, Isaac)\""
+  }
+}
