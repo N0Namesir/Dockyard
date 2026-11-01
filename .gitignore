@@ -1,0 +1,21 @@
+# Dependencias
+node_modules/
+
+# Compilados
+dist/
+.astro/
+*.tsbuildinfo
+
+# Datos de ejecución (proyectos registrados y base SQLite)
+projects/
+data/
+
+# Variables de entorno
+.env
+.env.*
+!.env.example
+
+# Registros y sistema
+*.log
+npm-debug.log*
+.DS_Store
