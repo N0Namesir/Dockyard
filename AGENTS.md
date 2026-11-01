@@ -2,22 +2,37 @@
 
 Guía para agentes de código (Claude Code, Codex, etc.) que trabajan en este repositorio.
 
-## Estado del repositorio
-
-Todavía no hay código: solo el commit inicial y `referencias/`, que contiene la fuente de verdad del diseño:
+## Fuentes de verdad del diseño
 
 - `referencias/Documento de visión ….md`: alcance, requisitos, stack, contrato de la API y reparto de áreas.
 - `referencias/Ficha de 0V3R ….md`: detalle de las Áreas 1 y 4 (núcleo Docker, despliegue, pruebas, documentación) y criterios de terminado.
+- `docs/guia-tecnica.md`: cómo quedó implementado y por qué.
 
-Ante cualquier duda de diseño, consulta esos dos documentos antes de decidir. Si el código y la ficha discrepan, pregunta.
+Ante cualquier duda de diseño, consulta esos documentos antes de decidir. Si el código y la ficha discrepan, pregunta.
+
+## Comandos
+
+```bash
+npm install                                   # Node 24 o superior
+npm run build                                 # compila core, api y web
+npm run typecheck
+npm test                                      # pruebas del núcleo sin Docker
+npm run test:docker -w core                   # pruebas con Docker real (usan los puertos 8081-8083, ~1-2 min)
+node --test --test-name-pattern="choque" core/test/docker.test.ts   # una sola prueba
+npm run try -w core -- ejemplos/prueba-estatico   # recorrido manual (url https, .zip o carpeta)
+node ejemplos/crear-zips.ts                   # genera las variantes de ZIP en ejemplos/zips/
+./install.sh                                  # despliegue en contenedor
+```
+
+Los `.ts` corren directamente con Node 24 (type stripping) y `tsc` (TypeScript 7) solo compila a `dist/`. Por eso los imports relativos llevan extensión `.ts` y no se usa sintaxis no borrable (`enum`, `namespace`, parámetros de propiedad); lo hacen cumplir `erasableSyntaxOnly` y `rewriteRelativeImportExtensions` en `tsconfig.base.json`. `@dockyard/core` exporta desde `core/dist/`, así que la API necesita `npm run build -w core` (o `npm run dev -w core`) antes de importarlo.
 
 ## Qué es Dockyard
 
 Aplicación web local que corre en la PC del docente (Ubuntu, sin exposición a internet, sin login). Permite registrar proyectos de estudiantes desde un repositorio de GitHub (solo `https://`, solo públicos) o un ZIP, y encenderlos, apagarlos y abrirlos. Cada proyecto trae su propio `docker-compose`. Prioridades, en orden: que funcione en la entrega y que la estructura sea clara para el grupo que la herede.
 
-## Arquitectura (planificada)
+## Arquitectura
 
-Monorepo con workspaces de npm, un `tsconfig` base compartido y scripts raíz `dev`, `build` y `start`. Las carpetas tienen dueño y fronteras estrictas:
+Monorepo con workspaces de npm (`core`, `api`, `web`) y un `tsconfig.base.json` compartido. `api/` y `web/` son stubs hasta que Isaac los implemente. Las carpetas tienen dueño y fronteras estrictas:
 
 | Carpeta | Área | Responsable | Frontera |
 |---|---|---|---|
@@ -47,6 +62,8 @@ getProjectStatus(name: string): Promise<ProjectStatus>
 - Apagar es `stop`, no `down`.
 - Los choques de puertos se detectan antes de `up -d` (con `config --format json` contra `docker ps`) y se avisan. Los puertos nunca se reescriben.
 - Si `prepareProject` falla a mitad de camino, borra la carpeta que creó. El ZIP lo borra la API, no el núcleo.
+- `startProject`, `stopProject` y `getProjectStatus` rechazan nombres sin normalizar (`assertNormalizedName`).
+- Los comandos de Docker pasan por el ayudante `docker()` de `core/src/docker.ts`, que traduce "Docker no responde" y "sin permiso". Los demás, por `run()` de `core/src/run.ts`.
 
 ### Rutas de la API (contrato con `web/`)
 
@@ -63,7 +80,7 @@ getProjectStatus(name: string): Promise<ProjectStatus>
 
 ## Pruebas
 
-No hay framework de pruebas definido. El núcleo se prueba con un script manual (`core/try.ts`) que ejecuta `prepare → status → start → status → stop → status` sobre los proyectos de prueba `prueba-estatico` (8081), `prueba-bd` (8082), `prueba-build` (8083) y `prueba-conflicto` (8081, para probar el choque de puertos). Los criterios de terminado están al final de la ficha de 0V3R.
+Se usa `node:test`, sin dependencias. `core/test/unit.test.ts` cubre las funciones puras; `core/test/docker.test.ts` cubre los criterios de terminado de la ficha con Docker real, usando un `PROJECTS_DIR` temporal y nombres `dockyard-test-*` que elimina al terminar (`down -v`). Los proyectos de prueba están en `ejemplos/`: `prueba-estatico` (8081, monta `./html` con ruta relativa), `prueba-bd` (8082, con `.env.example`), `prueba-build` (8083) y `prueba-conflicto` (8081, para el choque de puertos).
 
 ## Convenciones
 
