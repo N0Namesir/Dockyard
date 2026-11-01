@@ -116,7 +116,15 @@ export function portsInUse(containers: any[]): PortInUse[] {
 
 /** Lanza un error si algún puerto fijo del proyecto ya lo ocupa un contenedor de otro proyecto. */
 async function checkPortConflicts(prefix: string[], name: string): Promise<void> {
-  const config = JSON.parse(await docker([...prefix, 'config', '--format', 'json'], { timeoutMs: STATUS_TIMEOUT }))
+  let config: any
+  try {
+    config = JSON.parse(await docker([...prefix, 'config', '--format', 'json'], { timeoutMs: STATUS_TIMEOUT }))
+  } catch (err) {
+    if (err instanceof CommandError) {
+      throw new Error(`El archivo compose del proyecto tiene errores. Docker respondió:\n${lastLines(err.stderr, 5)}`)
+    }
+    throw err
+  }
   const requested = requestedPorts(config)
   if (requested.length === 0) return
 

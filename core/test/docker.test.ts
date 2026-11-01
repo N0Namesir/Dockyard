@@ -187,6 +187,12 @@ describe('encender, consultar y apagar', () => {
     await assert.rejects(startProject(dir, name), /se detuvieron enseguida[\s\S]*falta la variable DATABASE_URL/)
   })
 
+  test('un compose con errores da un mensaje claro', async () => {
+    // prueba-bd exige POSTGRES_PASSWORD; sin .env el compose no es válido.
+    const name = uniqueName('compose-invalido')
+    await assert.rejects(startProject(join(EJEMPLOS, 'prueba-bd'), name), /El archivo compose del proyecto tiene errores[\s\S]*POSTGRES_PASSWORD/)
+  })
+
   test('rechaza nombres sin normalizar', async () => {
     await assert.rejects(getProjectStatus('Mi Proyecto'), /no es válido/)
     await assert.rejects(startProject(join(EJEMPLOS, 'prueba-estatico'), '../x'), /no es válido/)
