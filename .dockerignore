@@ -1,0 +1,12 @@
+.git
+node_modules
+**/node_modules
+**/dist
+**/.astro
+projects
+data
+ejemplos/zips
+.env
+.env.*
+!.env.example
+*.log

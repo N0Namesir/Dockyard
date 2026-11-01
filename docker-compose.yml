@@ -1,0 +1,20 @@
+# Despliegue de Dockyard en la PC del docente. Se levanta con ./install.sh, que genera .env.
+name: dockyard
+
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "${TOOL_PORT:-4300}:${TOOL_PORT:-4300}"
+    environment:
+      PORT: ${TOOL_PORT:-4300}
+      PROJECTS_DIR: ${PROJECTS_DIR:?Falta PROJECTS_DIR en .env. Ejecuta ./install.sh}
+      DATA_DIR: /app/data
+    volumes:
+      # La herramienta controla el Docker del anfitrión; los proyectos son contenedores hermanos.
+      - /var/run/docker.sock:/var/run/docker.sock
+      # Regla crítica: la misma ruta dentro y fuera. El Docker del anfitrión resuelve los montajes
+      # relativos de los proyectos (./src:/app) con la ruta que ve la herramienta.
+      - ${PROJECTS_DIR}:${PROJECTS_DIR}
+      - ./data:/app/data
