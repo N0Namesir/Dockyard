@@ -1,0 +1,6 @@
+# Un servicio que construye su propia imagen con build: y un Dockerfile.
+services:
+  app:
+    build: .
+    ports:
+      - "8083:3000"

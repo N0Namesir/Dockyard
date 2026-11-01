@@ -1,0 +1,17 @@
+# Aplicación web con base de datos y un volumen con nombre.
+# Adminer queda en http://localhost:8082 (servidor: db, usuario: postgres, contraseña: la de .env).
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Falta POSTGRES_PASSWORD en .env}
+    volumes:
+      - datos:/var/lib/postgresql/data
+  adminer:
+    image: adminer
+    depends_on:
+      - db
+    ports:
+      - "8082:8080"
+volumes:
+  datos:

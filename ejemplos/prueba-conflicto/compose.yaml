@@ -1,0 +1,10 @@
+# Copia de prueba-estatico que también publica el 8081, para probar la detección de choques de puertos.
+# Monta ./html con una ruta relativa para comprobar que los montajes funcionan
+# también cuando Dockyard corre en contenedor.
+services:
+  web:
+    image: nginx:alpine
+    ports:
+      - "8081:80"
+    volumes:
+      - ./html:/usr/share/nginx/html:ro
