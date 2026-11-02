@@ -1,0 +1,464 @@
+---
+import '../styles/global.css'
+---
+
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width" />
+    <meta
+      name="description"
+      content="Dockyard: administración local de proyectos estudiantiles"
+    />
+    <title>Dockyard · Proyectos</title>
+  </head>
+  <body>
+    <header class="border-b border-slate-200/80 bg-white/90 backdrop-blur">
+      <div class="mx-auto flex max-w-7xl items-center justify-between px-5 py-4 sm:px-8">
+        <div class="flex items-center gap-3">
+          <div
+            class="grid size-10 place-items-center rounded-xl bg-cyan-700 text-lg font-black text-white shadow-sm"
+            aria-hidden="true"
+          >
+            D
+          </div>
+          <div>
+            <p class="text-lg font-extrabold tracking-tight text-slate-900">Dockyard</p>
+            <p class="text-xs font-medium text-slate-500">Proyectos estudiantiles</p>
+          </div>
+        </div>
+        <div class="hidden items-center gap-2 text-sm text-slate-500 sm:flex">
+          <span class="size-2 rounded-full bg-emerald-500"></span>
+          Uso local
+        </div>
+      </div>
+    </header>
+
+    <main class="mx-auto max-w-7xl px-5 py-8 sm:px-8 lg:py-12">
+      <section class="mb-8 max-w-2xl">
+        <p class="mb-2 text-xs font-bold uppercase tracking-[0.18em] text-cyan-700">
+          Panel del docente
+        </p>
+        <h1 class="text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">
+          Proyectos del aula
+        </h1>
+        <p class="mt-3 leading-7 text-slate-600">
+          Registra entregas, enciende sus contenedores y abre cada proyecto desde un solo lugar.
+        </p>
+      </section>
+
+      <div
+        id="global-message"
+        class="mb-6 hidden rounded-xl border px-4 py-3 text-sm"
+        role="alert"
+        aria-live="polite"
+      ></div>
+
+      <div class="grid items-start gap-7 xl:grid-cols-[minmax(0,1fr)_23rem]">
+        <section class="min-w-0 rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <div class="flex flex-col gap-4 border-b border-slate-200 p-5 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 class="text-lg font-bold text-slate-900">Proyectos registrados</h2>
+              <p id="project-count" class="mt-1 text-sm text-slate-500">Cargando…</p>
+            </div>
+            <label class="relative block sm:w-72">
+              <span class="sr-only">Buscar por nombre o equipo</span>
+              <svg
+                class="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                aria-hidden="true"
+              >
+                <circle cx="11" cy="11" r="7"></circle>
+                <path d="m20 20-3.5-3.5"></path>
+              </svg>
+              <input
+                id="search"
+                type="search"
+                placeholder="Buscar nombre o equipo"
+                autocomplete="off"
+                class="w-full rounded-xl border border-slate-300 bg-slate-50 py-2.5 pl-9 pr-3 text-sm text-slate-900 placeholder:text-slate-400 hover:border-slate-400 focus:border-cyan-600 focus:bg-white"
+              />
+            </label>
+          </div>
+
+          <div class="overflow-x-auto">
+            <table class="w-full min-w-[700px] border-collapse text-left text-sm">
+              <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+                <tr>
+                  <th class="px-5 py-3 font-semibold">Nombre</th>
+                  <th class="px-5 py-3 font-semibold">Equipo</th>
+                  <th class="px-5 py-3 font-semibold">Estado</th>
+                  <th class="px-5 py-3 font-semibold">Puertos</th>
+                  <th class="px-5 py-3 text-right font-semibold">Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="projects" class="divide-y divide-slate-100"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <aside class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+          <div class="mb-6">
+            <p class="text-xs font-bold uppercase tracking-[0.16em] text-cyan-700">Nuevo</p>
+            <h2 class="mt-1 text-xl font-bold text-slate-900">Registrar proyecto</h2>
+            <p class="mt-2 text-sm leading-6 text-slate-500">
+              El proyecto debe incluir su propio archivo de Docker Compose.
+            </p>
+          </div>
+
+          <form id="register-form" class="space-y-5" novalidate>
+            <label class="block">
+              <span class="mb-1.5 block text-sm font-semibold text-slate-700">Equipo</span>
+              <input
+                name="team"
+                required
+                maxlength="120"
+                placeholder="Ej. Equipo 3"
+                class="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm placeholder:text-slate-400 focus:border-cyan-600"
+              />
+            </label>
+
+            <label class="block">
+              <span class="mb-1.5 block text-sm font-semibold text-slate-700">Nombre del proyecto</span>
+              <input
+                name="name"
+                required
+                maxlength="120"
+                placeholder="Ej. Tienda escolar"
+                class="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm placeholder:text-slate-400 focus:border-cyan-600"
+              />
+            </label>
+
+            <fieldset>
+              <legend class="mb-2 text-sm font-semibold text-slate-700">Origen</legend>
+              <div class="grid grid-cols-2 gap-2 rounded-xl bg-slate-100 p-1">
+                <label class="cursor-pointer">
+                  <input class="peer sr-only" type="radio" name="source" value="git" checked />
+                  <span class="block rounded-lg px-3 py-2 text-center text-sm font-semibold text-slate-500 peer-checked:bg-white peer-checked:text-cyan-800 peer-checked:shadow-sm">
+                    GitHub
+                  </span>
+                </label>
+                <label class="cursor-pointer">
+                  <input class="peer sr-only" type="radio" name="source" value="zip" />
+                  <span class="block rounded-lg px-3 py-2 text-center text-sm font-semibold text-slate-500 peer-checked:bg-white peer-checked:text-cyan-800 peer-checked:shadow-sm">
+                    Archivo ZIP
+                  </span>
+                </label>
+              </div>
+            </fieldset>
+
+            <label id="git-field" class="block">
+              <span class="mb-1.5 block text-sm font-semibold text-slate-700">URL del repositorio</span>
+              <input
+                name="repoUrl"
+                type="url"
+                required
+                placeholder="https://github.com/equipo/proyecto"
+                class="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm placeholder:text-slate-400 focus:border-cyan-600"
+              />
+            </label>
+
+            <label id="zip-field" class="hidden">
+              <span class="mb-1.5 block text-sm font-semibold text-slate-700">Archivo del proyecto</span>
+              <input
+                name="file"
+                type="file"
+                accept=".zip,application/zip"
+                class="block w-full cursor-pointer rounded-xl border border-slate-300 text-sm text-slate-500 file:mr-3 file:border-0 file:bg-slate-100 file:px-3 file:py-2.5 file:font-semibold file:text-slate-700 hover:file:bg-slate-200"
+              />
+              <span class="mt-1.5 block text-xs text-slate-500">Máximo 200 MB.</span>
+            </label>
+
+            <p id="form-error" class="hidden text-sm font-medium text-red-700" role="alert"></p>
+
+            <button
+              id="register-button"
+              type="submit"
+              class="w-full rounded-xl bg-cyan-700 px-4 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-cyan-800 disabled:cursor-wait disabled:opacity-60"
+            >
+              Registrar proyecto
+            </button>
+          </form>
+        </aside>
+      </div>
+    </main>
+
+    <script>
+      interface Project {
+        id: number
+        name: string
+        team: string
+        state: 'running' | 'stopped'
+        ports: number[]
+        url: string | null
+      }
+
+      interface ApiError {
+        message?: string
+      }
+
+      const projectsBody = document.querySelector<HTMLTableSectionElement>('#projects')!
+      const projectCount = document.querySelector<HTMLElement>('#project-count')!
+      const searchInput = document.querySelector<HTMLInputElement>('#search')!
+      const globalMessage = document.querySelector<HTMLElement>('#global-message')!
+      const form = document.querySelector<HTMLFormElement>('#register-form')!
+      const registerButton = document.querySelector<HTMLButtonElement>('#register-button')!
+      const formError = document.querySelector<HTMLElement>('#form-error')!
+      const gitField = document.querySelector<HTMLElement>('#git-field')!
+      const zipField = document.querySelector<HTMLElement>('#zip-field')!
+      const repoInput = form.elements.namedItem('repoUrl') as HTMLInputElement
+      const fileInput = form.elements.namedItem('file') as HTMLInputElement
+
+      let projects: Project[] = []
+      let loading = true
+      let searchTimer: ReturnType<typeof setTimeout> | undefined
+      const pendingActions = new Set<number>()
+      const actionErrors = new Map<number, string>()
+
+      function element<K extends keyof HTMLElementTagNameMap>(
+        tag: K,
+        classes?: string,
+        text?: string,
+      ): HTMLElementTagNameMap[K] {
+        const node = document.createElement(tag)
+        if (classes) node.className = classes
+        if (text !== undefined) node.textContent = text
+        return node
+      }
+
+      async function api<T>(path: string, init?: RequestInit): Promise<T> {
+        const response = await fetch(path, init)
+        if (!response.ok) {
+          let body: ApiError = {}
+          try {
+            body = (await response.json()) as ApiError
+          } catch {
+            // La respuesta sin JSON se convierte en un mensaje estable para el docente.
+          }
+          throw new Error(body.message ?? 'La operación no pudo completarse.')
+        }
+        return response.json() as Promise<T>
+      }
+
+      function showGlobalMessage(message: string, kind: 'error' | 'success'): void {
+        globalMessage.textContent = message
+        globalMessage.className = `mb-6 rounded-xl border px-4 py-3 text-sm ${
+          kind === 'error'
+            ? 'border-red-200 bg-red-50 text-red-800'
+            : 'border-emerald-200 bg-emerald-50 text-emerald-800'
+        }`
+      }
+
+      function render(): void {
+        projectsBody.replaceChildren()
+        projectCount.textContent = loading
+          ? 'Cargando…'
+          : `${projects.length} ${projects.length === 1 ? 'proyecto' : 'proyectos'}`
+
+        if (loading) {
+          const row = element('tr')
+          const cell = element('td', 'px-5 py-12 text-center text-slate-500', 'Cargando proyectos…')
+          cell.colSpan = 5
+          row.append(cell)
+          projectsBody.append(row)
+          return
+        }
+
+        if (projects.length === 0) {
+          const row = element('tr')
+          const message = searchInput.value.trim()
+            ? 'No se encontraron proyectos con esa búsqueda.'
+            : 'Todavía no hay proyectos registrados.'
+          const cell = element('td', 'px-5 py-12 text-center text-slate-500', message)
+          cell.colSpan = 5
+          row.append(cell)
+          projectsBody.append(row)
+          return
+        }
+
+        for (const project of projects) {
+          const row = element('tr', 'text-slate-700 hover:bg-slate-50/70')
+          row.append(element('td', 'px-5 py-4 font-bold text-slate-900', project.name))
+          row.append(element('td', 'px-5 py-4', project.team))
+
+          const stateCell = element('td', 'px-5 py-4')
+          stateCell.append(
+            element(
+              'span',
+              `inline-flex items-center rounded-full px-2.5 py-1 text-xs font-bold ${
+                project.state === 'running'
+                  ? 'bg-emerald-100 text-emerald-800'
+                  : 'bg-slate-200 text-slate-700'
+              }`,
+              project.state === 'running' ? 'Encendido' : 'Apagado',
+            ),
+          )
+          row.append(stateCell)
+          row.append(
+            element(
+              'td',
+              'px-5 py-4 font-mono text-xs text-slate-600',
+              project.ports.length ? project.ports.join(', ') : '—',
+            ),
+          )
+
+          const actionsCell = element('td', 'px-5 py-4')
+          const actionStack = element('div', 'flex flex-col items-end gap-2')
+          const actions = element('div', 'flex items-center justify-end gap-2')
+          const isPending = pendingActions.has(project.id)
+          const action = element(
+            'button',
+            'rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 hover:border-cyan-600 hover:text-cyan-800 disabled:cursor-wait disabled:opacity-50',
+            isPending
+              ? project.state === 'running' ? 'Apagando…' : 'Encendiendo…'
+              : project.state === 'running' ? 'Apagar' : 'Encender',
+          )
+          action.type = 'button'
+          action.disabled = isPending
+          action.addEventListener('click', () => void changeState(project))
+          actions.append(action)
+
+          if (project.state === 'running' && project.url) {
+            const open = element(
+              'a',
+              'rounded-lg bg-cyan-700 px-3 py-1.5 text-xs font-bold text-white hover:bg-cyan-800',
+              'Abrir',
+            )
+            open.href = project.url
+            open.target = '_blank'
+            open.rel = 'noopener noreferrer'
+            actions.append(open)
+          }
+          actionStack.append(actions)
+
+          const actionError = actionErrors.get(project.id)
+          if (actionError) {
+            actionStack.append(element('p', 'max-w-xs text-right text-xs text-red-700', actionError))
+          }
+          actionsCell.append(actionStack)
+          row.append(actionsCell)
+          projectsBody.append(row)
+        }
+      }
+
+      async function loadProjects(): Promise<void> {
+        loading = true
+        render()
+        try {
+          const query = searchInput.value.trim()
+          projects = await api<Project[]>(`/api/projects${query ? `?q=${encodeURIComponent(query)}` : ''}`)
+          globalMessage.classList.add('hidden')
+        } catch (error) {
+          projects = []
+          showGlobalMessage(
+            error instanceof Error
+              ? `No se puede conectar con la API: ${error.message}`
+              : 'No se puede conectar con la API.',
+            'error',
+          )
+        } finally {
+          loading = false
+          render()
+        }
+      }
+
+      async function changeState(project: Project): Promise<void> {
+        if (pendingActions.has(project.id)) return
+        pendingActions.add(project.id)
+        actionErrors.delete(project.id)
+        render()
+        const action = project.state === 'running' ? 'stop' : 'start'
+        try {
+          const updated = await api<Project>(`/api/projects/${project.id}/${action}`, {
+            method: 'POST',
+          })
+          projects = projects.map((item) => item.id === updated.id ? updated : item)
+        } catch (error) {
+          actionErrors.set(
+            project.id,
+            error instanceof Error ? error.message : 'No se pudo cambiar el estado.',
+          )
+        } finally {
+          pendingActions.delete(project.id)
+          render()
+        }
+      }
+
+      function selectedSource(): 'git' | 'zip' {
+        const selected = form.querySelector<HTMLInputElement>('input[name="source"]:checked')
+        return selected?.value === 'zip' ? 'zip' : 'git'
+      }
+
+      function updateSourceFields(): void {
+        const isGit = selectedSource() === 'git'
+        gitField.classList.toggle('hidden', !isGit)
+        zipField.classList.toggle('hidden', isGit)
+        repoInput.required = isGit
+        fileInput.required = !isGit
+      }
+
+      form.addEventListener('change', (event) => {
+        const target = event.target as HTMLInputElement
+        if (target.name === 'source') updateSourceFields()
+      })
+
+      form.addEventListener('submit', async (event) => {
+        event.preventDefault()
+        formError.classList.add('hidden')
+        if (!form.reportValidity()) return
+
+        const formData = new FormData(form)
+        registerButton.disabled = true
+        registerButton.textContent = 'Registrando…'
+
+        try {
+          let init: RequestInit
+          if (selectedSource() === 'git') {
+            init = {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                team: formData.get('team'),
+                name: formData.get('name'),
+                repoUrl: formData.get('repoUrl'),
+              }),
+            }
+          } else {
+            const upload = new FormData()
+            upload.set('team', String(formData.get('team') ?? ''))
+            upload.set('name', String(formData.get('name') ?? ''))
+            const file = formData.get('file')
+            if (file instanceof File) upload.set('file', file)
+            init = { method: 'POST', body: upload }
+          }
+
+          await api<Project>('/api/projects', init)
+          form.reset()
+          updateSourceFields()
+          searchInput.value = ''
+          showGlobalMessage('El proyecto se registró correctamente.', 'success')
+          await loadProjects()
+        } catch (error) {
+          formError.textContent = error instanceof Error ? error.message : 'No se pudo registrar el proyecto.'
+          formError.classList.remove('hidden')
+        } finally {
+          registerButton.disabled = false
+          registerButton.textContent = 'Registrar proyecto'
+        }
+      })
+
+      searchInput.addEventListener('input', () => {
+        if (searchTimer) clearTimeout(searchTimer)
+        searchTimer = setTimeout(() => void loadProjects(), 300)
+      })
+
+      updateSourceFields()
+      render()
+      void loadProjects()
+    </script>
+  </body>
+</html>
