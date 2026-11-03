@@ -195,6 +195,7 @@ import '../styles/global.css'
         state: 'running' | 'stopped'
         ports: number[]
         url: string | null
+        urls: string[]
       }
 
       interface ApiError {
@@ -325,13 +326,17 @@ import '../styles/global.css'
             ),
           )
           row.append(stateCell)
-          row.append(
-            element(
-              'td',
-              'px-5 py-4 font-mono text-xs text-slate-600',
-              project.ports.length ? project.ports.join(', ') : '—',
-            ),
-          )
+          const portsCell = element('td', 'px-5 py-4 font-mono text-xs text-slate-600')
+          if (project.ports.length === 0) portsCell.textContent = '—'
+          project.ports.forEach((port, index) => {
+            if (index > 0) portsCell.append(', ')
+            const link = element('a', 'text-cyan-800 underline hover:text-cyan-950', String(port))
+            link.href = project.urls[index] ?? '#'
+            link.target = '_blank'
+            link.rel = 'noopener noreferrer'
+            portsCell.append(link)
+          })
+          row.append(portsCell)
 
           const actionsCell = element('td', 'px-5 py-4')
           const actionStack = element('div', 'flex flex-col items-end gap-2')

@@ -21,6 +21,7 @@ export interface ProjectResponse {
   state: ProjectStatus['state']
   ports: number[]
   url: string | null
+  urls: string[]
 }
 
 export interface CoreAdapter {

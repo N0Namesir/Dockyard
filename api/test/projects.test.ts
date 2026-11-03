@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { access } from 'node:fs/promises'
 import test from 'node:test'
-import { buildApp } from '../src/app.ts'
+import { buildApp, isAllowedRequest } from '../src/app.ts'
 import type { ProjectSource, ProjectStatus } from '../src/core.ts'
 import { createProjectRepository } from '../src/db/projects.ts'
 import type { CoreAdapter } from '../src/types.ts'
@@ -81,6 +81,7 @@ test('registra por GitHub, consulta, busca, enciende y apaga', async () => {
     state: 'stopped',
     ports: [],
     url: null,
+    urls: [],
   })
 
   const found = await app.inject({
@@ -271,6 +272,97 @@ test('rechaza una URL con credenciales sin llamar al núcleo', async () => {
     assert.match(response.json().message, /usuario ni contraseña/)
   }
   assert.equal(fake.getReceivedSource(), undefined)
+  await app.close()
+})
+
+test('Abrir evita los puertos de bases de datos y urls enlaza todos', async () => {
+  const fake = fakeCore()
+  const app = await testApp({
+    ...fake.core,
+    async startProject() {
+      return { state: 'running', ports: [3306, 8084] }
+    },
+  })
+  await app.inject({
+    method: 'POST',
+    url: '/api/projects',
+    payload: { team: 'E', name: 'P', repoUrl: 'https://github.com/e/p' },
+  })
+  const started = (await app.inject({ method: 'POST', url: '/api/projects/1/start' })).json()
+  assert.equal(started.url, 'http://localhost:8084')
+  assert.deepEqual(started.urls, ['http://localhost:3306', 'http://localhost:8084'])
+  await app.close()
+})
+
+test('si solo hay puertos de bases de datos, Abrir usa el primero', async () => {
+  const fake = fakeCore()
+  const app = await testApp({
+    ...fake.core,
+    async startProject() {
+      return { state: 'running', ports: [5432] }
+    },
+  })
+  await app.inject({
+    method: 'POST',
+    url: '/api/projects',
+    payload: { team: 'E', name: 'P', repoUrl: 'https://github.com/e/p' },
+  })
+  const started = (await app.inject({ method: 'POST', url: '/api/projects/1/start' })).json()
+  assert.equal(started.url, 'http://localhost:5432')
+  await app.close()
+})
+
+test('solo acepta peticiones de su propia página en esta PC', () => {
+  const allowed: [string, string | undefined][] = [
+    ['localhost:4300', undefined],
+    ['127.0.0.1:4300', undefined],
+    ['[::1]:4300', undefined],
+    ['localhost:4300', 'http://localhost:4300'],
+    ['127.0.0.1:4300', 'http://127.0.0.1:4300'],
+    ['localhost:4321', 'http://localhost:4321'],
+  ]
+  for (const [host, origin] of allowed) {
+    assert.equal(isAllowedRequest(host, origin), true, `${host} ${origin}`)
+  }
+
+  const rejected: [string | undefined, string | undefined][] = [
+    [undefined, undefined],
+    ['sitio-malo.example', undefined],
+    ['localhost.sitio-malo.example:4300', undefined],
+    ['192.168.1.20:4300', undefined],
+    ['localhost:4300', 'https://sitio-malo.example'],
+    ['localhost:4300', 'http://localhost:8081'],
+    ['localhost:4300', 'http://127.0.0.1:4300'],
+    ['localhost:4300', 'null'],
+  ]
+  for (const [host, origin] of rejected) {
+    assert.equal(isAllowedRequest(host, origin), false, `${host} ${origin}`)
+  }
+})
+
+test('una petición de otra página no llega al núcleo', async () => {
+  const fake = fakeCore()
+  let starts = 0
+  const app = await testApp({
+    ...fake.core,
+    async startProject() {
+      starts++
+      return { state: 'running', ports: [] }
+    },
+  })
+  await app.inject({
+    method: 'POST',
+    url: '/api/projects',
+    payload: { team: 'E', name: 'P', repoUrl: 'https://github.com/e/p' },
+  })
+  const response = await app.inject({
+    method: 'POST',
+    url: '/api/projects/1/start',
+    headers: { origin: 'https://sitio-malo.example' },
+  })
+  assert.equal(response.statusCode, 403)
+  assert.deepEqual(Object.keys(response.json()), ['message'])
+  assert.equal(starts, 0)
   await app.close()
 })
 

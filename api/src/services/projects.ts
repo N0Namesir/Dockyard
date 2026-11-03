@@ -14,15 +14,20 @@ export interface RegisterProjectInput {
   sourceLabel: string
 }
 
+/** Puertos habituales de servicios que no son páginas: bases de datos, colas y cachés. */
+const NON_WEB_PORTS = new Set([1433, 1521, 3306, 5432, 5672, 6379, 9042, 11211, 27017])
+
 function toResponse(row: ProjectRow, status: ProjectStatus): ProjectResponse {
-  const firstPort = status.ports[0]
+  // "Abrir" usa el primer puerto que parezca una página; "Puertos" enlaza todos.
+  const mainPort = status.ports.find((port) => !NON_WEB_PORTS.has(port)) ?? status.ports[0]
   return {
     id: row.id,
     name: row.name,
     team: row.team,
     state: status.state,
     ports: status.ports,
-    url: firstPort === undefined ? null : `http://localhost:${firstPort}`,
+    url: mainPort === undefined ? null : `http://localhost:${mainPort}`,
+    urls: status.ports.map((port) => `http://localhost:${port}`),
   }
 }
 

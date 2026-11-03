@@ -11,9 +11,12 @@ services:
     group_add:
       - "${DOCKER_GID:-0}"
     ports:
-      - "${TOOL_PORT:-4300}:${TOOL_PORT:-4300}"
+      # Solo esta PC: quien alcance la herramienta puede ejecutar proyectos con el Docker del anfitrión.
+      - "127.0.0.1:${TOOL_PORT:-4300}:${TOOL_PORT:-4300}"
     environment:
       PORT: ${TOOL_PORT:-4300}
+      # Dentro del contenedor debe escuchar en todas sus interfaces; el límite lo pone "ports".
+      HOST: 0.0.0.0
       PROJECTS_DIR: ${PROJECTS_DIR:?Falta PROJECTS_DIR en .env. Ejecuta ./install.sh}
       DATA_DIR: /app/data
       # El usuario no existe dentro de la imagen; npm, git y docker necesitan un HOME con escritura.
