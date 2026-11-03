@@ -13,7 +13,7 @@ import { basename, join } from 'node:path'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { after, before, describe, test } from 'node:test'
 import { buildZip, createTestZips, entriesFrom } from '../../ejemplos/crear-zips.ts'
-import { getProjectStatus, normalizeProjectName, prepareProject, startProject, stopProject } from '../src/index.ts'
+import { getProjectLogs, getProjectStatus, normalizeProjectName, prepareProject, removeProject, startProject, stopProject } from '../src/index.ts'
 import { run } from '../src/run.ts'
 
 const EJEMPLOS = join(import.meta.dirname, '..', '..', 'ejemplos')
@@ -234,6 +234,68 @@ describe('encender, consultar y apagar', () => {
     } finally {
       await stopProject(join(EJEMPLOS, 'prueba-estatico'), name)
     }
+  })
+
+  test('un proyecto a medias aparece encendido, con el servicio caído y su registro', async () => {
+    const name = uniqueName('a-medias')
+    const dir = join(base, basename(name))
+    await mkdir(dir)
+    await writeFile(
+      join(dir, 'compose.yaml'),
+      'services:\n  web:\n    image: busybox\n    command: ["sleep", "600"]\n  api:\n    image: busybox\n    command: ["sh", "-c", "echo falta la clave de la api; exit 1"]\n',
+    )
+    assert.deepEqual(await startProject(dir, name), { state: 'running', ports: [], failedServices: ['api'] })
+    assert.match(await getProjectLogs(name), /falta la clave de la api/)
+    await stopProject(dir, name)
+    assert.match(await getProjectLogs(name), /falta la clave de la api/)
+  })
+
+  test('removeProject borra contenedores, volúmenes, imagen y carpeta, y se puede repetir', { timeout: 300_000 }, async () => {
+    const name = uniqueName('borrar')
+    const dir = join(process.env.PROJECTS_DIR!, name)
+    await mkdir(dir)
+    await writeFile(join(dir, 'Dockerfile'), 'FROM busybox\n')
+    await writeFile(
+      join(dir, 'compose.yaml'),
+      'services:\n  app:\n    build: .\n    command: ["sleep", "600"]\n    volumes: ["datos:/datos"]\nvolumes:\n  datos:\n',
+    )
+    assert.equal((await startProject(dir, name)).state, 'running')
+
+    await removeProject(name)
+    assert.ok(!existsSync(dir))
+    assert.deepEqual(await getProjectStatus(name), { state: 'stopped', ports: [] })
+    assert.equal(await run('docker', ['volume', 'ls', '-q', '--filter', `name=${name}_datos`]), '')
+    assert.equal(await run('docker', ['images', '-q', `${name}-app`]), '')
+    await removeProject(name)
+  })
+
+  test('removeProject funciona aunque el compose ya no sea válido', async () => {
+    const name = uniqueName('borrar-invalido')
+    const dir = join(process.env.PROJECTS_DIR!, name)
+    await mkdir(dir)
+    await writeFile(join(dir, 'compose.yaml'), 'services:\n  app:\n    image: busybox\n    command: ["sleep", "600"]\n')
+    assert.equal((await startProject(dir, name)).state, 'running')
+    await writeFile(join(dir, 'compose.yaml'), 'esto: [no es valido\n')
+    await removeProject(name)
+    assert.ok(!existsSync(dir))
+    assert.equal((await getProjectStatus(name)).state, 'stopped')
+  })
+
+  test('removeProject indica cómo borrar archivos de root', { skip: process.getuid?.() === 0 }, async () => {
+    const name = uniqueName('borrar-root')
+    const dir = join(process.env.PROJECTS_DIR!, name)
+    await mkdir(dir)
+    await writeFile(
+      join(dir, 'compose.yaml'),
+      'services:\n  app:\n    image: busybox\n    command: ["sh", "-c", "mkdir -p /datos/sub; touch /datos/sub/x; sleep 600"]\n    volumes: ["./datos:/datos"]\n',
+    )
+    await startProject(dir, name)
+    await assert.rejects(removeProject(name), /sudo rm -rf/)
+    assert.equal((await getProjectStatus(name)).state, 'stopped')
+    // Devuelve los archivos al usuario y repite: ahora termina de borrar.
+    await run('docker', ['run', '--rm', '-v', `${dir}:/d`, 'busybox', 'chown', '-R', `${process.getuid!()}`, '/d'])
+    await removeProject(name)
+    assert.ok(!existsSync(dir))
   })
 
   test('rechaza nombres sin normalizar', async () => {

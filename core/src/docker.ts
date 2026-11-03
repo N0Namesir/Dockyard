@@ -1,12 +1,15 @@
+import { rm } from 'node:fs/promises'
+import { join } from 'node:path'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { assertNormalizedName } from './name.ts'
-import { findComposeFile } from './paths.ts'
+import { findComposeFile, projectsDir } from './paths.ts'
 import { CommandError, run, type RunOptions } from './run.ts'
 import type { ProjectStatus } from './types.ts'
 
 const START_TIMEOUT = 10 * 60_000
 const STOP_TIMEOUT = 2 * 60_000
 const STATUS_TIMEOUT = 30_000
+const LOG_LINES = 200
 /** Pausa tras `up -d` para que un contenedor que arranca y se cae alcance a figurar como detenido. */
 const SETTLE_MS = 2_000
 
@@ -56,16 +59,24 @@ export function statusFromContainers(containers: any[]): ProjectStatus {
       if (p.PublishedPort > 0) ports.add(p.PublishedPort)
     }
   }
-  return {
+  const status: ProjectStatus = {
     state: active.length > 0 ? 'running' : 'stopped',
     ports: [...ports].sort((a, b) => a - b),
   }
+  // Salir con 0 es normal (una migración que termina); apagado por completo no es una falla.
+  const failed = containers.filter(
+    (c) => c.State === 'restarting' || c.State === 'dead' || (c.State === 'exited' && (c.ExitCode ?? 0) !== 0),
+  )
+  if (active.length > 0 && failed.length > 0) {
+    status.failedServices = [...new Set<string>(failed.map((c) => c.Service))].sort()
+  }
+  return status
 }
 
 async function listContainers(name: string): Promise<any[]> {
   assertNormalizedName(name)
-  // Solo con -p: no depende de la carpeta ni del archivo compose.
-  return parsePs(await docker(['compose', '-p', name, 'ps', '--format', 'json'], { timeoutMs: STATUS_TIMEOUT }))
+  // Solo con -p: no depende de la carpeta ni del archivo compose. Con -a incluye los que se cayeron.
+  return parsePs(await docker(['compose', '-p', name, 'ps', '-a', '--format', 'json'], { timeoutMs: STATUS_TIMEOUT }))
 }
 
 export async function getProjectStatus(name: string): Promise<ProjectStatus> {
@@ -234,6 +245,63 @@ export async function stopProject(dir: string, name: string): Promise<ProjectSta
     throw err
   }
   return getProjectStatus(name)
+}
+
+/** Últimas líneas del registro de todos los servicios, incluidos los que ya se detuvieron. */
+export async function getProjectLogs(name: string): Promise<string> {
+  assertNormalizedName(name)
+  try {
+    return await docker(['compose', '-p', name, 'logs', '--tail', String(LOG_LINES), '--no-color'], { timeoutMs: STATUS_TIMEOUT })
+  } catch (err) {
+    if (err instanceof CommandError) {
+      throw new Error(`No se pudo leer el registro del proyecto. Docker respondió:\n${lastLines(err.stderr, 5)}`)
+    }
+    throw err
+  }
+}
+
+/**
+ * Borra los contenedores, las redes, los volúmenes y la carpeta del proyecto. Se puede repetir
+ * sin problema: lo que ya no existe se ignora.
+ */
+export async function removeProject(name: string): Promise<void> {
+  assertNormalizedName(name)
+  const target = join(projectsDir(), name)
+  try {
+    await removeContainers(target, name)
+  } catch (err) {
+    if (err instanceof CommandError) {
+      throw new Error(`No se pudieron borrar los contenedores del proyecto. Docker respondió:\n${lastLines(err.stderr, 10)}`)
+    }
+    throw err
+  }
+
+  try {
+    await rm(target, { recursive: true, force: true })
+  } catch (err: any) {
+    if (err.code === 'EACCES' || err.code === 'EPERM') {
+      // Los contenedores del proyecto pueden haber creado archivos de root en sus carpetas montadas.
+      throw new Error(`Los contenedores se borraron, pero el proyecto dejó archivos sin permiso de borrado. Ejecuta en una terminal: sudo rm -rf ${target} y vuelve a eliminarlo.`)
+    }
+    throw err
+  }
+}
+
+async function removeContainers(target: string, name: string): Promise<void> {
+  const down = ['down', '-v', '--remove-orphans']
+  const location = await findComposeFile(target).catch(() => null)
+  if (location) {
+    try {
+      // Con el archivo también se borran las imágenes que el proyecto construyó.
+      const prefix = ['compose', '-p', name, '--project-directory', location.dir, '-f', location.file]
+      await docker([...prefix, ...down, '--rmi', 'local'], { timeoutMs: STOP_TIMEOUT })
+      return
+    } catch (err) {
+      if (!(err instanceof CommandError)) throw err
+      // El compose puede ya no ser válido: sin él, Docker encuentra los contenedores por el nombre.
+    }
+  }
+  await docker(['compose', '-p', name, ...down], { timeoutMs: STOP_TIMEOUT })
 }
 
 function lastLines(text: string, n: number): string {

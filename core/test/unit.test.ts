@@ -55,9 +55,32 @@ describe('parsePs y statusFromContainers', () => {
 describe('estado con contenedores que se reinician', () => {
   test('cuenta como encendido para que se pueda apagar', () => {
     assert.deepEqual(
-      statusFromContainers([{ State: 'restarting', Publishers: [] }]),
-      { state: 'running', ports: [] },
+      statusFromContainers([{ State: 'restarting', Service: 'app', Publishers: [] }]),
+      { state: 'running', ports: [], failedServices: ['app'] },
     )
+  })
+})
+
+describe('servicios caídos', () => {
+  const web = { State: 'running', Service: 'web', Publishers: [] }
+
+  test('nombra los que fallaron y los que se reinician', () => {
+    assert.deepEqual(
+      statusFromContainers([
+        web,
+        { State: 'exited', ExitCode: 1, Service: 'api' },
+        { State: 'restarting', ExitCode: 1, Service: 'cola' },
+      ]).failedServices,
+      ['api', 'cola'],
+    )
+  })
+
+  test('salir con 0 no es una falla', () => {
+    assert.equal(statusFromContainers([web, { State: 'exited', ExitCode: 0, Service: 'migracion' }]).failedServices, undefined)
+  })
+
+  test('un proyecto apagado no tiene servicios caídos', () => {
+    assert.deepEqual(statusFromContainers([{ State: 'exited', ExitCode: 137, Service: 'web' }]), { state: 'stopped', ports: [] })
   })
 })
 

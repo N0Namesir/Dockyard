@@ -7,6 +7,8 @@ export interface ProjectStatus {
   state: ProjectState
   /** Puertos publicados en el anfitrión, sin repetidos y ordenados. */
   ports: number[]
+  /** Servicios caídos o reiniciándose de un proyecto encendido. Solo aparece si hay alguno. */
+  failedServices?: string[]
 }
 
 export type ProjectSource =

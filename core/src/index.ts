@@ -3,6 +3,6 @@
 
 export { normalizeProjectName } from './name.ts'
 export { prepareProject } from './sources.ts'
-export { startProject, stopProject, getProjectStatus } from './docker.ts'
+export { startProject, stopProject, getProjectStatus, getProjectLogs, removeProject } from './docker.ts'
 export { projectsDir } from './paths.ts'
 export type { ProjectState, ProjectStatus, ProjectSource, PreparedProject } from './types.ts'
