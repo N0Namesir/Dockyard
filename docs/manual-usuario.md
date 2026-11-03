@@ -37,7 +37,6 @@ En los dos casos, el proyecto debe traer su archivo compose. Reparte entre los e
 | El proyecto se encendió, pero sus contenedores se detuvieron enseguida | El proyecto tiene un error propio; el mensaje muestra las últimas líneas de su registro | Comparte ese mensaje con el equipo para que lo corrija |
 | No se encontró un archivo compose en la raíz del proyecto | El proyecto no cumple los requisitos | Pide al equipo que agregue su `compose.yaml` en la raíz |
 | No se pudo clonar el repositorio … | La URL está mal o el repositorio es privado | Revisa la URL o pide al equipo que haga público el repositorio |
-| El proyecto no terminó de encender | Pasaron más de 11 minutos sin que el proyecto encendiera | Presiona **Encender** otra vez para ver el motivo |
 | No se puede conectar con Dockyard | La herramienta no responde | Recarga la página; si sigue igual, ejecuta `./install.sh` en la carpeta de Dockyard |
 | No se pudo descomprimir el archivo | El ZIP está dañado o no es un ZIP | Pide al equipo que lo vuelva a generar |
 | Ya existe un proyecto con ese nombre | Ya registraste un proyecto con ese nombre, o quedó su carpeta | Usa otro nombre, por ejemplo agregando el número de equipo |

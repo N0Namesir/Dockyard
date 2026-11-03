@@ -30,6 +30,22 @@ export function createProjectService(
   repository: ProjectRepository,
   core: CoreAdapter,
 ) {
+  // Operaciones en curso: una petición repetida espera el mismo resultado en vez de lanzar otra.
+  const inFlight = new Map<string, Promise<ProjectResponse>>()
+
+  function once(
+    id: number,
+    action: 'start' | 'stop',
+    run: () => Promise<ProjectResponse>,
+  ): Promise<ProjectResponse> {
+    const key = `${id}:${action}`
+    const current = inFlight.get(key)
+    if (current) return current
+    const operation = run().finally(() => inFlight.delete(key))
+    inFlight.set(key, operation)
+    return operation
+  }
+
   async function hydrate(row: ProjectRow): Promise<ProjectResponse> {
     return toResponse(row, await core.getProjectStatus(row.name))
   }
@@ -71,17 +87,15 @@ export function createProjectService(
 
     async start(id: number): Promise<ProjectResponse> {
       const project = requireProject(id)
-      return toResponse(
-        project,
-        await core.startProject(project.dir, project.name),
+      return once(id, 'start', async () =>
+        toResponse(project, await core.startProject(project.dir, project.name)),
       )
     },
 
     async stop(id: number): Promise<ProjectResponse> {
       const project = requireProject(id)
-      return toResponse(
-        project,
-        await core.stopProject(project.dir, project.name),
+      return once(id, 'stop', async () =>
+        toResponse(project, await core.stopProject(project.dir, project.name)),
       )
     },
   }

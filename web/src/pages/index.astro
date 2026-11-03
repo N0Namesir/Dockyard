@@ -217,10 +217,8 @@ import '../styles/global.css'
       class ConnectionError extends Error {}
 
       const CONNECTION_MESSAGE = 'No se puede conectar con Dockyard. Verifica que esté encendido y recarga la página.'
-      const POLL_INTERVAL_MS = 5_000
-      // Un poco más que el límite del núcleo para encender (10 minutos).
-      const POLL_LIMIT_MS = 11 * 60_000
-      const POLL_MAX_CONNECTION_FAILURES = 3
+      const RETRY_DELAY_MS = 5_000
+      const MAX_CONNECTION_FAILURES = 5
 
       let projects: Project[] = []
       let loading = true
@@ -399,32 +397,19 @@ import '../styles/global.css'
       }
 
       /**
-       * El servidor sigue trabajando aunque el navegador corte la espera (Firefox lo hace a los
-       * 5 minutos y encender puede tardar 10), así que se consulta el estado hasta que cambie.
+       * Firefox corta las peticiones pendientes cuando cambian las redes de la PC, y encender un
+       * proyecto crea una red de Docker. El servidor sigue trabajando, así que se repite la
+       * petición: la API la une a la operación en curso y responde con su resultado real.
        */
-      async function waitForState(project: Project, state: Project['state']): Promise<void> {
-        const deadline = Date.now() + POLL_LIMIT_MS
-        let connectionFailures = 0
-        while (Date.now() < deadline) {
-          await new Promise((done) => setTimeout(done, POLL_INTERVAL_MS))
+      async function requestStateChange(project: Project, action: 'start' | 'stop'): Promise<Project> {
+        for (let failures = 1; ; failures++) {
           try {
-            const current = await api<Project>(`/api/projects/${project.id}`)
-            connectionFailures = 0
-            if (current.state === state) {
-              projects = projects.map((item) => item.id === current.id ? current : item)
-              return
-            }
+            return await api<Project>(`/api/projects/${project.id}/${action}`, { method: 'POST' })
           } catch (error) {
-            if (!(error instanceof ConnectionError)) throw error
-            connectionFailures++
-            if (connectionFailures >= POLL_MAX_CONNECTION_FAILURES) throw error
+            if (!(error instanceof ConnectionError) || failures >= MAX_CONNECTION_FAILURES) throw error
+            await new Promise((done) => setTimeout(done, RETRY_DELAY_MS))
           }
         }
-        throw new Error(
-          state === 'running'
-            ? 'El proyecto no terminó de encender. Intenta encenderlo de nuevo para ver el motivo.'
-            : 'El proyecto no terminó de apagarse. Intenta apagarlo de nuevo para ver el motivo.',
-        )
       }
 
       async function changeState(project: Project): Promise<void> {
@@ -432,17 +417,9 @@ import '../styles/global.css'
         pendingActions.add(project.id)
         actionErrors.delete(project.id)
         render()
-        const running = project.state === 'running'
         try {
-          try {
-            const updated = await api<Project>(`/api/projects/${project.id}/${running ? 'stop' : 'start'}`, {
-              method: 'POST',
-            })
-            projects = projects.map((item) => item.id === updated.id ? updated : item)
-          } catch (error) {
-            if (!(error instanceof ConnectionError)) throw error
-            await waitForState(project, running ? 'stopped' : 'running')
-          }
+          const updated = await requestStateChange(project, project.state === 'running' ? 'stop' : 'start')
+          projects = projects.map((item) => item.id === updated.id ? updated : item)
         } catch (error) {
           actionErrors.set(
             project.id,

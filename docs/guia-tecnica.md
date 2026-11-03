@@ -77,7 +77,7 @@ Cómo funciona el contenedor:
 - **Datos:** SQLite guarda solo lo que Docker no sabe (nombre, equipo, origen, carpeta). El estado y los puertos se consultan siempre al núcleo, así que listar ejecuta un `docker compose ps` por proyecto.
 - **Búsqueda:** ignora mayúsculas y tildes con la función `normalizar`, registrada en SQLite, porque `LIKE` solo ignora mayúsculas en letras sin acento. `%` y `_` se buscan como texto.
 - **ZIP:** se guarda en una carpeta temporal, con un límite de 200 MB, y se borra al terminar el registro, salga bien o mal.
-- **Encendidos largos:** la ruta responde cuando el núcleo termina, hasta 10 minutos después, pero Firefox deja de esperar una respuesta a los 5. Si la petición se corta, la interfaz consulta el estado cada 5 segundos hasta que cambie, porque el servidor sigue trabajando.
+- **Peticiones cortadas:** la ruta responde cuando el núcleo termina, hasta 10 minutos después. Firefox corta las peticiones pendientes cuando cambian las redes de la PC, y encender un proyecto crea una red de Docker (comprobado con Firefox 159; sin cambios de red, esperó 7 minutos sin problema). Por eso, si la petición se corta, la interfaz la repite, y la API la une a la operación en curso (`once` en `api/src/services/projects.ts`) en vez de lanzar otra. Así el docente recibe el resultado real, incluido el error.
 - **Búsqueda en la interfaz:** espera 300 ms desde la última tecla y descarta cualquier respuesta que no sea la de la última petición.
 
 ## Contrato entre el núcleo y la API

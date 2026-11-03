@@ -218,6 +218,43 @@ test('devuelve 404 y conserva el mensaje de una falla del núcleo', async () => 
   await app.close()
 })
 
+test('una petición repetida se une a la operación en curso', async () => {
+  const fake = fakeCore()
+  let calls = 0
+  let finish: () => void = () => {}
+  const gate = new Promise<void>((done) => { finish = done })
+  const app = await testApp({
+    ...fake.core,
+    async startProject() {
+      calls++
+      await gate
+      throw new Error('Los contenedores se detuvieron enseguida.')
+    },
+  })
+  await app.inject({
+    method: 'POST',
+    url: '/api/projects',
+    payload: { team: 'E', name: 'P', repoUrl: 'https://github.com/e/p' },
+  })
+
+  const first = app.inject({ method: 'POST', url: '/api/projects/1/start' })
+  const second = app.inject({ method: 'POST', url: '/api/projects/1/start' })
+  await new Promise((done) => setTimeout(done, 50))
+  finish()
+  const responses = await Promise.all([first, second])
+
+  assert.equal(calls, 1)
+  for (const response of responses) {
+    assert.equal(response.statusCode, 500)
+    assert.deepEqual(response.json(), { message: 'Los contenedores se detuvieron enseguida.' })
+  }
+
+  // Terminada la operación, una petición nueva vuelve a ejecutarla.
+  await app.inject({ method: 'POST', url: '/api/projects/1/start' })
+  assert.equal(calls, 2)
+  await app.close()
+})
+
 test('todos los errores responden solo con message', async () => {
   const app = await testApp()
   const cases: [Parameters<typeof app.inject>[0], number][] = [
