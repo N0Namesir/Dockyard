@@ -47,6 +47,8 @@ export function parsePs(out: string): any[] {
 
 /** Calcula el estado de un proyecto a partir de sus contenedores. */
 export function statusFromContainers(containers: any[]): ProjectStatus {
+  // Un contenedor que se reinicia sigue activo: debe poder apagarse.
+  const active = containers.filter((c) => c.State === 'running' || c.State === 'restarting')
   const running = containers.filter((c) => c.State === 'running')
   const ports = new Set<number>()
   for (const c of running) {
@@ -55,16 +57,66 @@ export function statusFromContainers(containers: any[]): ProjectStatus {
     }
   }
   return {
-    state: running.length > 0 ? 'running' : 'stopped',
+    state: active.length > 0 ? 'running' : 'stopped',
     ports: [...ports].sort((a, b) => a - b),
   }
 }
 
-export async function getProjectStatus(name: string): Promise<ProjectStatus> {
+async function listContainers(name: string): Promise<any[]> {
   assertNormalizedName(name)
   // Solo con -p: no depende de la carpeta ni del archivo compose.
-  const out = await docker(['compose', '-p', name, 'ps', '--format', 'json'], { timeoutMs: STATUS_TIMEOUT })
-  return statusFromContainers(parsePs(out))
+  return parsePs(await docker(['compose', '-p', name, 'ps', '--format', 'json'], { timeoutMs: STATUS_TIMEOUT }))
+}
+
+export async function getProjectStatus(name: string): Promise<ProjectStatus> {
+  return statusFromContainers(await listContainers(name))
+}
+
+/** Lanza un error si ya hay contenedores, encendidos o no, con este nombre de proyecto de compose. */
+export async function assertProjectNameFree(name: string): Promise<void> {
+  assertNormalizedName(name)
+  const out = await docker(
+    ['ps', '-a', '--filter', `label=com.docker.compose.project=${name}`, '--format', 'json'],
+    { timeoutMs: STATUS_TIMEOUT },
+  )
+  const taken = parsePs(out)[0]
+  if (taken) {
+    throw new Error(`El nombre ${name} ya lo usa otro proyecto de Docker en esta PC (contenedor ${containerName(taken)}). Usa otro nombre.`)
+  }
+}
+
+function containerName(container: any): string {
+  return String(container.Names ?? '').split(',')[0] ?? ''
+}
+
+/** Nombres fijos (container_name) que un compose pide, a partir de `config --format json`. */
+export function requestedContainerNames(config: any): string[] {
+  return Object.values<any>(config?.services ?? {})
+    .map((service) => service?.container_name)
+    .filter((name): name is string => typeof name === 'string' && name !== '')
+}
+
+function composeProjectOf(container: any): string | null {
+  return /(?:^|,)com\.docker\.compose\.project=([^,]+)/.exec(container.Labels ?? '')?.[1] ?? null
+}
+
+/** Lanza un error si un container_name del proyecto ya lo tiene un contenedor de otro proyecto. */
+async function checkContainerNameConflicts(config: any, name: string): Promise<void> {
+  const requested = requestedContainerNames(config)
+  if (requested.length === 0) return
+
+  // Con -a: un proyecto apagado con stop conserva sus contenedores y sus nombres.
+  const containers = parsePs(await docker(['ps', '-a', '--format', 'json'], { timeoutMs: STATUS_TIMEOUT }))
+    .filter((c) => composeProjectOf(c) !== name)
+
+  for (const wanted of requested) {
+    const taken = containers.find((c) => containerName(c) === wanted)
+    if (taken) {
+      const project = composeProjectOf(taken)
+      const owner = project ? `el proyecto ${project}` : 'otro contenedor de esta PC'
+      throw new Error(`El nombre de contenedor ${wanted} ya lo usa ${owner}, aunque esté apagado. Pide al equipo que quite container_name de su compose.`)
+    }
+  }
 }
 
 export interface PortRequest {
@@ -100,8 +152,8 @@ export interface PortInUse {
 export function portsInUse(containers: any[]): PortInUse[] {
   const result: PortInUse[] = []
   for (const c of containers) {
-    const project = /(?:^|,)com\.docker\.compose\.project=([^,]+)/.exec(c.Labels ?? '')?.[1] ?? null
-    const container = String(c.Names ?? '').split(',')[0] ?? ''
+    const project = composeProjectOf(c)
+    const container = containerName(c)
     // Ports es un texto como "0.0.0.0:8080->80/tcp, [::]:8080->80/tcp" o "0.0.0.0:8000-8002->8000-8002/tcp".
     for (const m of String(c.Ports ?? '').matchAll(/:(\d+)(?:-(\d+))?->[\d-]+\/(\w+)/g)) {
       const from = Number(m[1])
@@ -114,8 +166,8 @@ export function portsInUse(containers: any[]): PortInUse[] {
   return result
 }
 
-/** Lanza un error si algún puerto fijo del proyecto ya lo ocupa un contenedor de otro proyecto. */
-async function checkPortConflicts(prefix: string[], name: string): Promise<void> {
+/** Lanza un error si un puerto fijo o un container_name del proyecto ya lo tiene otro proyecto. */
+async function checkConflicts(prefix: string[], name: string): Promise<void> {
   let config: any
   try {
     config = JSON.parse(await docker([...prefix, 'config', '--format', 'json'], { timeoutMs: STATUS_TIMEOUT }))
@@ -125,6 +177,8 @@ async function checkPortConflicts(prefix: string[], name: string): Promise<void>
     }
     throw err
   }
+  await checkContainerNameConflicts(config, name)
+
   const requested = requestedPorts(config)
   if (requested.length === 0) return
 
@@ -141,7 +195,7 @@ async function checkPortConflicts(prefix: string[], name: string): Promise<void>
 
 export async function startProject(dir: string, name: string): Promise<ProjectStatus> {
   const prefix = await composePrefix(dir, name)
-  await checkPortConflicts(prefix, name)
+  await checkConflicts(prefix, name)
 
   try {
     await docker([...prefix, 'up', '-d'], { timeoutMs: START_TIMEOUT })
@@ -156,12 +210,16 @@ export async function startProject(dir: string, name: string): Promise<ProjectSt
   }
 
   await sleep(SETTLE_MS)
-  const status = await getProjectStatus(name)
-  if (status.state === 'stopped') {
+  const containers = await listContainers(name)
+  if (!containers.some((c) => c.State === 'running')) {
     const logs = await docker([...prefix, 'logs', '--tail', '20', '--no-color'], { timeoutMs: STATUS_TIMEOUT }).catch(() => '')
+    // Con restart: always seguiría reiniciándose sin fin; se detiene para que quede de verdad apagado.
+    if (containers.some((c) => c.State === 'restarting')) {
+      await docker([...prefix, 'stop'], { timeoutMs: STOP_TIMEOUT }).catch(() => {})
+    }
     throw new Error(`El proyecto se encendió, pero sus contenedores se detuvieron enseguida. Últimas líneas del registro:\n${logs.trim() || '(sin registro)'}`)
   }
-  return status
+  return statusFromContainers(containers)
 }
 
 export async function stopProject(dir: string, name: string): Promise<ProjectStatus> {

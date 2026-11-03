@@ -5,7 +5,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { after, describe, test } from 'node:test'
-import { parsePs, portsInUse, requestedPorts, statusFromContainers } from '../src/docker.ts'
+import { parsePs, portsInUse, requestedContainerNames, requestedPorts, statusFromContainers } from '../src/docker.ts'
 import { assertNormalizedName, normalizeProjectName } from '../src/name.ts'
 import { findComposeFile } from '../src/paths.ts'
 
@@ -49,6 +49,25 @@ describe('parsePs y statusFromContainers', () => {
   })
   test('puertos de contenedores en ejecución, sin repetidos y ordenados', () => {
     assert.deepEqual(statusFromContainers(lines), { state: 'running', ports: [5432, 8082] })
+  })
+})
+
+describe('estado con contenedores que se reinician', () => {
+  test('cuenta como encendido para que se pueda apagar', () => {
+    assert.deepEqual(
+      statusFromContainers([{ State: 'restarting', Publishers: [] }]),
+      { state: 'running', ports: [] },
+    )
+  })
+})
+
+describe('requestedContainerNames', () => {
+  test('toma solo los nombres fijos', () => {
+    assert.deepEqual(
+      requestedContainerNames({ services: { a: { container_name: 'base' }, b: {} } }),
+      ['base'],
+    )
+    assert.deepEqual(requestedContainerNames({}), [])
   })
 })
 

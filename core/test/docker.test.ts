@@ -194,6 +194,48 @@ describe('encender, consultar y apagar', () => {
     await assert.rejects(startProject(join(EJEMPLOS, 'prueba-bd'), name), /El archivo compose del proyecto tiene errores[\s\S]*POSTGRES_PASSWORD/)
   })
 
+  test('restart: always que falla queda apagado de verdad, con su registro', async () => {
+    const name = uniqueName('reinicia')
+    const dir = join(base, basename(name))
+    await mkdir(dir)
+    await writeFile(
+      join(dir, 'compose.yaml'),
+      'services:\n  app:\n    image: busybox\n    restart: always\n    command: ["sh", "-c", "echo falta la clave; exit 1"]\n',
+    )
+    await assert.rejects(startProject(dir, name), /se detuvieron enseguida[\s\S]*falta la clave/)
+    assert.equal((await getProjectStatus(name)).state, 'stopped')
+  })
+
+  test('container_name repetido: nombra al proyecto que lo tiene, aunque esté apagado', async () => {
+    const compose = 'services:\n  db:\n    image: busybox\n    container_name: dockyard-test-nombre-fijo\n    command: ["sleep", "600"]\n'
+    const first = uniqueName('nombre-a')
+    const second = uniqueName('nombre-b')
+    for (const name of [first, second]) {
+      await mkdir(join(base, name))
+      await writeFile(join(base, name, 'compose.yaml'), compose)
+    }
+    await startProject(join(base, first), first)
+    await stopProject(join(base, first), first)
+    await assert.rejects(
+      startProject(join(base, second), second),
+      new RegExp(`El nombre de contenedor dockyard-test-nombre-fijo ya lo usa el proyecto ${first}`),
+    )
+    // El dueño del nombre puede encender de nuevo.
+    assert.equal((await startProject(join(base, first), first)).state, 'running')
+    await stopProject(join(base, first), first)
+  })
+
+  test('no registra un nombre que ya usa otro proyecto de Docker', async () => {
+    const name = uniqueName('ocupado')
+    await startProject(join(EJEMPLOS, 'prueba-estatico'), name)
+    try {
+      await assert.rejects(prepareProject({ type: 'zip', filePath: zips.raiz }, name), /ya lo usa otro proyecto de Docker/)
+      assert.ok(!(await projectFolders()).includes(name))
+    } finally {
+      await stopProject(join(EJEMPLOS, 'prueba-estatico'), name)
+    }
+  })
+
   test('rechaza nombres sin normalizar', async () => {
     await assert.rejects(getProjectStatus('Mi Proyecto'), /no es válido/)
     await assert.rejects(startProject(join(EJEMPLOS, 'prueba-estatico'), '../x'), /no es válido/)

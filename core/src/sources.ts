@@ -1,6 +1,7 @@
 import { constants } from 'node:fs'
 import { access, copyFile, mkdir, rm, stat } from 'node:fs/promises'
 import { join } from 'node:path'
+import { assertProjectNameFree } from './docker.ts'
 import { normalizeProjectName } from './name.ts'
 import { findComposeFile, projectsDir } from './paths.ts'
 import { CommandError, run } from './run.ts'
@@ -27,6 +28,8 @@ export async function prepareProject(source: ProjectSource, name: string): Promi
   }
 
   try {
+    await assertProjectNameFree(normalized)
+
     if (source.type === 'git') {
       await cloneRepo(source.url, target)
     } else {
