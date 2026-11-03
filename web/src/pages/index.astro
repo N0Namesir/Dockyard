@@ -196,6 +196,7 @@ import '../styles/global.css'
         ports: number[]
         url: string | null
         urls: string[]
+        failedServices: string[]
       }
 
       interface ApiError {
@@ -217,6 +218,20 @@ import '../styles/global.css'
       /** La petición no llegó a responder: la API está caída o el navegador cortó la espera. */
       class ConnectionError extends Error {}
 
+      /** La API respondió con un error. */
+      class ApiResponseError extends Error {
+        readonly status: number
+
+        constructor(status: number, message: string) {
+          super(message)
+          this.status = status
+        }
+      }
+
+      type ProjectAction = 'start' | 'stop' | 'remove'
+
+      const REFRESH_INTERVAL_MS = 15_000
+
       const CONNECTION_MESSAGE = 'No se puede conectar con Dockyard. Verifica que esté encendido y recarga la página.'
       const RETRY_DELAY_MS = 5_000
       const MAX_CONNECTION_FAILURES = 5
@@ -226,7 +241,9 @@ import '../styles/global.css'
       let loadFailed = false
       let latestLoad = 0
       let searchTimer: ReturnType<typeof setTimeout> | undefined
-      const pendingActions = new Set<number>()
+      const pendingActions = new Map<number, ProjectAction>()
+      /** Registros abiertos por proyecto; null mientras se cargan. */
+      const openLogs = new Map<number, string | null>()
       const actionErrors = new Map<number, string>()
 
       function element<K extends keyof HTMLElementTagNameMap>(
@@ -254,8 +271,9 @@ import '../styles/global.css'
           } catch {
             // La respuesta sin JSON se convierte en un mensaje estable para el docente.
           }
-          throw new Error(body.message ?? 'La operación no pudo completarse.')
+          throw new ApiResponseError(response.status, body.message ?? 'La operación no pudo completarse.')
         }
+        if (response.status === 204) return undefined as T
         return response.json() as Promise<T>
       }
 
@@ -325,6 +343,15 @@ import '../styles/global.css'
               project.state === 'running' ? 'Encendido' : 'Apagado',
             ),
           )
+          if (project.failedServices.length > 0) {
+            stateCell.append(
+              element(
+                'p',
+                'mt-1 max-w-40 text-xs font-medium text-amber-800',
+                `Con fallas: ${project.failedServices.join(', ')}`,
+              ),
+            )
+          }
           row.append(stateCell)
           const portsCell = element('td', 'px-5 py-4 font-mono text-xs text-slate-600')
           if (project.ports.length === 0) portsCell.textContent = '—'
@@ -341,12 +368,14 @@ import '../styles/global.css'
           const actionsCell = element('td', 'px-5 py-4')
           const actionStack = element('div', 'flex flex-col items-end gap-2')
           const actions = element('div', 'flex items-center justify-end gap-2')
-          const isPending = pendingActions.has(project.id)
+          const pending = pendingActions.get(project.id)
+          const isPending = pending !== undefined
+          const pendingLabel = pending === 'stop' ? 'Apagando…' : 'Encendiendo…'
           const action = element(
             'button',
             'rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 hover:border-cyan-600 hover:text-cyan-800 disabled:cursor-wait disabled:opacity-50',
-            isPending
-              ? project.state === 'running' ? 'Apagando…' : 'Encendiendo…'
+            pending === 'start' || pending === 'stop'
+              ? pendingLabel
               : project.state === 'running' ? 'Apagar' : 'Encender',
           )
           action.type = 'button'
@@ -365,7 +394,24 @@ import '../styles/global.css'
             open.rel = 'noopener noreferrer'
             actions.append(open)
           }
-          actionStack.append(actions)
+          const secondaryActions = element('div', 'flex items-center justify-end gap-3 text-xs font-semibold')
+          const logsButton = element(
+            'button',
+            'text-slate-600 underline hover:text-cyan-800',
+            openLogs.has(project.id) ? 'Ocultar registro' : 'Ver registro',
+          )
+          logsButton.type = 'button'
+          logsButton.addEventListener('click', () => void toggleLogs(project))
+          const removeButton = element(
+            'button',
+            'text-red-700 underline hover:text-red-900 disabled:cursor-wait disabled:opacity-50',
+            pending === 'remove' ? 'Eliminando…' : 'Eliminar',
+          )
+          removeButton.type = 'button'
+          removeButton.disabled = isPending
+          removeButton.addEventListener('click', () => void removeProject(project))
+          secondaryActions.append(logsButton, removeButton)
+          actionStack.append(actions, secondaryActions)
 
           const actionError = actionErrors.get(project.id)
           if (actionError) {
@@ -374,14 +420,70 @@ import '../styles/global.css'
           actionsCell.append(actionStack)
           row.append(actionsCell)
           projectsBody.append(row)
+
+          if (openLogs.has(project.id)) projectsBody.append(logsRow(project))
         }
       }
 
-      /** Devuelve true si la lista se cargó. Una respuesta que ya no es la última se descarta. */
-      async function loadProjects(): Promise<boolean> {
-        const load = ++latestLoad
-        loading = true
+      function logsRow(project: Project): HTMLTableRowElement {
+        const row = element('tr')
+        const cell = element('td', 'bg-slate-50 px-5 py-4')
+        cell.colSpan = 5
+        const header = element('div', 'mb-2 flex items-center justify-between gap-3')
+        header.append(element('p', 'text-xs font-bold text-slate-700', `Últimas líneas del registro de ${project.name}`))
+        const refresh = element('button', 'text-xs font-semibold text-slate-600 underline hover:text-cyan-800', 'Actualizar')
+        refresh.type = 'button'
+        refresh.addEventListener('click', () => void loadLogs(project))
+        header.append(refresh)
+        const logs = openLogs.get(project.id)
+        const output = element(
+          'pre',
+          'max-h-80 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-slate-900 p-3 font-mono text-xs text-slate-100',
+          logs === null ? 'Cargando…' : logs?.trim() || 'Este proyecto todavía no tiene registro.',
+        )
+        cell.append(header, output)
+        row.append(cell)
+        // Lo más reciente queda al final.
+        requestAnimationFrame(() => { output.scrollTop = output.scrollHeight })
+        return row
+      }
+
+      async function loadLogs(project: Project): Promise<void> {
+        openLogs.set(project.id, null)
         render()
+        let text: string
+        try {
+          text = (await api<{ logs: string }>(`/api/projects/${project.id}/logs`)).logs
+        } catch (error) {
+          text = error instanceof Error ? error.message : 'No se pudo leer el registro.'
+        }
+        // Pudo cerrarse mientras se cargaba.
+        if (openLogs.has(project.id)) {
+          openLogs.set(project.id, text)
+          render()
+        }
+      }
+
+      async function toggleLogs(project: Project): Promise<void> {
+        if (openLogs.has(project.id)) {
+          openLogs.delete(project.id)
+          render()
+          return
+        }
+        await loadLogs(project)
+      }
+
+      /**
+       * Devuelve true si la lista se cargó. Una respuesta que ya no es la última se descarta.
+       * Con silent no muestra "Cargando" ni redibuja si nada cambió: es el refresco automático.
+       */
+      async function loadProjects(silent = false): Promise<boolean> {
+        const load = ++latestLoad
+        const wasFailed = loadFailed
+        if (!silent) {
+          loading = true
+          render()
+        }
         let result: Project[] | undefined
         let message = ''
         try {
@@ -392,12 +494,15 @@ import '../styles/global.css'
         }
         if (load !== latestLoad) return false
 
+        const unchanged = silent && !wasFailed && result !== undefined
+          && JSON.stringify(result) === JSON.stringify(projects)
         loading = false
         loadFailed = result === undefined
         projects = result ?? []
-        if (result) globalMessage.classList.add('hidden')
-        else showGlobalMessage(message, 'error')
-        render()
+        // El refresco no borra un aviso de éxito; solo el error que él mismo vino a resolver.
+        if (!result) showGlobalMessage(message, 'error')
+        else if (!silent || wasFailed) globalMessage.classList.add('hidden')
+        if (!unchanged) render()
         return result !== undefined
       }
 
@@ -406,12 +511,18 @@ import '../styles/global.css'
        * proyecto crea una red de Docker. El servidor sigue trabajando, así que se repite la
        * petición: la API la une a la operación en curso y responde con su resultado real.
        */
-      async function requestStateChange(project: Project, action: 'start' | 'stop'): Promise<Project> {
+      async function requestWithRetries<T>(path: string, method: string, afterCut?: (error: unknown) => T | undefined): Promise<T> {
+        let wasCut = false
         for (let failures = 1; ; failures++) {
           try {
-            return await api<Project>(`/api/projects/${project.id}/${action}`, { method: 'POST' })
+            return await api<T>(path, { method })
           } catch (error) {
+            if (wasCut && afterCut) {
+              const result = afterCut(error)
+              if (result !== undefined) return result
+            }
             if (!(error instanceof ConnectionError) || failures >= MAX_CONNECTION_FAILURES) throw error
+            wasCut = true
             await new Promise((done) => setTimeout(done, RETRY_DELAY_MS))
           }
         }
@@ -419,16 +530,45 @@ import '../styles/global.css'
 
       async function changeState(project: Project): Promise<void> {
         if (pendingActions.has(project.id)) return
-        pendingActions.add(project.id)
+        const action = project.state === 'running' ? 'stop' : 'start'
+        pendingActions.set(project.id, action)
         actionErrors.delete(project.id)
         render()
         try {
-          const updated = await requestStateChange(project, project.state === 'running' ? 'stop' : 'start')
+          const updated = await requestWithRetries<Project>(`/api/projects/${project.id}/${action}`, 'POST')
           projects = projects.map((item) => item.id === updated.id ? updated : item)
         } catch (error) {
           actionErrors.set(
             project.id,
             error instanceof Error ? error.message : 'No se pudo cambiar el estado.',
+          )
+        } finally {
+          pendingActions.delete(project.id)
+          render()
+        }
+      }
+
+      async function removeProject(project: Project): Promise<void> {
+        if (pendingActions.has(project.id)) return
+        const confirmed = window.confirm(
+          `¿Eliminar ${project.name}? Se borran sus contenedores, su código y sus datos. No se puede deshacer.`,
+        )
+        if (!confirmed) return
+        pendingActions.set(project.id, 'remove')
+        actionErrors.delete(project.id)
+        render()
+        try {
+          // Borrar quita una red, y Firefox puede cortar la petición: un 404 tras el corte es que ya terminó.
+          await requestWithRetries<true>(`/api/projects/${project.id}`, 'DELETE', (error) =>
+            error instanceof ApiResponseError && error.status === 404 ? true : undefined,
+          )
+          projects = projects.filter((item) => item.id !== project.id)
+          openLogs.delete(project.id)
+          showGlobalMessage(`Se eliminó ${project.name}.`, 'success')
+        } catch (error) {
+          actionErrors.set(
+            project.id,
+            error instanceof Error ? error.message : 'No se pudo eliminar el proyecto.',
           )
         } finally {
           pendingActions.delete(project.id)
@@ -505,6 +645,13 @@ import '../styles/global.css'
         if (searchTimer) clearTimeout(searchTimer)
         searchTimer = setTimeout(() => void loadProjects(), 300)
       })
+
+      // Mantiene al día el estado de los proyectos, por ejemplo si uno se cae solo.
+      function refresh(): void {
+        if (!document.hidden && !loading) void loadProjects(true)
+      }
+      setInterval(refresh, REFRESH_INTERVAL_MS)
+      document.addEventListener('visibilitychange', refresh)
 
       updateSourceFields()
       render()
