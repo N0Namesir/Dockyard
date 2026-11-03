@@ -81,6 +81,9 @@ Cómo funciona el contenedor:
 - **Búsqueda:** ignora mayúsculas y tildes con la función `normalizar`, registrada en SQLite, porque `LIKE` solo ignora mayúsculas en letras sin acento. `%` y `_` se buscan como texto.
 - **ZIP:** se guarda en una carpeta temporal, con un límite de 200 MB, y se borra al terminar el registro, salga bien o mal.
 - **Peticiones cortadas:** la ruta responde cuando el núcleo termina, hasta 10 minutos después. Firefox corta las peticiones pendientes cuando cambian las redes de la PC, y encender un proyecto crea una red de Docker (comprobado con Firefox 159; sin cambios de red, esperó 7 minutos sin problema). Por eso, si la petición se corta, la interfaz la repite, y la API la une a la operación en curso (`once` en `api/src/services/projects.ts`) en vez de lanzar otra. Así el docente recibe el resultado real, incluido el error.
+- **Eliminar:** `DELETE /api/projects/:id` llama a `removeProject` y luego borra la fila. Si falla, la fila queda para poder reintentar. No se permite mientras el proyecto enciende o apaga (409).
+- **Registro:** `GET /api/projects/:id/logs` devuelve las últimas 200 líneas. No es en vivo: se actualiza con un botón.
+- **Refresco:** la interfaz consulta la lista cada 15 segundos y al volver a la pestaña, sin redibujar si nada cambió.
 - **Búsqueda en la interfaz:** espera 300 ms desde la última tecla y descarta cualquier respuesta que no sea la de la última petición.
 
 ## Contrato entre el núcleo y la API
@@ -139,6 +142,8 @@ Reglas que cumple el núcleo:
 | `npm run test:docker -w core` | Los criterios de terminado del núcleo con Docker real: ZIP en la raíz y con carpeta intermedia, fallas sin carpetas a medias, choque de puertos, imagen con `build:`, persistencia de la base de datos y proyecto que se cae al arrancar |
 | `npm run try -w core -- ejemplos/prueba-estatico` | Recorrido manual: preparar, consultar, encender, consultar, apagar, consultar |
 
+GitHub Actions (`.github/workflows/ci.yml`) corre la compilación, los tipos y todas las pruebas, y construye la imagen, en cada push a `main` y en cada PR.
+
 Las pruebas con Docker usan una carpeta temporal como `PROJECTS_DIR` y eliminan al final los contenedores y volúmenes que crearon. Necesitan libres los puertos 8081 a 8083.
 
 ## Límites conocidos y mejoras sugeridas
@@ -151,6 +156,5 @@ Esta entrega no las incluye. Mientras tanto, el docente registra solo proyectos 
 - **Reescritura automática de puertos o subdominios con Traefik**: Traefik da subdominios `.localhost`, pero exige saber qué servicio y qué puerto interno expone cada proyecto.
 - **Límites de recursos** por proyecto.
 - **Login** para el docente.
-- Un proyecto con un servicio caído y otro activo aparece como encendido, sin aviso.
 - La detección de puertos solo ve contenedores. Si otro programa de la PC usa el puerto, falla `up -d` y el mensaje de Docker llega al docente.
 - Actualizar un proyecto (`git pull`): el clonado conserva `.git` para poder hacerlo, pero falta la función.
