@@ -31,7 +31,7 @@ En desarrollo no se usa el contenedor: la herramienta usa el Docker de la laptop
 |---|---|
 | `npm run build` | Compila `core`, `api` y `web` |
 | `npm run start` | Arranca la herramienta compilada |
-| `npm test` | Pruebas del núcleo que no necesitan Docker |
+| `npm test` | Pruebas del núcleo y de la API que no necesitan Docker |
 | `npm run test:docker -w core` | Pruebas del núcleo con Docker real (publican 8081 a 8083) |
 | `npm run try -w core -- <url \| zip \| carpeta>` | Prueba manual del núcleo con un proyecto |
 | `npm run typecheck` | Revisa los tipos de todos los paquetes |
@@ -41,8 +41,8 @@ En desarrollo no se usa el contenedor: la herramienta usa el Docker de la laptop
 | Carpeta | Qué contiene | Responsable |
 |---|---|---|
 | `core/` | Núcleo: obtiene el código y controla los proyectos con `docker compose` | Área 1 (0V3R) |
-| `api/` | Servidor Fastify y base de datos SQLite | Área 2 (Isaac) |
-| `web/` | Interfaz con Astro y Tailwind | Área 3 (Isaac) |
+| `api/` | Servidor Fastify y base de datos SQLite | Área 2 (Isaac; ahora 0V3R) |
+| `web/` | Interfaz con Astro y Tailwind | Área 3 (Isaac; ahora 0V3R) |
 | `docs/` | Guía técnica, manual de usuario y requisitos para los proyectos | Área 4 (0V3R) |
 | `ejemplos/` | Proyectos de prueba con compose | Área 4 (0V3R) |
 

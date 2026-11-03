@@ -25,7 +25,12 @@ navegador ──► web (Astro) ──► api (Fastify + SQLite) ──► core 
 | `core/src/docker.ts` | Encender, apagar, estado y detección de choques de puertos |
 | `core/src/run.ts` | Ayudante que ejecuta comandos con `execFile` |
 | `core/test/` | Pruebas unitarias e integración con Docker |
-| `api/`, `web/` | Áreas 2 y 3 |
+| `api/src/routes/projects.ts` | Rutas del contrato, validación y subida del ZIP a un archivo temporal |
+| `api/src/services/projects.ts` | Une la base de datos con el núcleo; arma la respuesta de cada proyecto |
+| `api/src/db/projects.ts` | Esquema de SQLite, consultas y búsqueda |
+| `api/src/app.ts`, `api/src/server.ts` | Arma Fastify y sirve `web/dist` en el mismo puerto; arranca el servidor |
+| `api/test/` | Pruebas de las rutas con un núcleo simulado |
+| `web/src/pages/index.astro` | La única página: lista, búsqueda, registro y botones, sin otro framework |
 | `ejemplos/` | Cuatro proyectos de prueba y el generador de ZIP de prueba |
 | `projects/` | Código de los proyectos registrados (no se sube a git) |
 | `data/` | Base de datos SQLite (no se sube a git) |
@@ -60,10 +65,20 @@ Cómo funciona el contenedor:
 
 - La herramienta usa el Docker del anfitrión a través de `/var/run/docker.sock`. Los proyectos de estudiantes no corren dentro de ella: son contenedores hermanos, así que sus puertos se publican en la PC y `http://localhost:<puerto>` funciona desde el navegador.
 - **`projects/` se monta con la misma ruta dentro y fuera** (`${PROJECTS_DIR}:${PROJECTS_DIR}`). Cuando un proyecto monta una carpeta relativa (`./src:/app`), el Docker del anfitrión la resuelve con la ruta que ve la herramienta. Si las rutas difirieran, esos montajes apuntarían a un lugar que no existe.
-- El contenedor corre como root, así que los archivos de `projects/` y `data/` quedan como propiedad de root. Para borrar uno a mano: `sudo rm -rf projects/<nombre>`.
+- El contenedor corre con el usuario que ejecutó `install.sh` (`HOST_UID`, `HOST_GID`) y con el grupo del socket (`DOCKER_GID`), así que `projects/` y `data/` quedan a su nombre. Los contenedores de un proyecto pueden crear archivos de root en sus propias carpetas montadas; esos se borran con `sudo`.
 - `restart: unless-stopped` hace que la herramienta vuelva sola al reiniciar, siempre que el servicio de Docker arranque con el sistema (`sudo systemctl enable docker`).
 
 **Plan B, sin contenedor.** Si el despliegue en contenedor falla, la herramienta corre directamente en la PC con Node: `npm ci && npm run build && npm run start`, o con PM2 para que se mantenga encendida (`pm2 start npm --name dockyard -- run start`). Requiere Node 24, git, unzip y Docker en la PC.
+
+## Cómo funcionan la API y la interfaz
+
+- **Rutas:** las cinco de `/api/projects` responden JSON. Toda falla responde solo `{ "message": "…" }`: 400 por datos inválidos, 404 si no existe, 409 si el nombre se repite y 500 con el mensaje del núcleo.
+- **El manejador de errores va antes de registrar las rutas** (`api/src/app.ts`). Un plugin hereda el manejador que existe al registrarse; si se define después, Fastify usa el suyo sin avisar.
+- **Datos:** SQLite guarda solo lo que Docker no sabe (nombre, equipo, origen, carpeta). El estado y los puertos se consultan siempre al núcleo, así que listar ejecuta un `docker compose ps` por proyecto.
+- **Búsqueda:** ignora mayúsculas y tildes con la función `normalizar`, registrada en SQLite, porque `LIKE` solo ignora mayúsculas en letras sin acento. `%` y `_` se buscan como texto.
+- **ZIP:** se guarda en una carpeta temporal, con un límite de 200 MB, y se borra al terminar el registro, salga bien o mal.
+- **Encendidos largos:** la ruta responde cuando el núcleo termina, hasta 10 minutos después, pero Firefox deja de esperar una respuesta a los 5. Si la petición se corta, la interfaz consulta el estado cada 5 segundos hasta que cambie, porque el servidor sigue trabajando.
+- **Búsqueda en la interfaz:** espera 300 ms desde la última tecla y descarta cualquier respuesta que no sea la de la última petición.
 
 ## Contrato entre el núcleo y la API
 
@@ -116,7 +131,7 @@ Reglas que cumple el núcleo:
 
 | Comando | Cubre |
 |---|---|
-| `npm test` | Normalización, lectura de la salida de Docker, detección de puertos y búsqueda del compose |
+| `npm test` | Sin Docker. Núcleo: normalización, lectura de la salida de Docker, detección de puertos y búsqueda del compose. API: rutas, errores, búsqueda y subida de ZIP con un núcleo simulado |
 | `npm run test:docker -w core` | Los criterios de terminado del núcleo con Docker real: ZIP en la raíz y con carpeta intermedia, fallas sin carpetas a medias, choque de puertos, imagen con `build:`, persistencia de la base de datos y proyecto que se cae al arrancar |
 | `npm run try -w core -- ejemplos/prueba-estatico` | Recorrido manual: preparar, consultar, encender, consultar, apagar, consultar |
 
