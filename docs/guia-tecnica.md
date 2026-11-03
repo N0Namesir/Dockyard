@@ -30,7 +30,9 @@ navegador ──► web (Astro) ──► api (Fastify + SQLite) ──► core 
 | `api/src/db/projects.ts` | Esquema de SQLite, consultas y búsqueda |
 | `api/src/app.ts`, `api/src/server.ts` | Arma Fastify y sirve `web/dist` en el mismo puerto; arranca el servidor |
 | `api/test/` | Pruebas de las rutas con un núcleo simulado |
-| `web/src/pages/index.astro` | La única página: lista, búsqueda, registro y botones, sin otro framework |
+| `web/src/pages/index.astro` | Página principal: lista, búsqueda, registro y botones, sin otro framework |
+| `web/src/pages/docs/`, `web/src/lib/docs.ts` | Sección de documentación: publica `docs/*.md` en `/docs` al compilar |
+| `web/public/` | Logo (`favicon.svg`) e iconos generados a partir de él |
 | `ejemplos/` | Cuatro proyectos de prueba y el generador de ZIP de prueba |
 | `projects/` | Código de los proyectos registrados (no se sube a git) |
 | `data/` | Base de datos SQLite (no se sube a git) |
@@ -83,6 +85,7 @@ Cómo funciona el contenedor:
 - **Peticiones cortadas:** la ruta responde cuando el núcleo termina, hasta 10 minutos después. Firefox corta las peticiones pendientes cuando cambian las redes de la PC, y encender un proyecto crea una red de Docker (comprobado con Firefox 159; sin cambios de red, esperó 7 minutos sin problema). Por eso, si la petición se corta, la interfaz la repite, y la API la une a la operación en curso (`once` en `api/src/services/projects.ts`) en vez de lanzar otra. Así el docente recibe el resultado real, incluido el error.
 - **Eliminar:** `DELETE /api/projects/:id` llama a `removeProject` y luego borra la fila. Si falla, la fila queda para poder reintentar. No se permite mientras el proyecto enciende o apaga (409).
 - **Registro:** `GET /api/projects/:id/logs` devuelve las últimas 200 líneas. No es en vivo: se actualiza con un botón.
+- **Documentación:** `docs/*.md` es la única fuente: Astro la convierte en páginas al compilar, así que un cambio se ve al reconstruir. Un documento nuevo se agrega a la lista de `web/src/lib/docs.ts`.
 - **Refresco:** la interfaz consulta la lista cada 15 segundos y al volver a la pestaña, sin redibujar si nada cambió.
 - **Búsqueda en la interfaz:** espera 300 ms desde la última tecla y descarta cualquier respuesta que no sea la de la última petición.
 

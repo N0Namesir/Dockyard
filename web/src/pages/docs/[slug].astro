@@ -1,0 +1,17 @@
+---
+import DocsLayout from '../../layouts/DocsLayout.astro'
+import { DOCS, docFile, docHtml } from '../../lib/docs.ts'
+
+export function getStaticPaths() {
+  return DOCS.map((doc) => ({ params: { slug: doc.slug }, props: { title: doc.title } }))
+}
+
+const { slug } = Astro.params
+const { title } = Astro.props
+const headings = docFile(slug).getHeadings()
+const html = await docHtml(slug)
+---
+
+<DocsLayout title={title} current={slug} headings={headings}>
+  <article class="doc-content" set:html={html} />
+</DocsLayout>

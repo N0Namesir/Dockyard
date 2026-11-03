@@ -1,0 +1,39 @@
+---
+import DocsLayout from '../../layouts/DocsLayout.astro'
+import { DOCS } from '../../lib/docs.ts'
+---
+
+<DocsLayout title="Documentación">
+  <p class="mb-2 text-xs font-bold tracking-[0.18em] text-cyan-700 uppercase">Documentación</p>
+  <h1 class="text-4xl font-black tracking-tight text-slate-950">Todo lo de Dockyard, en un solo lugar</h1>
+
+  <h2 class="mt-10 text-xl font-bold text-slate-900">Cómo meter un proyecto</h2>
+  <ol class="mt-4 list-decimal space-y-2 pl-5 text-slate-700">
+    <li>
+      El equipo lo prepara y lo prueba siguiendo la <a class="font-medium text-cyan-800 underline" href="/docs/guia-estudiantes/">guía para estudiantes</a>.
+    </li>
+    <li>
+      El docente lo registra desde <a class="font-medium text-cyan-800 underline" href="/">Proyectos</a> con su repositorio de GitHub o su ZIP, como explica la{' '}
+      <a class="font-medium text-cyan-800 underline" href="/docs/manual-usuario/#registrar-un-proyecto">sección de registro del manual</a>.
+    </li>
+    <li>Lo enciende y lo abre con los botones de su fila.</li>
+  </ol>
+
+  <h2 class="mt-10 text-xl font-bold text-slate-900">Documentos</h2>
+  <ul class="mt-4 grid gap-4 md:grid-cols-3">
+    {
+      DOCS.map((doc) => (
+        <li>
+          <a
+            href={`/docs/${doc.slug}/`}
+            class="block h-full rounded-2xl border border-slate-200 bg-white p-5 shadow-sm hover:border-cyan-600"
+          >
+            <span class="text-xs font-bold tracking-[0.12em] text-cyan-700 uppercase">{doc.audience}</span>
+            <span class="mt-2 block text-lg font-bold text-slate-900">{doc.title}</span>
+            <span class="mt-2 block text-sm leading-6 text-slate-600">{doc.summary}</span>
+          </a>
+        </li>
+      ))
+    }
+  </ul>
+</DocsLayout>

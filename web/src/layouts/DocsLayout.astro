@@ -1,0 +1,74 @@
+---
+import '../styles/global.css'
+import SiteHeader from '../components/SiteHeader.astro'
+import FaviconLinks from '../components/FaviconLinks.astro'
+import { DOCS } from '../lib/docs.ts'
+
+interface Props {
+  title: string
+  current?: string
+  headings?: { depth: number; slug: string; text: string }[]
+}
+const { title, current, headings = [] } = Astro.props
+const sections = headings.filter((heading) => heading.depth === 2)
+---
+
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width" />
+    <meta name="description" content="Documentación de Dockyard" />
+    <FaviconLinks />
+    <title>{title} · Dockyard</title>
+  </head>
+  <body>
+    <SiteHeader current="docs" />
+    <div class="mx-auto grid max-w-7xl gap-8 px-5 py-8 sm:px-8 lg:grid-cols-[16rem_minmax(0,1fr)] lg:py-12">
+      <aside class="lg:sticky lg:top-6 lg:max-h-[calc(100vh-3rem)] lg:self-start lg:overflow-y-auto">
+        <nav aria-label="Documentos" class="text-sm">
+          <a href="/docs/" class="mb-2 block text-xs font-bold tracking-[0.16em] text-cyan-700 uppercase">
+            Documentación
+          </a>
+          <ul class="space-y-1">
+            {
+              DOCS.map((doc) => (
+                <li>
+                  <a
+                    href={`/docs/${doc.slug}/`}
+                    aria-current={doc.slug === current ? 'page' : undefined}
+                    class:list={[
+                      'block rounded-lg px-3 py-2 font-medium hover:bg-slate-100',
+                      doc.slug === current ? 'bg-cyan-50 text-cyan-800' : 'text-slate-700',
+                    ]}
+                  >
+                    {doc.title}
+                  </a>
+                </li>
+              ))
+            }
+          </ul>
+        </nav>
+        {
+          sections.length > 0 && (
+            <nav aria-label="En esta página" class="mt-6 hidden text-sm lg:block">
+              <p class="mb-2 text-xs font-bold tracking-[0.16em] text-slate-500 uppercase">En esta página</p>
+              <ul class="space-y-1 border-l border-slate-200">
+                {sections.map((section) => (
+                  <li>
+                    <a href={`#${section.slug}`} class="block px-3 py-1 text-slate-600 hover:text-cyan-800">
+                      {section.text}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </nav>
+          )
+        }
+      </aside>
+      <main class="min-w-0">
+        <slot />
+      </main>
+    </div>
+  </body>
+</html>

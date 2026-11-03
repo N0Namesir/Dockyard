@@ -20,7 +20,7 @@ En el panel **Registrar proyecto**, llena **Equipo** y **Nombre del proyecto**, 
 
 **Origen Archivo ZIP.** Elige el ZIP que te entregó el equipo, de 200 MB como máximo. Dockyard lo descomprime.
 
-En los dos casos, el proyecto debe traer su archivo compose. Reparte entre los equipos el documento [Requisitos para proyectos de estudiantes](requisitos-proyectos.md) para evitar problemas.
+En los dos casos, el proyecto debe traer su archivo compose. Reparte entre los equipos la [Guía para estudiantes](guia-estudiantes.md) para evitar problemas. Toda la documentación se puede leer dentro de Dockyard, en la sección **Documentación**.
 
 ## Buscar, encender, apagar y abrir
 

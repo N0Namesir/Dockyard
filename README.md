@@ -1,3 +1,5 @@
+<img src="web/public/favicon.svg" width="96" height="96" alt="Logo de Dockyard: una D sobre una ola">
+
 # Dockyard
 
 Aplicación web local para que el docente registre proyectos de estudiantes (desde un repositorio de GitHub o un ZIP), los encienda, los apague y los abra en el navegador. Cada proyecto corre con su propio `docker compose`.
@@ -43,11 +45,11 @@ En desarrollo no se usa el contenedor: la herramienta usa el Docker de la laptop
 | `core/` | Núcleo: obtiene el código y controla los proyectos con `docker compose` | Área 1 (0V3R) |
 | `api/` | Servidor Fastify y base de datos SQLite | Área 2 (Isaac; ahora 0V3R) |
 | `web/` | Interfaz con Astro y Tailwind | Área 3 (Isaac; ahora 0V3R) |
-| `docs/` | Guía técnica, manual de usuario y requisitos para los proyectos | Área 4 (0V3R) |
+| `docs/` | Guía técnica, manual de usuario y guía para estudiantes; también se leen en `/docs` dentro de la herramienta | Área 4 (0V3R) |
 | `ejemplos/` | Proyectos de prueba con compose | Área 4 (0V3R) |
 
 ## Documentación
 
 - [Guía técnica](docs/guia-tecnica.md): para quien continúe el proyecto.
 - [Manual de usuario](docs/manual-usuario.md): para el docente.
-- [Requisitos para proyectos de estudiantes](docs/requisitos-proyectos.md): para repartir a los equipos.
+- [Guía para estudiantes](docs/guia-estudiantes.md): cómo debe ir un proyecto, para repartir a los equipos.

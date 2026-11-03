@@ -39,7 +39,7 @@ Monorepo con workspaces de npm (`core`, `api`, `web`) y un `tsconfig.base.json` 
 |---|---|---|---|
 | `core/` | 1: núcleo Docker y fuentes | 0V3R | Solo ejecuta `git`, `unzip` y `docker compose`. Nunca HTTP, SQLite ni UI |
 | `api/` | 2: API y datos | 0V3R (de Isaac) | Fastify 5 + TypeBox + SQLite (`node:sqlite`, con `better-sqlite3` como respaldo). Orquesta llamando a `core/`, nunca ejecuta Docker ni git |
-| `web/` | 3: interfaz | 0V3R (de Isaac) | Astro + Tailwind. Solo habla con la API, sin lógica de estados ni puertos |
+| `web/` | 3: interfaz | 0V3R (de Isaac) | Astro + Tailwind. Solo habla con la API, sin lógica de estados ni puertos. Publica `docs/*.md` en `/docs` al compilar |
 | `docs/`, `Dockerfile`, `docker-compose.yml`, `install.sh` | 4: infraestructura y documentación | 0V3R | No escribe lógica de otras áreas |
 | `projects/`, `data/` | — | — | Datos de ejecución, en `.gitignore` |
 

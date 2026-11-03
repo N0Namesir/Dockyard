@@ -106,6 +106,7 @@ export async function buildApp(options: AppOptions = {}): Promise<FastifyInstanc
     await app.register(fastifyStatic, {
       root: webRoot,
       index: ['index.html'],
+      redirect: true, // /docs lleva a /docs/, donde está su index.html
     })
   }
 
