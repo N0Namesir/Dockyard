@@ -5,12 +5,19 @@ services:
   app:
     build: .
     restart: unless-stopped
+    # Corre con el usuario que instaló, para que projects/ y data/ queden a su nombre.
+    # El grupo del socket le da permiso de usar Docker. Los tres valores los escribe install.sh.
+    user: "${HOST_UID:-0}:${HOST_GID:-0}"
+    group_add:
+      - "${DOCKER_GID:-0}"
     ports:
       - "${TOOL_PORT:-4300}:${TOOL_PORT:-4300}"
     environment:
       PORT: ${TOOL_PORT:-4300}
       PROJECTS_DIR: ${PROJECTS_DIR:?Falta PROJECTS_DIR en .env. Ejecuta ./install.sh}
       DATA_DIR: /app/data
+      # El usuario no existe dentro de la imagen; npm, git y docker necesitan un HOME con escritura.
+      HOME: /tmp
     volumes:
       # La herramienta controla el Docker del anfitrión; los proyectos son contenedores hermanos.
       - /var/run/docker.sock:/var/run/docker.sock

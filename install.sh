@@ -21,6 +21,11 @@ echo "Compose: $(docker compose version --short)"
 
 mkdir -p projects data
 
+# Una instalación anterior pudo dejar estas carpetas a nombre de root.
+if [[ -n "$(find projects data -maxdepth 1 -not -user "$(id -u)" -print -quit)" ]]; then
+  fail "Hay archivos en projects/ o data/ de otro usuario. Corrígelo con: sudo chown -R \$(id -u):\$(id -g) projects data"
+fi
+
 # Conserva el puerto de una instalación anterior si no se indica otro.
 if [[ -z "${TOOL_PORT:-}" && -f .env ]]; then
   TOOL_PORT="$(sed -n 's/^TOOL_PORT=//p' .env)"
@@ -31,6 +36,9 @@ cat > .env <<EOF
 # Generado por install.sh
 PROJECTS_DIR=$(pwd)/projects
 TOOL_PORT=${TOOL_PORT}
+HOST_UID=$(id -u)
+HOST_GID=$(id -g)
+DOCKER_GID=$(stat -c %g /var/run/docker.sock)
 EOF
 
 docker compose up -d --build
