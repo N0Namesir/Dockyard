@@ -16,7 +16,7 @@
     "dev": "npm run dev -w api & npm run dev -w web & wait",
     "build": "npm run build -w core && npm run build -w api && npm run build -w web",
     "start": "npm run start -w api",
-    "test": "npm test -w core",
+    "test": "npm test --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present"
   },
   "devDependencies": {

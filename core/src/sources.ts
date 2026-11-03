@@ -22,7 +22,7 @@ export async function prepareProject(source: ProjectSource, name: string): Promi
   try {
     await mkdir(target) // sin recursive: falla si ya existe
   } catch (err: any) {
-    if (err.code === 'EEXIST') throw new Error('Ya existe un proyecto con ese nombre.')
+    if (err.code === 'EEXIST') throw new Error(`Ya existe un proyecto con ese nombre en la carpeta de proyectos. Usa otro nombre o, si ese proyecto ya no se usa, borra la carpeta ${target}.`)
     throw err
   }
 

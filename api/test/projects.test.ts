@@ -217,3 +217,77 @@ test('devuelve 404 y conserva el mensaje de una falla del núcleo', async () => 
   )
   await app.close()
 })
+
+test('todos los errores responden solo con message', async () => {
+  const app = await testApp()
+  const cases: [Parameters<typeof app.inject>[0], number][] = [
+    [{ method: 'GET', url: '/api/projects/999' }, 404],
+    [{ method: 'GET', url: '/api/projects/abc' }, 400],
+    [{ method: 'GET', url: '/api/no-existe' }, 404],
+    [{
+      method: 'POST',
+      url: '/api/projects',
+      headers: { 'content-type': 'application/json' },
+      payload: '{mal',
+    }, 400],
+    [{
+      method: 'POST',
+      url: '/api/projects',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      payload: 'team=x',
+    }, 415],
+  ]
+  for (const [request, statusCode] of cases) {
+    const response = await app.inject(request)
+    assert.equal(response.statusCode, statusCode)
+    assert.deepEqual(Object.keys(response.json()), ['message'])
+    assert.doesNotMatch(response.json().message, /must match|not valid|Unsupported|not found/)
+  }
+  await app.close()
+})
+
+test('una falla del núcleo responde 500 solo con su mensaje', async () => {
+  const fake = fakeCore()
+  const app = await testApp({
+    ...fake.core,
+    async prepareProject() {
+      throw new Error('No se pudo clonar el repositorio.')
+    },
+  })
+  const response = await app.inject({
+    method: 'POST',
+    url: '/api/projects',
+    payload: { team: 'E', name: 'P', repoUrl: 'https://github.com/e/p' },
+  })
+  assert.equal(response.statusCode, 500)
+  assert.deepEqual(response.json(), { message: 'No se pudo clonar el repositorio.' })
+  await app.close()
+})
+
+test('la búsqueda ignora tildes y mayúsculas y trata los comodines como texto', async () => {
+  const app = await testApp()
+  const register = (team: string, name: string) =>
+    app.inject({
+      method: 'POST',
+      url: '/api/projects',
+      payload: { team, name, repoUrl: 'https://github.com/e/p' },
+    })
+  await register('Equipo Ámbar', 'Tienda Ñandú')
+  await register('Equipo 100%', 'otro_proyecto')
+  await register('Equipo 3', 'otroxproyecto')
+
+  const search = async (q: string) => {
+    const response = await app.inject({
+      method: 'GET',
+      url: `/api/projects?q=${encodeURIComponent(q)}`,
+    })
+    return response.json().map((project: { name: string }) => project.name).sort()
+  }
+
+  assert.deepEqual(await search('ámbar'), ['tienda-nandu'])
+  assert.deepEqual(await search('AMBAR'), ['tienda-nandu'])
+  assert.deepEqual(await search('Tienda Ñandú'), ['tienda-nandu'])
+  assert.deepEqual(await search('%'), ['otro_proyecto'])
+  assert.deepEqual(await search('otro_p'), ['otro_proyecto'])
+  await app.close()
+})

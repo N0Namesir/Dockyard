@@ -15,6 +15,19 @@ const schema = `
   ) STRICT;
 `
 
+/** Minúsculas y sin tildes: LIKE de SQLite solo ignora mayúsculas en letras sin acento. */
+function normalizeForSearch(text: string): string {
+  return text
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+}
+
+/** Patrón para LIKE que trata %, _ y \\ como texto normal. */
+function likePattern(text: string): string {
+  return `%${text.replace(/[\\%_]/g, '\\$&')}%`
+}
+
 export interface ProjectRepository {
   list(query?: string): ProjectRow[]
   findById(id: number): ProjectRow | undefined
@@ -41,6 +54,9 @@ export function createProjectRepository(
   db.exec('PRAGMA foreign_keys = ON;')
   db.exec('PRAGMA journal_mode = WAL;')
   db.exec(schema)
+  db.function('normalizar', { deterministic: true }, (value) =>
+    normalizeForSearch(String(value)),
+  )
 
   const listAll = db.prepare(`
     SELECT id, name, team, source_type, source, dir, created_at
@@ -50,7 +66,7 @@ export function createProjectRepository(
   const search = db.prepare(`
     SELECT id, name, team, source_type, source, dir, created_at
     FROM projects
-    WHERE name LIKE ? OR team LIKE ?
+    WHERE normalizar(name) LIKE ? ESCAPE '\\' OR normalizar(team) LIKE ? ESCAPE '\\'
     ORDER BY created_at DESC, id DESC
   `)
   const byId = db.prepare(`
@@ -72,8 +88,10 @@ export function createProjectRepository(
     list(query) {
       const trimmed = query?.trim()
       if (!trimmed) return listAll.all() as unknown as ProjectRow[]
-      const pattern = `%${trimmed}%`
-      return search.all(pattern, pattern) as unknown as ProjectRow[]
+      const text = normalizeForSearch(trimmed)
+      // El nombre guardado lleva guiones: "tienda escolar" también debe encontrar "tienda-escolar".
+      const byName = likePattern(text.replace(/\s+/g, '-'))
+      return search.all(byName, likePattern(text)) as unknown as ProjectRow[]
     },
 
     findById(id) {
