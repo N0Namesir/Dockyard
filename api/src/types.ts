@@ -22,6 +22,7 @@ export interface ProjectResponse {
   ports: number[]
   url: string | null
   urls: string[]
+  failedServices: string[]
 }
 
 export interface CoreAdapter {
@@ -30,6 +31,8 @@ export interface CoreAdapter {
   startProject(dir: string, name: string): Promise<ProjectStatus>
   stopProject(dir: string, name: string): Promise<ProjectStatus>
   getProjectStatus(name: string): Promise<ProjectStatus>
+  getProjectLogs(name: string): Promise<string>
+  removeProject(name: string): Promise<void>
 }
 
 export interface NewProjectRow {

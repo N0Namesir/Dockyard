@@ -28,6 +28,7 @@ function toResponse(row: ProjectRow, status: ProjectStatus): ProjectResponse {
     ports: status.ports,
     url: mainPort === undefined ? null : `http://localhost:${mainPort}`,
     urls: status.ports.map((port) => `http://localhost:${port}`),
+    failedServices: status.failedServices ?? [],
   }
 }
 
@@ -36,16 +37,16 @@ export function createProjectService(
   core: CoreAdapter,
 ) {
   // Operaciones en curso: una petición repetida espera el mismo resultado en vez de lanzar otra.
-  const inFlight = new Map<string, Promise<ProjectResponse>>()
+  const inFlight = new Map<string, Promise<unknown>>()
 
-  function once(
+  function once<T>(
     id: number,
-    action: 'start' | 'stop',
-    run: () => Promise<ProjectResponse>,
-  ): Promise<ProjectResponse> {
+    action: 'start' | 'stop' | 'remove',
+    run: () => Promise<T>,
+  ): Promise<T> {
     const key = `${id}:${action}`
     const current = inFlight.get(key)
-    if (current) return current
+    if (current) return current as Promise<T>
     const operation = run().finally(() => inFlight.delete(key))
     inFlight.set(key, operation)
     return operation
@@ -88,6 +89,22 @@ export function createProjectService(
         dir: prepared.dir,
       })
       return hydrate(row)
+    },
+
+    async logs(id: number): Promise<{ logs: string }> {
+      const project = requireProject(id)
+      return { logs: await core.getProjectLogs(project.name) }
+    },
+
+    async remove(id: number): Promise<void> {
+      const project = requireProject(id)
+      if (inFlight.has(`${id}:start`) || inFlight.has(`${id}:stop`)) {
+        throw new HttpError(409, 'El proyecto se está encendiendo o apagando. Espera a que termine.')
+      }
+      return once(id, 'remove', async () => {
+        await core.removeProject(project.name)
+        repository.delete(id)
+      })
     },
 
     async start(id: number): Promise<ProjectResponse> {

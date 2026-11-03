@@ -33,6 +33,7 @@ export interface ProjectRepository {
   findById(id: number): ProjectRow | undefined
   findByName(name: string): ProjectRow | undefined
   insert(project: NewProjectRow): ProjectRow
+  delete(id: number): void
   close(): void
 }
 
@@ -84,6 +85,8 @@ export function createProjectRepository(
     VALUES (?, ?, ?, ?, ?, ?)
   `)
 
+  const remove = db.prepare('DELETE FROM projects WHERE id = ?')
+
   return {
     list(query) {
       const trimmed = query?.trim()
@@ -117,6 +120,10 @@ export function createProjectRepository(
         | undefined
       if (!row) throw new Error('No se pudo leer el proyecto recién registrado.')
       return row
+    },
+
+    delete(id) {
+      remove.run(id)
     },
 
     close() {

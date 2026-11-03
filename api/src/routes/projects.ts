@@ -170,6 +170,21 @@ export function projectRoutes(service: ProjectService): FastifyPluginAsync {
       return reply.code(201).send(project)
     })
 
+    app.get<{ Params: IdParams }>(
+      '/projects/:id/logs',
+      { schema: { params: idParamsSchema } },
+      async (request) => service.logs(Number(request.params.id)),
+    )
+
+    app.delete<{ Params: IdParams }>(
+      '/projects/:id',
+      { schema: { params: idParamsSchema } },
+      async (request, reply) => {
+        await service.remove(Number(request.params.id))
+        return reply.code(204).send()
+      },
+    )
+
     app.post<{ Params: IdParams }>(
       '/projects/:id/start',
       { schema: { params: idParamsSchema } },

@@ -1,7 +1,9 @@
 export {
+  getProjectLogs,
   getProjectStatus,
   normalizeProjectName,
   prepareProject,
+  removeProject,
   startProject,
   stopProject,
 } from '@dockyard/core'

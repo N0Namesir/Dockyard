@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { access } from 'node:fs/promises'
 import test from 'node:test'
+import type { InjectOptions } from 'fastify'
 import { buildApp, isAllowedRequest } from '../src/app.ts'
 import type { ProjectSource, ProjectStatus } from '../src/core.ts'
 import { createProjectRepository } from '../src/db/projects.ts'
@@ -40,6 +41,12 @@ function fakeCore() {
     },
     async getProjectStatus(name) {
       return statuses.get(name) ?? { state: 'stopped', ports: [] }
+    },
+    async getProjectLogs(name) {
+      return `registro de ${name}`
+    },
+    async removeProject(name) {
+      statuses.delete(name)
     },
   }
 
@@ -82,6 +89,7 @@ test('registra por GitHub, consulta, busca, enciende y apaga', async () => {
     ports: [],
     url: null,
     urls: [],
+    failedServices: [],
   })
 
   const found = await app.inject({
@@ -366,9 +374,91 @@ test('una petición de otra página no llega al núcleo', async () => {
   await app.close()
 })
 
+const repoProject = { team: 'E', name: 'P', repoUrl: 'https://github.com/e/p' }
+
+test('devuelve los servicios caídos y el registro', async () => {
+  const fake = fakeCore()
+  const app = await testApp({
+    ...fake.core,
+    async startProject() {
+      return { state: 'running', ports: [], failedServices: ['api'] }
+    },
+  })
+  await app.inject({ method: 'POST', url: '/api/projects', payload: repoProject })
+  const started = await app.inject({ method: 'POST', url: '/api/projects/1/start' })
+  assert.deepEqual(started.json().failedServices, ['api'])
+
+  const logs = await app.inject({ method: 'GET', url: '/api/projects/1/logs' })
+  assert.equal(logs.statusCode, 200)
+  assert.deepEqual(logs.json(), { logs: 'registro de p' })
+  assert.equal((await app.inject({ method: 'GET', url: '/api/projects/9/logs' })).statusCode, 404)
+  await app.close()
+})
+
+test('elimina un proyecto y libera su nombre', async () => {
+  const app = await testApp()
+  await app.inject({ method: 'POST', url: '/api/projects', payload: repoProject })
+
+  const removed = await app.inject({ method: 'DELETE', url: '/api/projects/1' })
+  assert.equal(removed.statusCode, 204)
+  assert.equal(removed.body, '')
+  assert.deepEqual((await app.inject({ method: 'GET', url: '/api/projects' })).json(), [])
+  assert.equal((await app.inject({ method: 'DELETE', url: '/api/projects/1' })).statusCode, 404)
+  assert.equal((await app.inject({ method: 'POST', url: '/api/projects', payload: repoProject })).statusCode, 201)
+  await app.close()
+})
+
+test('si borrar falla, el proyecto sigue registrado para poder reintentar', async () => {
+  const fake = fakeCore()
+  const app = await testApp({
+    ...fake.core,
+    async removeProject() {
+      throw new Error('Ejecuta en una terminal: sudo rm -rf /x')
+    },
+  })
+  await app.inject({ method: 'POST', url: '/api/projects', payload: repoProject })
+  const failed = await app.inject({ method: 'DELETE', url: '/api/projects/1' })
+  assert.equal(failed.statusCode, 500)
+  assert.match(failed.json().message, /sudo rm -rf/)
+  assert.equal((await app.inject({ method: 'GET', url: '/api/projects/1' })).statusCode, 200)
+  await app.close()
+})
+
+test('no elimina un proyecto que se está encendiendo y une los borrados repetidos', async () => {
+  const fake = fakeCore()
+  let finishStart: () => void = () => {}
+  const starting = new Promise<void>((done) => { finishStart = done })
+  let removals = 0
+  const app = await testApp({
+    ...fake.core,
+    async startProject() {
+      await starting
+      return { state: 'running', ports: [] }
+    },
+    async removeProject() {
+      removals++
+      await new Promise((done) => setTimeout(done, 30))
+    },
+  })
+  await app.inject({ method: 'POST', url: '/api/projects', payload: repoProject })
+  const start = app.inject({ method: 'POST', url: '/api/projects/1/start' })
+  await new Promise((done) => setTimeout(done, 20))
+  assert.equal((await app.inject({ method: 'DELETE', url: '/api/projects/1' })).statusCode, 409)
+  finishStart()
+  await start
+
+  const responses = await Promise.all([
+    app.inject({ method: 'DELETE', url: '/api/projects/1' }),
+    app.inject({ method: 'DELETE', url: '/api/projects/1' }),
+  ])
+  assert.deepEqual(responses.map((response) => response.statusCode), [204, 204])
+  assert.equal(removals, 1)
+  await app.close()
+})
+
 test('todos los errores responden solo con message', async () => {
   const app = await testApp()
-  const cases: [Parameters<typeof app.inject>[0], number][] = [
+  const cases: [InjectOptions, number][] = [
     [{ method: 'GET', url: '/api/projects/999' }, 404],
     [{ method: 'GET', url: '/api/projects/abc' }, 400],
     [{ method: 'GET', url: '/api/no-existe' }, 404],
