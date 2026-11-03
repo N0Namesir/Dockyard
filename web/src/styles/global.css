@@ -24,3 +24,13 @@ input {
   outline: 3px solid rgb(8 145 178 / 0.35);
   outline-offset: 2px;
 }
+
+/* Evita que la página de atrás se desplace mientras un diálogo modal está abierto. */
+dialog:modal {
+  overscroll-behavior: contain;
+}
+
+dialog::backdrop {
+  overflow: hidden;
+  overscroll-behavior: contain;
+}

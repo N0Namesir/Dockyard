@@ -29,7 +29,7 @@ En los dos casos, el proyecto debe traer su archivo compose. Reparte entre los e
 - **Abrir:** cuando el proyecto está **Encendido**, este botón abre en otra pestaña la dirección donde funciona (por ejemplo, http://localhost:8081). Si no abre la página correcta, prueba con los números de la columna **Puertos**: cada uno es un enlace.
 - **Apagar:** detiene el proyecto sin borrar nada. Sus datos se conservan para la próxima vez.
 - **Ver registro:** muestra las últimas líneas que escribió el proyecto. Sirve para saber por qué falla y compartirlo con el equipo.
-- **Eliminar:** borra el proyecto, su código y sus datos, y libera su nombre. Pide confirmación y no se puede deshacer.
+- **Eliminar:** borra el proyecto, su código y sus datos, y libera su nombre. Para confirmar hay que escribir el nombre del proyecto, porque no se puede deshacer.
 
 La tabla se actualiza sola cada 15 segundos. Si un proyecto aparece **Encendido** con el aviso **Con fallas**, uno de sus servicios se cayó; usa **Ver registro** para ver el motivo.
 

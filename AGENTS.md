@@ -93,5 +93,6 @@ Se usa `node:test`, sin dependencias. `api/test/projects.test.ts` cubre las ruta
 ## Convenciones
 
 - Código, mensajes de error y documentación en español.
+- Las acciones destructivas llevan doble verificación en la interfaz: el docente escribe el nombre exacto del proyecto para habilitar el botón.
 - Flujo de git: una rama por persona y cambios pequeños. La rama principal es `main`.
 - Commits y PRs sin atribución de agentes: nada de `Co-Authored-By`, "Generated with …", enlaces de sesión ni líneas similares. Solo el mensaje del cambio. Antes de cada commit o push, revisa el mensaje (`git log -1 --format=%B`) y quita cualquier línea de ese tipo.
