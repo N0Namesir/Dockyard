@@ -10,6 +10,8 @@ Abre en el navegador http://localhost:4300. Dockyard arranca sola al encender la
 
 Si la página no carga, abre una terminal en la carpeta de Dockyard y ejecuta `./install.sh`.
 
+Al reiniciar la PC, Dockyard vuelve solo, pero los proyectos quedan apagados y hay que encenderlos de nuevo. La excepción son los que declaran una política `restart` en su compose.
+
 ## Registrar un proyecto
 
 En el panel **Registrar proyecto**, llena **Equipo** y **Nombre del proyecto**, elige el **Origen** y presiona **Registrar proyecto**. Cada proyecto se registra una vez. Dockyard ajusta el nombre a un formato válido: por ejemplo, `Tienda Equipo 3` queda como `tienda-equipo-3`.
