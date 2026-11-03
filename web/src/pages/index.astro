@@ -213,8 +213,19 @@ import '../styles/global.css'
       const repoInput = form.elements.namedItem('repoUrl') as HTMLInputElement
       const fileInput = form.elements.namedItem('file') as HTMLInputElement
 
+      /** La petición no llegó a responder: la API está caída o el navegador cortó la espera. */
+      class ConnectionError extends Error {}
+
+      const CONNECTION_MESSAGE = 'No se puede conectar con Dockyard. Verifica que esté encendido y recarga la página.'
+      const POLL_INTERVAL_MS = 5_000
+      // Un poco más que el límite del núcleo para encender (10 minutos).
+      const POLL_LIMIT_MS = 11 * 60_000
+      const POLL_MAX_CONNECTION_FAILURES = 3
+
       let projects: Project[] = []
       let loading = true
+      let loadFailed = false
+      let latestLoad = 0
       let searchTimer: ReturnType<typeof setTimeout> | undefined
       const pendingActions = new Set<number>()
       const actionErrors = new Map<number, string>()
@@ -231,7 +242,12 @@ import '../styles/global.css'
       }
 
       async function api<T>(path: string, init?: RequestInit): Promise<T> {
-        const response = await fetch(path, init)
+        let response: Response
+        try {
+          response = await fetch(path, init)
+        } catch {
+          throw new ConnectionError(CONNECTION_MESSAGE)
+        }
         if (!response.ok) {
           let body: ApiError = {}
           try {
@@ -255,13 +271,26 @@ import '../styles/global.css'
 
       function render(): void {
         projectsBody.replaceChildren()
-        projectCount.textContent = loading
-          ? 'Cargando…'
-          : `${projects.length} ${projects.length === 1 ? 'proyecto' : 'proyectos'}`
+        if (loading) {
+          projectCount.textContent = 'Cargando…'
+        } else if (loadFailed) {
+          projectCount.textContent = 'Sin datos'
+        } else {
+          projectCount.textContent = `${projects.length} ${projects.length === 1 ? 'proyecto' : 'proyectos'}`
+        }
 
         if (loading) {
           const row = element('tr')
           const cell = element('td', 'px-5 py-12 text-center text-slate-500', 'Cargando proyectos…')
+          cell.colSpan = 5
+          row.append(cell)
+          projectsBody.append(row)
+          return
+        }
+
+        if (loadFailed) {
+          const row = element('tr')
+          const cell = element('td', 'px-5 py-12 text-center text-slate-500', 'No se pudo cargar la lista de proyectos.')
           cell.colSpan = 5
           row.append(cell)
           projectsBody.append(row)
@@ -337,7 +366,7 @@ import '../styles/global.css'
 
           const actionError = actionErrors.get(project.id)
           if (actionError) {
-            actionStack.append(element('p', 'max-w-xs text-right text-xs text-red-700', actionError))
+            actionStack.append(element('p', 'max-w-md whitespace-pre-wrap break-words text-left text-xs text-red-700', actionError))
           }
           actionsCell.append(actionStack)
           row.append(actionsCell)
@@ -345,25 +374,57 @@ import '../styles/global.css'
         }
       }
 
-      async function loadProjects(): Promise<void> {
+      /** Devuelve true si la lista se cargó. Una respuesta que ya no es la última se descarta. */
+      async function loadProjects(): Promise<boolean> {
+        const load = ++latestLoad
         loading = true
         render()
+        let result: Project[] | undefined
+        let message = ''
         try {
           const query = searchInput.value.trim()
-          projects = await api<Project[]>(`/api/projects${query ? `?q=${encodeURIComponent(query)}` : ''}`)
-          globalMessage.classList.add('hidden')
+          result = await api<Project[]>(`/api/projects${query ? `?q=${encodeURIComponent(query)}` : ''}`)
         } catch (error) {
-          projects = []
-          showGlobalMessage(
-            error instanceof Error
-              ? `No se puede conectar con la API: ${error.message}`
-              : 'No se puede conectar con la API.',
-            'error',
-          )
-        } finally {
-          loading = false
-          render()
+          message = error instanceof Error ? error.message : CONNECTION_MESSAGE
         }
+        if (load !== latestLoad) return false
+
+        loading = false
+        loadFailed = result === undefined
+        projects = result ?? []
+        if (result) globalMessage.classList.add('hidden')
+        else showGlobalMessage(message, 'error')
+        render()
+        return result !== undefined
+      }
+
+      /**
+       * El servidor sigue trabajando aunque el navegador corte la espera (Firefox lo hace a los
+       * 5 minutos y encender puede tardar 10), así que se consulta el estado hasta que cambie.
+       */
+      async function waitForState(project: Project, state: Project['state']): Promise<void> {
+        const deadline = Date.now() + POLL_LIMIT_MS
+        let connectionFailures = 0
+        while (Date.now() < deadline) {
+          await new Promise((done) => setTimeout(done, POLL_INTERVAL_MS))
+          try {
+            const current = await api<Project>(`/api/projects/${project.id}`)
+            connectionFailures = 0
+            if (current.state === state) {
+              projects = projects.map((item) => item.id === current.id ? current : item)
+              return
+            }
+          } catch (error) {
+            if (!(error instanceof ConnectionError)) throw error
+            connectionFailures++
+            if (connectionFailures >= POLL_MAX_CONNECTION_FAILURES) throw error
+          }
+        }
+        throw new Error(
+          state === 'running'
+            ? 'El proyecto no terminó de encender. Intenta encenderlo de nuevo para ver el motivo.'
+            : 'El proyecto no terminó de apagarse. Intenta apagarlo de nuevo para ver el motivo.',
+        )
       }
 
       async function changeState(project: Project): Promise<void> {
@@ -371,12 +432,17 @@ import '../styles/global.css'
         pendingActions.add(project.id)
         actionErrors.delete(project.id)
         render()
-        const action = project.state === 'running' ? 'stop' : 'start'
+        const running = project.state === 'running'
         try {
-          const updated = await api<Project>(`/api/projects/${project.id}/${action}`, {
-            method: 'POST',
-          })
-          projects = projects.map((item) => item.id === updated.id ? updated : item)
+          try {
+            const updated = await api<Project>(`/api/projects/${project.id}/${running ? 'stop' : 'start'}`, {
+              method: 'POST',
+            })
+            projects = projects.map((item) => item.id === updated.id ? updated : item)
+          } catch (error) {
+            if (!(error instanceof ConnectionError)) throw error
+            await waitForState(project, running ? 'stopped' : 'running')
+          }
         } catch (error) {
           actionErrors.set(
             project.id,
@@ -409,6 +475,7 @@ import '../styles/global.css'
       form.addEventListener('submit', async (event) => {
         event.preventDefault()
         formError.classList.add('hidden')
+        globalMessage.classList.add('hidden')
         if (!form.reportValidity()) return
 
         const formData = new FormData(form)
@@ -440,8 +507,9 @@ import '../styles/global.css'
           form.reset()
           updateSourceFields()
           searchInput.value = ''
-          showGlobalMessage('El proyecto se registró correctamente.', 'success')
-          await loadProjects()
+          if (await loadProjects()) {
+            showGlobalMessage('El proyecto se registró correctamente.', 'success')
+          }
         } catch (error) {
           formError.textContent = error instanceof Error ? error.message : 'No se pudo registrar el proyecto.'
           formError.classList.remove('hidden')
