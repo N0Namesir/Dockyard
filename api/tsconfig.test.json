@@ -1,0 +1,9 @@
+{
+  // Revisa los tipos de las pruebas, que tsconfig.json deja fuera de la compilación.
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": ".."
+  },
+  "include": ["src", "test"]
+}
