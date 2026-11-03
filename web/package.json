@@ -5,8 +5,18 @@
   "description": "Área 3: interfaz con Astro y Tailwind",
   "type": "module",
   "scripts": {
-    "dev": "echo \"web: pendiente (Área 3, Isaac)\"",
-    "build": "echo \"web: pendiente (Área 3, Isaac)\"",
-    "start": "echo \"web: pendiente (Área 3, Isaac)\""
+    "dev": "astro dev",
+    "build": "astro build",
+    "start": "astro preview",
+    "typecheck": "astro sync && tsc --noEmit"
+  },
+  "dependencies": {
+    "@tailwindcss/vite": "^4.3.3",
+    "astro": "^7.4.4",
+    "tailwindcss": "^4.3.3"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.2",
+    "typescript": "^7.0.2"
   }
 }
