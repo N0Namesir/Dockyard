@@ -61,7 +61,9 @@ getProjectStatus(name: string): Promise<ProjectStatus>
 - Todos los comandos de compose usan el prefijo `docker compose -p <nombre> --project-directory <dir> -f <dir>/<archivo>`. `getProjectStatus` usa solo `-p`.
 - El compose se busca en este orden: `compose.yaml`, `compose.yml`, `docker-compose.yaml`, `docker-compose.yml`, primero en la raíz y luego en una única subcarpeta.
 - Apagar es `stop`, no `down`.
-- Los choques de puertos se detectan antes de `up -d` (con `config --format json` contra `docker ps`) y se avisan. Los puertos nunca se reescriben.
+- Los choques de puertos y de `container_name` se detectan antes de `up -d` (con `config --format json` contra `docker ps`) y se avisan. Los puertos y el compose nunca se reescriben.
+- `prepareProject` rechaza un nombre que ya usan contenedores de otro proyecto de compose de la PC.
+- Un contenedor en estado `restarting` cuenta como encendido para poder apagarlo. Si tras `up -d` ninguno queda `running`, `startProject` los detiene y lanza su registro.
 - Si `prepareProject` falla a mitad de camino, borra la carpeta que creó. El ZIP lo borra la API, no el núcleo.
 - `startProject`, `stopProject` y `getProjectStatus` rechazan nombres sin normalizar (`assertNormalizedName`).
 - Los comandos de Docker pasan por el ayudante `docker()` de `core/src/docker.ts`, que traduce "Docker no responde" y "sin permiso". Los demás, por `run()` de `core/src/run.ts`.
@@ -74,6 +76,7 @@ getProjectStatus(name: string): Promise<ProjectStatus>
 
 - La herramienta corre en un contenedor que usa el Docker del anfitrión por `/var/run/docker.sock`. Los proyectos de estudiantes son contenedores hermanos, así que sus puertos se publican en la PC del docente.
 - **Regla crítica:** `projects/` se monta con la misma ruta dentro y fuera del contenedor (`${PROJECTS_DIR}:${PROJECTS_DIR}`). Si no, los bind mounts relativos de los proyectos se rompen.
+- **Seguridad:** la herramienta no tiene login y controla el Docker del anfitrión. Por eso se publica solo en `127.0.0.1` y la API rechaza con 403 los `Host` no locales y los `Origin` distintos de `Host` (`isAllowedRequest` en `api/src/app.ts`). Fuera del contenedor escucha en `127.0.0.1`; `HOST` lo cambia.
 - El puerto de la herramienta es poco común (por defecto `4300`, variable `TOOL_PORT`) para no chocar con 3000, 5173 u 8080.
 - `install.sh` genera `.env` (`PROJECTS_DIR`, `TOOL_PORT`, `HOST_UID`, `HOST_GID`, `DOCKER_GID`) y ejecuta `docker compose up -d --build`. El contenedor corre con ese usuario y no como root.
 - En desarrollo no se usa el contenedor: `npm run dev` contra el Docker local. Requiere `docker`, `docker compose`, `git` y `unzip`.

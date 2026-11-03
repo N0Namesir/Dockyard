@@ -7,8 +7,9 @@ Para que el docente pueda encender tu proyecto en Dockyard, debe cumplir estas r
 3. **La base de datos va dentro del mismo compose**, con un volumen con nombre para que los datos no se pierdan al apagar.
 4. **Si el proyecto necesita variables, incluye un `.env.example`** con valores que funcionen. Dockyard lo copia como `.env` al registrar el proyecto. No subas tu `.env` real.
 5. **Publica puertos poco comunes y distintos de los de otros equipos** (por ejemplo, del 8100 en adelante, según te asigne el docente). Dos proyectos no pueden encenderse a la vez si usan el mismo puerto. Evita el 4300, que usa Dockyard.
-6. **En un ZIP no incluyas `node_modules` ni `.git`.**
-7. **El repositorio debe ser público** y su URL debe empezar con `https://`.
+6. **No uses `container_name` en tu compose.** Dos proyectos no pueden tener contenedores con el mismo nombre, aunque uno esté apagado.
+7. **En un ZIP no incluyas `node_modules` ni `.git`.**
+8. **El repositorio debe ser público** y su URL debe empezar con `https://`.
 
 ## Ejemplo mínimo
 

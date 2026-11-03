@@ -66,6 +66,7 @@ Cómo funciona el contenedor:
 - La herramienta usa el Docker del anfitrión a través de `/var/run/docker.sock`. Los proyectos de estudiantes no corren dentro de ella: son contenedores hermanos, así que sus puertos se publican en la PC y `http://localhost:<puerto>` funciona desde el navegador.
 - **`projects/` se monta con la misma ruta dentro y fuera** (`${PROJECTS_DIR}:${PROJECTS_DIR}`). Cuando un proyecto monta una carpeta relativa (`./src:/app`), el Docker del anfitrión la resuelve con la ruta que ve la herramienta. Si las rutas difirieran, esos montajes apuntarían a un lugar que no existe.
 - El contenedor corre con el usuario que ejecutó `install.sh` (`HOST_UID`, `HOST_GID`) y con el grupo del socket (`DOCKER_GID`), así que `projects/` y `data/` quedan a su nombre. Los contenedores de un proyecto pueden crear archivos de root en sus propias carpetas montadas; esos se borran con `sudo`.
+- **Solo esta PC:** el puerto se publica en `127.0.0.1`, porque quien alcance la herramienta puede ejecutar cualquier compose con el Docker del anfitrión. Dentro del contenedor la API escucha en `0.0.0.0` (variable `HOST`); fuera, en `127.0.0.1`. Abrirla a la red exige agregar login antes.
 - `restart: unless-stopped` hace que la herramienta vuelva sola al reiniciar, siempre que el servicio de Docker arranque con el sistema (`sudo systemctl enable docker`).
 
 **Plan B, sin contenedor.** Si el despliegue en contenedor falla, la herramienta corre directamente en la PC con Node: `npm ci && npm run build && npm run start`, o con PM2 para que se mantenga encendida (`pm2 start npm --name dockyard -- run start`). Requiere Node 24, git, unzip y Docker en la PC.
@@ -74,6 +75,8 @@ Cómo funciona el contenedor:
 
 - **Rutas:** las cinco de `/api/projects` responden JSON. Toda falla responde solo `{ "message": "…" }`: 400 por datos inválidos, 404 si no existe, 409 si el nombre se repite y 500 con el mensaje del núcleo.
 - **El manejador de errores va antes de registrar las rutas** (`api/src/app.ts`). Un plugin hereda el manejador que existe al registrarse; si se define después, Fastify usa el suyo sin avisar.
+- **Protección contra otras páginas:** el puerto local no basta, porque una página abierta en el navegador del docente también llega a `localhost`, incluidos los proyectos de estudiantes en otros puertos. Por eso `isAllowedRequest` (`api/src/app.ts`) exige un `Host` local y un `Origin` igual a `Host`, y responde 403 si no. Las peticiones sin `Origin`, como las de `curl`, se aceptan.
+- **Enlaces:** `urls` trae uno por puerto. `url`, el del botón **Abrir**, es el primero que no sea de un servicio conocido que no es una página (como 3306 o 5432); si todos lo son, usa el primero. Es una suposición: por eso la columna **Puertos** enlaza todos.
 - **Datos:** SQLite guarda solo lo que Docker no sabe (nombre, equipo, origen, carpeta). El estado y los puertos se consultan siempre al núcleo, así que listar ejecuta un `docker compose ps` por proyecto.
 - **Búsqueda:** ignora mayúsculas y tildes con la función `normalizar`, registrada en SQLite, porque `LIKE` solo ignora mayúsculas en letras sin acento. `%` y `_` se buscan como texto.
 - **ZIP:** se guarda en una carpeta temporal, con un límite de 200 MB, y se borra al terminar el registro, salga bien o mal.
@@ -121,6 +124,7 @@ Reglas que cumple el núcleo:
 |---|---|
 | CLI de `docker compose` en lugar de la API de Docker | La API de Docker no maneja compose y dockerode-compose deja parte de la especificación sin implementar |
 | `stop` en lugar de `down` para apagar | `stop` no borra contenedores ni redes, así encender de nuevo es rápido. `down` borra contenedores y redes (los volúmenes con nombre sí se conservan) |
+| Avisar de un `container_name` repetido sin quitarlo | `stop` conserva los contenedores, así que el nombre sigue ocupado con el proyecto apagado. Quitarlo implicaría modificar el compose del equipo |
 | Detectar choques de puertos sin reescribirlos | Los proyectos de estudiantes apuntan a sus propios puertos: un frontend que llama a `localhost:5000` dejaría de funcionar si se cambia el puerto del backend |
 | `docker compose -p <nombre> ps` sin `-f` para el estado | No depende de la carpeta ni del archivo compose; se comprobó con Docker 29.9 y Compose 5.6 |
 | Puerto 4300 para la herramienta | Los proyectos de estudiantes usan mucho el 3000, el 5173 y el 8080 |
@@ -147,5 +151,6 @@ Esta entrega no las incluye. Mientras tanto, el docente registra solo proyectos 
 - **Reescritura automática de puertos o subdominios con Traefik**: Traefik da subdominios `.localhost`, pero exige saber qué servicio y qué puerto interno expone cada proyecto.
 - **Límites de recursos** por proyecto.
 - **Login** para el docente.
+- Un proyecto con un servicio caído y otro activo aparece como encendido, sin aviso.
 - La detección de puertos solo ve contenedores. Si otro programa de la PC usa el puerto, falla `up -d` y el mensaje de Docker llega al docente.
 - Actualizar un proyecto (`git pull`): el clonado conserva `.git` para poder hacerlo, pero falta la función.
