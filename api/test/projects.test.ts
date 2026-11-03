@@ -255,6 +255,25 @@ test('una petición repetida se une a la operación en curso', async () => {
   await app.close()
 })
 
+test('rechaza una URL con credenciales sin llamar al núcleo', async () => {
+  const fake = fakeCore()
+  const app = await testApp(fake.core)
+  for (const repoUrl of [
+    'https://usuario:token@github.com/equipo/proyecto',
+    'https://token@github.com/equipo/proyecto',
+  ]) {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/projects',
+      payload: { team: 'E', name: 'P', repoUrl },
+    })
+    assert.equal(response.statusCode, 400)
+    assert.match(response.json().message, /usuario ni contraseña/)
+  }
+  assert.equal(fake.getReceivedSource(), undefined)
+  await app.close()
+})
+
 test('todos los errores responden solo con message', async () => {
   const app = await testApp()
   const cases: [Parameters<typeof app.inject>[0], number][] = [

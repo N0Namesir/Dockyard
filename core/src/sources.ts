@@ -57,6 +57,9 @@ function validateSource(source: ProjectSource): void {
     if (url.protocol !== 'https:') {
       throw new Error('Solo se aceptan repositorios con URL https://.')
     }
+    if (url.username || url.password) {
+      throw new Error('La URL del repositorio no debe incluir usuario ni contraseña. Usa la forma https://github.com/usuario/repositorio.')
+    }
   } else if (source.type !== 'zip') {
     throw new Error('Fuente de proyecto desconocida: debe ser un repositorio git o un archivo ZIP.')
   }

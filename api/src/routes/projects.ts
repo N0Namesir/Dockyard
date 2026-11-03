@@ -59,6 +59,13 @@ function validateRepositoryUrl(value: string): string {
       'El repositorio debe ser público y usar una URL HTTPS de GitHub.',
     )
   }
+  if (url.username || url.password) {
+    // Se guardaría en texto plano en la base de datos.
+    throw new HttpError(
+      400,
+      'La URL del repositorio no debe incluir usuario ni contraseña.',
+    )
+  }
   return url.toString()
 }
 

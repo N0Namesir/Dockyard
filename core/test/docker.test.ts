@@ -91,6 +91,7 @@ describe('prepareProject', () => {
     ['ZIP dañado', () => ({ type: 'zip', filePath: zips.danado }), /ZIP válido/],
     ['ZIP inexistente', () => ({ type: 'zip', filePath: join(base, 'no-existe.zip') }), /No se encontró el archivo ZIP/],
     ['URL que no es https', () => ({ type: 'git', url: 'http://github.com/x/y' }), /https:\/\//],
+    ['URL con credenciales', () => ({ type: 'git', url: 'https://usuario:token@github.com/x/y' }), /usuario ni contraseña/],
     ['URL no válida', () => ({ type: 'git', url: 'no es una url' }), /no es válida/],
     ['repositorio inexistente o privado', () => ({ type: 'git', url: 'https://github.com/N0Namesir/no-existe-dockyard' }), /público/],
     ['repositorio sin compose', () => ({ type: 'git', url: 'https://github.com/octocat/Hello-World' }), /No se encontró un archivo compose/],
