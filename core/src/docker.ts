@@ -12,6 +12,8 @@ const STATUS_TIMEOUT = 30_000
 const LOG_LINES = 200
 /** Pausa tras `up -d` para que un contenedor que arranca y se cae alcance a figurar como detenido. */
 const SETTLE_MS = 2_000
+const SETTLE_CHECKS = 3
+const SETTLE_CHECK_GAP_MS = 500
 
 /** Ejecuta un comando de docker y traduce las fallas de conexión a un mensaje claro para el docente. */
 async function docker(args: string[], opts: RunOptions = {}): Promise<string> {
@@ -204,6 +206,19 @@ async function checkConflicts(prefix: string[], name: string): Promise<void> {
   }
 }
 
+/**
+ * Un contenedor con restart: always que falla aparece running por instantes entre reinicios.
+ * Por eso una sola mirada no basta: encendido es seguir running en todas.
+ */
+async function settledContainers(name: string): Promise<any[]> {
+  let containers = await listContainers(name)
+  for (let i = 1; i < SETTLE_CHECKS && containers.some((c) => c.State === 'running'); i++) {
+    await sleep(SETTLE_CHECK_GAP_MS)
+    containers = await listContainers(name)
+  }
+  return containers
+}
+
 export async function startProject(dir: string, name: string): Promise<ProjectStatus> {
   const prefix = await composePrefix(dir, name)
   await checkConflicts(prefix, name)
@@ -221,13 +236,11 @@ export async function startProject(dir: string, name: string): Promise<ProjectSt
   }
 
   await sleep(SETTLE_MS)
-  const containers = await listContainers(name)
+  const containers = await settledContainers(name)
   if (!containers.some((c) => c.State === 'running')) {
     const logs = await docker([...prefix, 'logs', '--tail', '20', '--no-color'], { timeoutMs: STATUS_TIMEOUT }).catch(() => '')
     // Con restart: always seguiría reiniciándose sin fin; se detiene para que quede de verdad apagado.
-    if (containers.some((c) => c.State === 'restarting')) {
-      await docker([...prefix, 'stop'], { timeoutMs: STOP_TIMEOUT }).catch(() => {})
-    }
+    await docker([...prefix, 'stop'], { timeoutMs: STOP_TIMEOUT }).catch(() => {})
     throw new Error(`El proyecto se encendió, pero sus contenedores se detuvieron enseguida. Últimas líneas del registro:\n${logs.trim() || '(sin registro)'}`)
   }
   return statusFromContainers(containers)
