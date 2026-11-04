@@ -21,6 +21,10 @@ services:
       DATA_DIR: /app/data
       # El usuario no existe dentro de la imagen; npm, git y docker necesitan un HOME con escritura.
       HOME: /tmp
+      # Para comprobar que la web de cada proyecto responde: aquí dentro, localhost es Dockyard.
+      PROJECTS_HOST: host.docker.internal
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS -o /dev/null http://127.0.0.1:$$PORT/"]
       interval: 30s

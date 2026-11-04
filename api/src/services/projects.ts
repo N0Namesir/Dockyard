@@ -6,6 +6,7 @@ import type {
   ProjectResponse,
   ProjectRow,
 } from '../types.ts'
+import type { CheckWeb, WebCheck } from './web-check.ts'
 
 export interface RegisterProjectInput {
   team: string
@@ -17,9 +18,19 @@ export interface RegisterProjectInput {
 /** Puertos habituales de servicios que no son páginas: bases de datos, colas y cachés. */
 const NON_WEB_PORTS = new Set([1433, 1521, 3306, 5432, 5672, 6379, 9042, 11211, 27017])
 
-function toResponse(row: ProjectRow, status: ProjectStatus): ProjectResponse {
-  // "Abrir" usa el primer puerto que parezca una página; "Puertos" enlaza todos.
-  const mainPort = status.ports.find((port) => !NON_WEB_PORTS.has(port)) ?? status.ports[0]
+/**
+ * Una web que contesta se vuelve a pedir cada minuto como mucho: la lista se refresca cada 15 s y
+ * algunos proyectos limitan las peticiones por dirección IP.
+ */
+const WEB_CHECK_TTL_MS = 60_000
+
+/** El puerto de "Abrir": el primero que parezca una página; si ninguno, el primero. */
+function mainPortOf(status: ProjectStatus): number | undefined {
+  return status.ports.find((port) => !NON_WEB_PORTS.has(port)) ?? status.ports[0]
+}
+
+function toResponse(row: ProjectRow, status: ProjectStatus, web: WebCheck | null): ProjectResponse {
+  const mainPort = mainPortOf(status)
   return {
     id: row.id,
     name: row.name,
@@ -29,12 +40,14 @@ function toResponse(row: ProjectRow, status: ProjectStatus): ProjectResponse {
     url: mainPort === undefined ? null : `http://localhost:${mainPort}`,
     urls: status.ports.map((port) => `http://localhost:${port}`),
     failedServices: status.failedServices ?? [],
+    web,
   }
 }
 
 export function createProjectService(
   repository: ProjectRepository,
   core: CoreAdapter,
+  checkWeb: CheckWeb,
 ) {
   // Operaciones en curso: una petición repetida espera el mismo resultado en vez de lanzar otra.
   const inFlight = new Map<string, Promise<unknown>>()
@@ -52,8 +65,31 @@ export function createProjectService(
     return operation
   }
 
+  const webChecks = new Map<number, { port: number; at: number; result: WebCheck }>()
+
+  async function webCheckOf(row: ProjectRow, status: ProjectStatus): Promise<WebCheck | null> {
+    const port = mainPortOf(status)
+    if (status.state !== 'running' || port === undefined || NON_WEB_PORTS.has(port)) {
+      webChecks.delete(row.id)
+      return null
+    }
+    const saved = webChecks.get(row.id)
+    // Lo que no contesta se repite siempre, para notar pronto que ya arrancó.
+    if (saved && saved.port === port && saved.result.state !== 'no-response'
+      && Date.now() - saved.at < WEB_CHECK_TTL_MS) {
+      return saved.result
+    }
+    const result = await checkWeb(port)
+    webChecks.set(row.id, { port, at: Date.now(), result })
+    return result
+  }
+
+  async function respond(row: ProjectRow, status: ProjectStatus): Promise<ProjectResponse> {
+    return toResponse(row, status, await webCheckOf(row, status))
+  }
+
   async function hydrate(row: ProjectRow): Promise<ProjectResponse> {
-    return toResponse(row, await core.getProjectStatus(row.name))
+    return respond(row, await core.getProjectStatus(row.name))
   }
 
   function requireProject(id: number): ProjectRow {
@@ -104,20 +140,23 @@ export function createProjectService(
       return once(id, 'remove', async () => {
         await core.removeProject(project.name)
         repository.delete(id)
+        webChecks.delete(id)
       })
     },
 
     async start(id: number): Promise<ProjectResponse> {
       const project = requireProject(id)
-      return once(id, 'start', async () =>
-        toResponse(project, await core.startProject(project.dir, project.name)),
-      )
+      return once(id, 'start', async () => {
+        const status = await core.startProject(project.dir, project.name)
+        webChecks.delete(id)
+        return respond(project, status)
+      })
     },
 
     async stop(id: number): Promise<ProjectResponse> {
       const project = requireProject(id)
       return once(id, 'stop', async () =>
-        toResponse(project, await core.stopProject(project.dir, project.name)),
+        respond(project, await core.stopProject(project.dir, project.name)),
       )
     },
   }

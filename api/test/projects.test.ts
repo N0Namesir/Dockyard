@@ -1,10 +1,13 @@
 import assert from 'node:assert/strict'
 import { access } from 'node:fs/promises'
+import { createServer } from 'node:http'
+import type { AddressInfo } from 'node:net'
 import test from 'node:test'
 import type { InjectOptions } from 'fastify'
 import { buildApp, isAllowedRequest } from '../src/app.ts'
 import type { ProjectSource, ProjectStatus } from '../src/core.ts'
 import { createProjectRepository } from '../src/db/projects.ts'
+import { createWebChecker, type CheckWeb } from '../src/services/web-check.ts'
 import type { CoreAdapter } from '../src/types.ts'
 
 function normalize(name: string): string {
@@ -53,9 +56,9 @@ function fakeCore() {
   return { core, getReceivedSource: () => receivedSource }
 }
 
-async function testApp(core = fakeCore().core) {
+async function testApp(core = fakeCore().core, checkWeb: CheckWeb = async () => ({ state: 'ok', httpStatus: 200 })) {
   const repository = createProjectRepository(':memory:')
-  return buildApp({ repository, core })
+  return buildApp({ repository, core, checkWeb })
 }
 
 test('la lista empieza vacía', async () => {
@@ -90,6 +93,7 @@ test('registra por GitHub, consulta, busca, enciende y apaga', async () => {
     url: null,
     urls: [],
     failedServices: [],
+    web: null,
   })
 
   const found = await app.inject({
@@ -528,4 +532,115 @@ test('la búsqueda ignora tildes y mayúsculas y trata los comodines como texto'
   assert.deepEqual(await search('%'), ['otro_proyecto'])
   assert.deepEqual(await search('otro_p'), ['otro_proyecto'])
   await app.close()
+})
+
+test('comprueba la web solo si está encendido y con el puerto de Abrir', async () => {
+  const fake = fakeCore()
+  const ports: number[] = []
+  const app = await testApp(
+    {
+      ...fake.core,
+      async startProject() {
+        return { state: 'running', ports: [3306, 8084] }
+      },
+    },
+    async (port) => {
+      ports.push(port)
+      return { state: 'no-response' }
+    },
+  )
+  await app.inject({ method: 'POST', url: '/api/projects', payload: repoProject })
+  assert.equal((await app.inject({ method: 'GET', url: '/api/projects/1' })).json().web, null)
+  assert.deepEqual(ports, [])
+
+  const started = await app.inject({ method: 'POST', url: '/api/projects/1/start' })
+  assert.deepEqual(started.json().web, { state: 'no-response' })
+  assert.deepEqual(ports, [8084])
+  await app.close()
+})
+
+test('sin puerto de página no comprueba la web', async () => {
+  const fake = fakeCore()
+  let calls = 0
+  const app = await testApp(
+    {
+      ...fake.core,
+      async startProject() {
+        return { state: 'running', ports: [5432] }
+      },
+    },
+    async () => {
+      calls++
+      return { state: 'ok' }
+    },
+  )
+  await app.inject({ method: 'POST', url: '/api/projects', payload: repoProject })
+  const started = await app.inject({ method: 'POST', url: '/api/projects/1/start' })
+  assert.equal(started.json().web, null)
+  assert.equal(calls, 0)
+  await app.close()
+})
+
+test('la web que contesta no se vuelve a pedir enseguida; la que no contesta, sí', async () => {
+  const statuses = new Map<string, ProjectStatus>()
+  const fake = fakeCore()
+  const core: CoreAdapter = {
+    ...fake.core,
+    async startProject(_dir, name) {
+      const status: ProjectStatus = { state: 'running', ports: [8084] }
+      statuses.set(name, status)
+      return status
+    },
+    async getProjectStatus(name) {
+      return statuses.get(name) ?? { state: 'stopped', ports: [] }
+    },
+  }
+  let calls = 0
+  let answer: 'ok' | 'no-response' = 'no-response'
+  const app = await testApp(core, async () => {
+    calls++
+    return { state: answer }
+  })
+  await app.inject({ method: 'POST', url: '/api/projects', payload: repoProject })
+  await app.inject({ method: 'POST', url: '/api/projects/1/start' })
+  assert.equal(calls, 1)
+
+  await app.inject({ method: 'GET', url: '/api/projects' })
+  assert.equal(calls, 2)
+
+  answer = 'ok'
+  await app.inject({ method: 'GET', url: '/api/projects' })
+  assert.equal(calls, 3)
+  const cached = await app.inject({ method: 'GET', url: '/api/projects' })
+  assert.equal(calls, 3)
+  assert.deepEqual(cached.json()[0].web, { state: 'ok' })
+
+  // Volver a encender descarta lo guardado.
+  await app.inject({ method: 'POST', url: '/api/projects/1/start' })
+  assert.equal(calls, 4)
+  await app.close()
+})
+
+test('el comprobador distingue respuesta, error del servidor y falta de respuesta', async () => {
+  let status = 200
+  const server = createServer((_request, response) => {
+    response.writeHead(status, status === 302 ? { location: 'http://localhost:1/' } : {})
+    response.end('hola')
+  })
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+  const { port } = server.address() as AddressInfo
+  const check = createWebChecker('127.0.0.1')
+
+  assert.deepEqual(await check(port), { state: 'ok', httpStatus: 200 })
+  // No sigue la redirección, y un 404 también prueba que la aplicación está viva.
+  status = 302
+  assert.deepEqual(await check(port), { state: 'ok', httpStatus: 302 })
+  status = 404
+  assert.deepEqual(await check(port), { state: 'ok', httpStatus: 404 })
+  status = 502
+  assert.deepEqual(await check(port), { state: 'error', httpStatus: 502 })
+
+  server.closeAllConnections()
+  await new Promise((resolve) => server.close(resolve))
+  assert.deepEqual(await check(port), { state: 'no-response' })
 })

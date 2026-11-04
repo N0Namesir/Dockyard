@@ -3,6 +3,7 @@ import type {
   ProjectSource,
   ProjectStatus,
 } from './core.ts'
+import type { WebCheck } from './services/web-check.ts'
 
 export interface ProjectRow {
   id: number
@@ -23,6 +24,8 @@ export interface ProjectResponse {
   url: string | null
   urls: string[]
   failedServices: string[]
+  /** null si está apagado o solo publica puertos que no son páginas. */
+  web: WebCheck | null
 }
 
 export interface CoreAdapter {

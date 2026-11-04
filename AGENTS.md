@@ -65,6 +65,7 @@ removeProject(name: string): Promise<void>                                      
 - Apagar es `stop`, no `down`.
 - Los choques de puertos y de `container_name` se detectan antes de `up -d` (con `config --format json` contra `docker ps`) y se avisan. Los puertos y el compose nunca se reescriben.
 - `prepareProject` rechaza un nombre que ya usan contenedores de otro proyecto de compose de la PC.
+- La comprobación de que la web responde (`web` en la respuesta) la hace la API en `api/src/services/web-check.ts`, porque el núcleo no usa HTTP.
 - `failedServices` nombra los servicios caídos (salida distinta de 0) o reiniciándose de un proyecto encendido, y solo aparece si hay alguno.
 - `removeProject` usa `down -v` y borra la carpeta. Si quedan archivos de root, lanza el comando `sudo` a ejecutar.
 - Un contenedor en estado `restarting` cuenta como encendido para poder apagarlo. Si tras `up -d` ninguno queda `running`, `startProject` los detiene y lanza su registro.

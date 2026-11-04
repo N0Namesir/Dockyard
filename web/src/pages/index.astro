@@ -224,6 +224,7 @@ import FaviconLinks from '../components/FaviconLinks.astro'
         url: string | null
         urls: string[]
         failedServices: string[]
+        web: { state: 'ok' | 'error' | 'no-response'; httpStatus?: number } | null
       }
 
       interface ApiError {
@@ -382,6 +383,20 @@ import FaviconLinks from '../components/FaviconLinks.astro'
                 'p',
                 'mt-1 max-w-40 text-xs font-medium text-amber-800',
                 `Con fallas: ${project.failedServices.join(', ')}`,
+              ),
+            )
+          }
+          if (project.web) {
+            const { state, httpStatus } = project.web
+            stateCell.append(
+              element(
+                'p',
+                `mt-1 max-w-40 text-xs font-medium ${state === 'ok' ? 'text-emerald-800' : 'text-amber-800'}`,
+                state === 'ok'
+                  ? 'La web responde'
+                  : state === 'error'
+                    ? `La web responde con error ${httpStatus}`
+                    : 'La web aún no responde',
               ),
             )
           }

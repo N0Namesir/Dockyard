@@ -11,6 +11,7 @@ import {
 import { errorMessage, HttpError } from './errors.ts'
 import { projectRoutes } from './routes/projects.ts'
 import { createProjectService } from './services/projects.ts'
+import { createWebChecker, type CheckWeb } from './services/web-check.ts'
 import type { CoreAdapter } from './types.ts'
 
 const LOCAL_HOSTNAMES = new Set(['localhost', '127.0.0.1', '[::1]'])
@@ -44,6 +45,7 @@ export function isAllowedRequest(host: string | undefined, origin: string | unde
 export interface AppOptions {
   repository?: ProjectRepository
   core?: CoreAdapter
+  checkWeb?: CheckWeb
   logger?: boolean
   serveWeb?: boolean
   webRoot?: string
@@ -98,7 +100,7 @@ export async function buildApp(options: AppOptions = {}): Promise<FastifyInstanc
     limits: { files: 1, fileSize: 200 * 1024 * 1024, fields: 10 },
   })
 
-  const service = createProjectService(repository, core)
+  const service = createProjectService(repository, core, options.checkWeb ?? createWebChecker())
   await app.register(projectRoutes(service), { prefix: '/api' })
 
   const webRoot = options.webRoot ?? resolve(import.meta.dirname, '../../web/dist')

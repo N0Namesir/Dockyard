@@ -33,6 +33,14 @@ En los dos casos, el proyecto debe traer su archivo compose. Reparte entre los e
 
 La tabla se actualiza sola cada 15 segundos. Si un proyecto aparece **Encendido** con el aviso **Con fallas**, uno de sus servicios se cayó; usa **Ver registro** para ver el motivo.
 
+Debajo de **Encendido** se indica si la página del proyecto contesta:
+
+- **La web responde:** Dockyard recibió una respuesta. No revisa si cada función sirve, pero la página está arriba.
+- **La web aún no responde:** es normal unos segundos o minutos después de encender, mientras arranca. Si no cambia, usa **Ver registro**.
+- **La web responde con error:** el servidor contesta, pero falla. Suele ser un problema del proyecto, como una base de datos que no conecta.
+
+Se comprueba solo el puerto que usa **Abrir**.
+
 ## Problemas frecuentes
 
 | Mensaje | Qué pasa | Qué hacer |

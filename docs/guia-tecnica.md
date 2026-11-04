@@ -80,6 +80,7 @@ Cómo funciona el contenedor:
 - **El manejador de errores va antes de registrar las rutas** (`api/src/app.ts`). Un plugin hereda el manejador que existe al registrarse; si se define después, Fastify usa el suyo sin avisar.
 - **Protección contra otras páginas:** el puerto local no basta, porque una página abierta en el navegador del docente también llega a `localhost`, incluidos los proyectos de estudiantes en otros puertos. Por eso `isAllowedRequest` (`api/src/app.ts`) exige un `Host` local y un `Origin` igual a `Host`, y responde 403 si no. Las peticiones sin `Origin`, como las de `curl`, se aceptan.
 - **Enlaces:** `urls` trae uno por puerto. `url`, el del botón **Abrir**, es el primero que no sea de un servicio conocido que no es una página (como 3306 o 5432); si todos lo son, usa el primero. Es una suposición: por eso la columna **Puertos** enlaza todos.
+- **Web:** `web` indica si contesta el puerto de **Abrir** (`api/src/services/web-check.ts`). Es `null` si el proyecto está apagado o solo publica puertos que no son páginas. Cualquier respuesta menor a 500 cuenta como `ok`, porque un 401 o un 404 también prueban que la aplicación está viva. La hace la API porque el núcleo no usa HTTP. Una web que contesta se vuelve a pedir cada minuto como mucho, para no gastar el límite de peticiones de los proyectos. Dentro del contenedor usa `PROJECTS_HOST` (`host.docker.internal`), porque ahí `localhost` es Dockyard.
 - **Datos:** SQLite guarda solo lo que Docker no sabe (nombre, equipo, origen, carpeta). El estado y los puertos se consultan siempre al núcleo, así que listar ejecuta un `docker compose ps` por proyecto.
 - **Búsqueda:** ignora mayúsculas y tildes con la función `normalizar`, registrada en SQLite, porque `LIKE` solo ignora mayúsculas en letras sin acento. `%` y `_` se buscan como texto.
 - **ZIP:** se guarda en una carpeta temporal, con un límite de 200 MB, y se borra al terminar el registro, salga bien o mal.
@@ -160,5 +161,6 @@ Esta entrega no las incluye. Mientras tanto, el docente registra solo proyectos 
 - **Reescritura automática de puertos o subdominios con Traefik**: Traefik da subdominios `.localhost`, pero exige saber qué servicio y qué puerto interno expone cada proyecto.
 - **Límites de recursos** por proyecto.
 - **Login** para el docente.
+- La comprobación de la web no alcanza un puerto publicado solo en `127.0.0.1` (como `"127.0.0.1:8101:80"`) cuando Dockyard corre en contenedor: dirá que no responde aunque abra en el navegador. Tampoco entiende HTTPS.
 - La detección de puertos solo ve contenedores. Si otro programa de la PC usa el puerto, falla `up -d` y el mensaje de Docker llega al docente.
 - Actualizar un proyecto (`git pull`): el clonado conserva `.git` para poder hacerlo, pero falta la función.
