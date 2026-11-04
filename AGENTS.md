@@ -21,6 +21,7 @@ npm test                                      # pruebas del núcleo y de la API,
 npm run test:docker -w core                   # pruebas con Docker real (usan los puertos 8081-8083, ~1-2 min)
 node --test --test-name-pattern="choque" core/test/docker.test.ts   # una sola prueba
 npm run try -w core -- ejemplos/prueba-estatico   # recorrido manual (url https, .zip o carpeta)
+npm version 1.1.0                             # publica una versión: prueba, crea commit y etiqueta, y los sube
 node ejemplos/crear-zips.ts                   # genera las variantes de ZIP en ejemplos/zips/
 ./install.sh                                  # despliegue en contenedor
 ```
@@ -56,6 +57,8 @@ getProjectStatus(name: string): Promise<ProjectStatus>
 getProjectLogs(name: string): Promise<string>                                   // últimas 200 líneas
 getResources(): Promise<ResourceUsage>                                          // { memoryLimit, projects }: consumo por proyecto de compose
 removeProject(name: string): Promise<void>                                      // se puede repetir
+getLatestVersion(repoUrl: string): Promise<string | null>                       // etiqueta vX.Y.Z más alta, sin descargar el repositorio
+isNewerVersion(candidate: string, current: string): boolean
 reviewProject(dir: string, name: string): Promise<string[]>                     // avisos para el docente, nunca lanza por el proyecto
 // ProjectSource = { type: 'git'; url } | { type: 'zip'; filePath }
 updateProject(name: string): Promise<ProjectUpdate>                             // { dir, changed, commit, summary }
@@ -80,13 +83,14 @@ updateProject(name: string): Promise<ProjectUpdate>                             
 - El núcleo traduce la salida de Docker a etapas (`core/src/progress.ts`). La API guarda el avance solo en memoria y la interfaz solo lo muestra. Si Docker cambia su formato, deja de cambiar la etapa, pero encender sigue funcionando.
 - El repositorio de un proyecto de GitHub vive en `projects/.repos/<nombre>`, nunca dentro de su carpeta: los contenedores suelen montarla y un hook o una configuración plantados en `.git` se ejecutarían al actualizar. Git se llama siempre con `--git-dir` y `--work-tree`.
 - `getResources` expresa la CPU sobre toda la PC, no por núcleo, y tarda unos 2 s porque Docker toma una muestra. Devuelve todos los proyectos de compose; la API deja solo los registrados y comparte la muestra 5 s.
+- `getLatestVersion` usa `git ls-remote --tags` e ignora las etiquetas que no sean `vX.Y.Z`. La API decide cuándo consultar (`api/src/services/version.ts`): como máximo cada 6 horas y solo si la piden, nunca al arrancar. `UPDATE_CHECK=off` la apaga e `install.sh` conserva ese valor.
 - `updateProject` no enciende nada y no pisa archivos cambiados en la PC. La API solo actualiza proyectos apagados, repite la revisión y hace que el siguiente encendido use `--build`.
 - `startProject`, `stopProject` y `getProjectStatus` rechazan nombres sin normalizar (`assertNormalizedName`).
 - Los comandos de Docker pasan por el ayudante `docker()` de `core/src/docker.ts`, que traduce "Docker no responde" y "sin permiso". Los demás, por `run()` de `core/src/run.ts`.
 
 ### Rutas de la API (contrato con `web/`)
 
-`GET /api/projects?q=`, `GET /api/projects/resources`, `POST /api/projects`, `GET /api/projects/:id`, `POST /api/projects/:id/start`, `POST /api/projects/:id/stop`, `POST /api/projects/:id/update`, `GET /api/projects/:id/logs`, `GET /api/projects/:id/progress`, `DELETE /api/projects/:id`.
+`GET /api/projects?q=`, `GET /api/projects/resources`, `POST /api/projects`, `GET /api/projects/:id`, `POST /api/projects/:id/start`, `POST /api/projects/:id/stop`, `POST /api/projects/:id/update`, `GET /api/projects/:id/logs`, `GET /api/projects/:id/progress`, `DELETE /api/projects/:id`, `GET /api/version`.
 
 ## Despliegue
 
@@ -94,7 +98,7 @@ updateProject(name: string): Promise<ProjectUpdate>                             
 - **Regla crítica:** `projects/` se monta con la misma ruta dentro y fuera del contenedor (`${PROJECTS_DIR}:${PROJECTS_DIR}`). Si no, los bind mounts relativos de los proyectos se rompen.
 - **Seguridad:** la herramienta no tiene login y controla el Docker del anfitrión. Por eso se publica solo en `127.0.0.1` y la API rechaza con 403 los `Host` no locales y los `Origin` distintos de `Host` (`isAllowedRequest` en `api/src/app.ts`). Fuera del contenedor escucha en `127.0.0.1`; `HOST` lo cambia.
 - El puerto de la herramienta es poco común (por defecto `4300`, variable `TOOL_PORT`) para no chocar con 3000, 5173 u 8080.
-- `install.sh` genera `.env` (`PROJECTS_DIR`, `TOOL_PORT`, `HOST_UID`, `HOST_GID`, `DOCKER_GID`) y ejecuta `docker compose up -d --build`. El contenedor corre con ese usuario y no como root.
+- `install.sh` genera `.env` (`PROJECTS_DIR`, `TOOL_PORT`, `UPDATE_CHECK`, `HOST_UID`, `HOST_GID`, `DOCKER_GID`) y ejecuta `docker compose up -d --build`. El contenedor corre con ese usuario y no como root.
 - En desarrollo no se usa el contenedor: `npm run dev` contra el Docker local. Requiere `docker`, `docker compose`, `git` y `unzip`.
 - Plan B: correr con Node y PM2 directamente en la PC.
 
@@ -109,4 +113,5 @@ Se usa `node:test`, sin dependencias. `api/test/projects.test.ts` cubre las ruta
 - Colores de la interfaz: usa los tokens `marca-*` de `web/src/styles/global.css`, no valores sueltos. El ámbar no se usa como texto sobre fondo claro; para eso está `marca-texto`.
 - `docs/privacidad.md` promete que Dockyard no recolecta datos. No agregues analítica, telemetría, cookies ni recursos de otros sitios (las fuentes van empaquetadas), y si cambia lo que se guarda, actualiza ese documento.
 - Flujo de git: una rama por persona y cambios pequeños. La rama principal es `main`.
+- Las versiones se publican solo con `npm version`, en `main`. Una etiqueta creada a mano no cambia `package.json` y el aviso de versión nueva no se iría al instalarla.
 - Commits y PRs sin atribución de agentes: nada de `Co-Authored-By`, "Generated with …", enlaces de sesión ni líneas similares. Solo el mensaje del cambio. Antes de cada commit o push, revisa el mensaje (`git log -1 --format=%B`) y quita cualquier línea de ese tipo.

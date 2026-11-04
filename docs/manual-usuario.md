@@ -52,6 +52,19 @@ Debajo de **Encendido** también se indica si la página del proyecto contesta:
 
 Se comprueba solo el puerto que usa **Abrir**.
 
+## Instalar una versión nueva de Dockyard
+
+Cuando hay una versión nueva, aparece un aviso sobre la lista de proyectos. Solo avisa: Dockyard no cambia nada por su cuenta. Para instalarla, abre una terminal en la carpeta de Dockyard y ejecuta:
+
+```bash
+git pull
+./install.sh
+```
+
+La página deja de responder mientras se reconstruye, unos minutos a lo sumo. Tus proyectos registrados y sus datos se conservan, y los que estén encendidos siguen encendidos.
+
+Sin internet simplemente no aparece el aviso. Para que Dockyard no consulte versiones nuevas, instala con `UPDATE_CHECK=off ./install.sh`.
+
 ## Problemas frecuentes
 
 | Mensaje | Qué pasa | Qué hacer |

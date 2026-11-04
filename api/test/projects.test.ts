@@ -10,6 +10,7 @@ import type { InjectOptions } from 'fastify'
 import { buildApp, isAllowedRequest } from '../src/app.ts'
 import type { ProjectSource, ProjectStatus } from '../src/core.ts'
 import { createProjectRepository } from '../src/db/projects.ts'
+import { createVersionChecker } from '../src/services/version.ts'
 import { createWebChecker, type CheckWeb } from '../src/services/web-check.ts'
 import type { CoreAdapter } from '../src/types.ts'
 
@@ -882,4 +883,119 @@ test('una base creada antes de la revisión recibe la columna de avisos', async 
   assert.equal(repository.list()[0]?.warnings, '[]')
   repository.close()
   await rm(dir, { recursive: true, force: true })
+})
+
+const HOUR = 60 * 60 * 1000
+
+test('la versión: avisa solo si la etiqueta es posterior a la instalada', async () => {
+  const check = (latest: string | null) =>
+    createVersionChecker({ current: '1.0.0', enabled: true, fetchLatest: async () => latest })()
+
+  assert.deepEqual(await check('v1.1.0'), { current: '1.0.0', latest: 'v1.1.0', updateAvailable: true })
+  assert.equal((await check('v1.0.0')).updateAvailable, false)
+  assert.equal((await check('v0.9.0')).updateAvailable, false)
+  assert.deepEqual(await check(null), { current: '1.0.0', latest: null, updateAvailable: false })
+})
+
+test('la versión: consulta como máximo cada 6 horas, aunque la pidan muchas veces a la vez', async () => {
+  let calls = 0
+  let time = 0
+  const check = createVersionChecker({
+    current: '1.0.0',
+    enabled: true,
+    now: () => time,
+    fetchLatest: async () => `v1.0.${++calls}`,
+  })
+
+  assert.equal(calls, 0, 'no consulta hasta que se lo piden')
+  const [first, second] = await Promise.all([check(), check()])
+  assert.equal(calls, 1)
+  assert.equal(first.latest, 'v1.0.1')
+  assert.equal(second.latest, 'v1.0.1')
+
+  time = 6 * HOUR - 1
+  assert.equal((await check()).latest, 'v1.0.1')
+  assert.equal(calls, 1)
+
+  time = 6 * HOUR
+  assert.equal((await check()).latest, 'v1.0.2')
+  assert.equal(calls, 2)
+})
+
+test('la versión: sin internet no falla, conserva el último dato y no insiste', async () => {
+  let online = true
+  let calls = 0
+  let time = 0
+  const errors: unknown[] = []
+  const check = createVersionChecker({
+    current: '1.0.0',
+    enabled: true,
+    now: () => time,
+    onError: (error) => errors.push(error),
+    fetchLatest: async () => {
+      calls++
+      if (!online) throw new Error('sin conexión')
+      return 'v1.1.0'
+    },
+  })
+
+  await check()
+  online = false
+  time = 6 * HOUR
+  assert.equal((await check()).updateAvailable, true, 'conserva lo último que supo')
+  assert.equal(errors.length, 1)
+  assert.equal(calls, 2)
+
+  time += HOUR
+  await check()
+  assert.equal(calls, 2, 'una falla también espera 6 horas')
+
+  const offline = createVersionChecker({
+    current: '1.0.0',
+    enabled: true,
+    fetchLatest: async () => { throw new Error('sin conexión') },
+  })
+  assert.deepEqual(await offline(), { current: '1.0.0', latest: null, updateAvailable: false })
+})
+
+test('la versión: UPDATE_CHECK=off no se conecta nunca', async () => {
+  let calls = 0
+  const fetchLatest = async () => { calls++; return 'v9.0.0' }
+  const before = process.env.UPDATE_CHECK
+  try {
+    for (const value of ['off', 'OFF', ' off ']) {
+      process.env.UPDATE_CHECK = value
+      assert.equal((await createVersionChecker({ current: '1.0.0', fetchLatest })()).updateAvailable, false)
+    }
+    assert.equal(calls, 0)
+    process.env.UPDATE_CHECK = 'on'
+    assert.equal((await createVersionChecker({ current: '1.0.0', fetchLatest })()).updateAvailable, true)
+    assert.equal(calls, 1)
+  } finally {
+    if (before === undefined) delete process.env.UPDATE_CHECK
+    else process.env.UPDATE_CHECK = before
+  }
+})
+
+test('GET /api/version responde con la versión instalada de la raíz', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'dockyard-api-version-'))
+  const repository = createProjectRepository(join(dir, 'dockyard.db'))
+  const app = await buildApp({
+    repository,
+    core: fakeCore().core,
+    checkVersion: createVersionChecker({ enabled: true, fetchLatest: async () => 'v99.0.0' }),
+  })
+  try {
+    const response = await app.inject({ method: 'GET', url: '/api/version', headers: { host: 'localhost:4300' } })
+    assert.equal(response.statusCode, 200)
+    const body = response.json()
+    assert.match(body.current, /^\d+\.\d+\.\d+$/)
+    assert.deepEqual({ latest: body.latest, updateAvailable: body.updateAvailable }, { latest: 'v99.0.0', updateAvailable: true })
+
+    const foreign = await app.inject({ method: 'GET', url: '/api/version', headers: { host: 'evil.example' } })
+    assert.equal(foreign.statusCode, 403)
+  } finally {
+    await app.close()
+    await rm(dir, { recursive: true, force: true })
+  }
 })

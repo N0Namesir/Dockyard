@@ -32,10 +32,17 @@ if [[ -z "${TOOL_PORT:-}" && -f .env ]]; then
 fi
 TOOL_PORT="${TOOL_PORT:-4300}"
 
+# Igual con la consulta de versiones nuevas: quien la apagó no debe encontrarla encendida al actualizar.
+if [[ -z "${UPDATE_CHECK:-}" && -f .env ]]; then
+  UPDATE_CHECK="$(sed -n 's/^UPDATE_CHECK=//p' .env)"
+fi
+UPDATE_CHECK="${UPDATE_CHECK:-on}"
+
 cat > .env <<EOF
 # Generado por install.sh
 PROJECTS_DIR=$(pwd)/projects
 TOOL_PORT=${TOOL_PORT}
+UPDATE_CHECK=${UPDATE_CHECK}
 HOST_UID=$(id -u)
 HOST_GID=$(id -g)
 DOCKER_GID=$(stat -c %g /var/run/docker.sock)

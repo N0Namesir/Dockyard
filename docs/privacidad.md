@@ -28,6 +28,7 @@ Solo para obtener lo que hace falta, nunca para enviar información sobre su uso
 - **Al registrar o actualizar desde GitHub:** descarga el repositorio de la URL indicada.
 - **Al encender un proyecto:** Docker descarga las imágenes y dependencias que ese proyecto pide.
 - **Al instalar o compilar Dockyard:** se descargan Docker, Node y las dependencias.
+- **Para saber si hay una versión nueva:** mientras la página de Dockyard está abierta, Dockyard pregunta a GitHub qué versiones publicó su repositorio, como máximo cada 6 horas. No envía ningún dato sobre la PC, los proyectos ni su uso. Para desactivarlo, instala con `UPDATE_CHECK=off ./install.sh`.
 
 Esos servicios (GitHub, Docker Hub, npm y otros) reciben lo normal en cualquier descarga, como la dirección IP, y aplican sus propias políticas. La telemetría de Astro, la herramienta con la que se compila la interfaz, está desactivada en los comandos del proyecto. La interfaz no carga fuentes, scripts ni imágenes de otros sitios.
 

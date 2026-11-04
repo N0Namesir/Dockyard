@@ -23,6 +23,8 @@ services:
       HOME: /tmp
       # Para comprobar que la web de cada proyecto responde: aquí dentro, localhost es Dockyard.
       PROJECTS_HOST: host.docker.internal
+      # off apaga la consulta periódica de versiones nuevas en GitHub.
+      UPDATE_CHECK: ${UPDATE_CHECK:-on}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     healthcheck:

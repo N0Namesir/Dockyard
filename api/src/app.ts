@@ -10,7 +10,9 @@ import {
 } from './db/projects.ts'
 import { errorMessage, HttpError } from './errors.ts'
 import { projectRoutes } from './routes/projects.ts'
+import { versionRoutes } from './routes/version.ts'
 import { createProjectService } from './services/projects.ts'
+import { createVersionChecker, type CheckVersion } from './services/version.ts'
 import { createWebChecker, type CheckWeb } from './services/web-check.ts'
 import type { CoreAdapter } from './types.ts'
 
@@ -46,6 +48,7 @@ export interface AppOptions {
   repository?: ProjectRepository
   core?: CoreAdapter
   checkWeb?: CheckWeb
+  checkVersion?: CheckVersion
   logger?: boolean
   serveWeb?: boolean
   webRoot?: string
@@ -102,6 +105,10 @@ export async function buildApp(options: AppOptions = {}): Promise<FastifyInstanc
 
   const service = createProjectService(repository, core, options.checkWeb ?? createWebChecker())
   await app.register(projectRoutes(service), { prefix: '/api' })
+  const checkVersion = options.checkVersion ?? createVersionChecker({
+    onError: (error) => app.log.warn(errorMessage(error)),
+  })
+  await app.register(versionRoutes(checkVersion), { prefix: '/api' })
 
   const webRoot = options.webRoot ?? resolve(import.meta.dirname, '../../web/dist')
   if ((options.serveWeb ?? false) && existsSync(webRoot)) {

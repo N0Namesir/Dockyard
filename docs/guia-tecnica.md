@@ -66,6 +66,7 @@ El script comprueba Docker, crea `projects/` y `data/`, escribe `.env` y ejecuta
 |---|---|
 | `PROJECTS_DIR` | Ruta absoluta de `projects/` en el anfitrión |
 | `TOOL_PORT` | Puerto de la herramienta, 4300 por defecto |
+| `UPDATE_CHECK` | `off` apaga la consulta de versiones nuevas; `on` por defecto. `install.sh` conserva el valor |
 
 Cómo funciona el contenedor:
 
@@ -76,6 +77,18 @@ Cómo funciona el contenedor:
 - `restart: unless-stopped` hace que la herramienta vuelva sola al reiniciar, siempre que el servicio de Docker arranque con el sistema (`sudo systemctl enable docker`).
 
 **Plan B, sin contenedor.** Si el despliegue en contenedor falla, la herramienta corre directamente en la PC con Node: `npm ci && npm run build && npm run start`, o con PM2 para que se mantenga encendida (`pm2 start npm --name dockyard -- run start`). Requiere Node 24, git, unzip y Docker en la PC.
+
+## Publicar una versión
+
+En `main`, con el árbol limpio:
+
+```bash
+npm version 1.1.0     # o patch, minor, major
+```
+
+Ese comando comprueba que estás en `main`, compila y corre los tipos y las pruebas sin Docker. Si pasan, sube la versión en `package.json` y `package-lock.json`, crea el commit `Versión 1.1.0` y la etiqueta `v1.1.0`, y sube ambos a GitHub. El mensaje del commit sale de `.npmrc`. Las instalaciones que tengan la página abierta muestran el aviso en un máximo de 6 horas.
+
+No crees etiquetas a mano: sin el cambio en `package.json`, una instalación al día seguiría viendo el aviso. Una etiqueta como `v2.0.0-beta` se ignora. Si el `push` falla, el commit y la etiqueta quedan locales: corrige la causa y ejecuta `git push origin main --follow-tags`.
 
 ## Cómo funcionan la API y la interfaz
 
@@ -92,6 +105,7 @@ Cómo funciona el contenedor:
 - **Avance del encendido:** `GET /api/projects/:id/progress` devuelve `{ progress }`, con la etapa, las últimas 8 líneas de Docker y los segundos transcurridos, o `null` si no se está encendiendo. También llega en el campo `progress` de cada proyecto, para que recargar la página no lo pierda. Se guarda solo en memoria. La interfaz lo consulta cada 2 s.
 - **Registro:** `GET /api/projects/:id/logs` devuelve las últimas 200 líneas. Mientras un proyecto está encendido y su registro abierto, la interfaz lo pide cada 3 s. No es una conexión abierta: así, cerrar la pestaña no deja procesos de `docker compose logs` colgados. El texto no se mueve mientras el docente lee más arriba o selecciona algo.
 - **Consumo:** `GET /api/projects/resources` devuelve `{ memoryLimit, total, projects }`, solo de los proyectos registrados y encendidos. La CPU se expresa sobre toda la PC: 100 son todos sus núcleos. La interfaz lo pide cada 10 s con la pestaña visible y algún proyecto encendido, y la API comparte cada muestra 5 s porque `docker stats` tarda unos 2 s. No se guarda.
+- **Versión nueva:** `GET /api/version` devuelve `{ current, latest, updateAvailable }`. `current` sale del `package.json` de la raíz; los de `core`, `api` y `web` no cuentan. `api/src/services/version.ts` consulta GitHub solo cuando la interfaz lo pide, como máximo cada 6 horas, también tras una falla. Sin internet no hay error ni aviso: se conserva el último dato y la falla queda en el registro del contenedor. El resultado vive en memoria. La interfaz pregunta al cargar y cada hora con la pestaña visible, y solo avisa: nada se actualiza desde el navegador. Para desactivarla: `UPDATE_CHECK=off ./install.sh`.
 - **Documentación:** `docs/*.md` es la única fuente: Astro la convierte en páginas al compilar, así que un cambio se ve al reconstruir. Un documento nuevo se agrega a la lista de `web/src/lib/docs.ts`.
 - **Refresco:** la interfaz consulta la lista cada 15 segundos y al volver a la pestaña, sin redibujar si nada cambió.
 - **Búsqueda en la interfaz:** espera 300 ms desde la última tecla y descarta cualquier respuesta que no sea la de la última petición.
@@ -106,6 +120,8 @@ updateProject(name: string): Promise<ProjectUpdate>   // { dir, changed, commit,
 stopProject(dir: string, name: string): Promise<ProjectStatus>
 getProjectStatus(name: string): Promise<ProjectStatus>
 getResources(): Promise<ResourceUsage>
+getLatestVersion(repoUrl: string): Promise<string | null>
+isNewerVersion(candidate: string, current: string): boolean
 reviewProject(dir: string, name: string): Promise<string[]>
 
 type ProjectSource = { type: 'git'; url: string } | { type: 'zip'; filePath: string }
@@ -120,6 +136,8 @@ type ProjectSource = { type: 'git'; url: string } | { type: 'zip'; filePath: str
 | `getProjectStatus` | Lee `ps --format json` | Docker no responde |
 | `updateProject` | Trae la última versión del repositorio sin encender ni reconstruir | No hay conexión, el repositorio ya no es público, pisaría un archivo cambiado en la PC o la versión nueva no trae compose |
 | `getResources` | Une `docker ps` y `docker stats` por proyecto de compose | Docker no responde |
+| `getLatestVersion` | Devuelve la etiqueta `vX.Y.Z` más alta del repositorio con `git ls-remote`, sin descargarlo. Ignora otros formatos | No hay conexión o el repositorio no responde en 15 s |
+| `isNewerVersion` | Compara dos versiones por número | Nunca; un formato distinto no cuenta como más nuevo |
 | `reviewProject` | Devuelve avisos sobre el compose y los archivos, sin encender nada | Nunca por el contenido del proyecto; si algo no se pudo revisar, también lo avisa |
 
 Reglas que cumple el núcleo:

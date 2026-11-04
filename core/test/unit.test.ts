@@ -13,6 +13,7 @@ import { composeWarnings, fileWarnings, secretsIn, sensitiveFileName, suspicious
 import { parseBytes, resourcesFrom } from '../src/resources.ts'
 import { run } from '../src/run.ts'
 import { cloneRepo, updateProject, zipProblem } from '../src/sources.ts'
+import { getLatestVersion, isNewerVersion, latestVersionTag } from '../src/version.ts'
 import type { StartProgress } from '../src/types.ts'
 
 describe('normalizeProjectName', () => {
@@ -569,5 +570,52 @@ describe('consumo de recursos', () => {
     assert.deepEqual(Object.keys(usage.projects), ['z'])
     assert.equal(usage.projects.z!.cpuPercent, 0)
     assert.equal(usage.projects.z!.memoryBytes, 0)
+  })
+})
+
+describe('versiones', () => {
+  const refs = (...tags: string[]) => tags.map((tag) => `abc123\trefs/tags/${tag}`).join('\n')
+
+  test('compara por número, no por texto', () => {
+    assert.equal(isNewerVersion('v1.10.0', '1.9.0'), true)
+    assert.equal(isNewerVersion('v2.0.0', '1.99.99'), true)
+    assert.equal(isNewerVersion('v1.0.0', '1.0.0'), false)
+    assert.equal(isNewerVersion('v0.9.0', '1.0.0'), false)
+  })
+
+  test('una versión con otro formato nunca es más nueva', () => {
+    assert.equal(isNewerVersion('v9.0.0-beta', '1.0.0'), false)
+    assert.equal(isNewerVersion('v9.0.0', 'desconocida'), false)
+  })
+
+  test('elige la etiqueta más alta e ignora las que no son vX.Y.Z', () => {
+    const tags = ['v1.2.0', 'v1.10.0', 'v1.9.9', 'v9.0.0-rc1', '9.0.0', 'latest', 'v9.0', 'v09.0.0', 'v9.0.0.0', 'x/v9.0.0']
+    assert.equal(latestVersionTag(refs(...tags)), 'v1.10.0')
+  })
+
+  test('sin etiquetas válidas no hay versión', () => {
+    assert.equal(latestVersionTag(''), null)
+    assert.equal(latestVersionTag(refs('borrador')), null)
+    assert.equal(latestVersionTag('abc123\trefs/heads/v9.0.0'), null)
+  })
+
+  test('lee las etiquetas de un repositorio de verdad, sin red', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'dockyard-version-'))
+    try {
+      const git = (...args: string[]) => run('git', ['-C', dir, '-c', 'user.name=Prueba', '-c', 'user.email=prueba@example.invalid', ...args])
+      await git('init', '-q')
+      assert.equal(await getLatestVersion(`file://${dir}`), null)
+      await git('commit', '-q', '--allow-empty', '-m', 'Inicio')
+      await git('tag', 'v1.0.0')
+      await git('tag', '-a', 'v1.2.0', '-m', 'Etiqueta anotada')
+      await git('tag', 'v2.0.0-beta')
+      assert.equal(await getLatestVersion(`file://${dir}`), 'v1.2.0')
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+
+  test('si no se puede consultar, lo dice en español', async () => {
+    await assert.rejects(getLatestVersion('file:///no/existe/dockyard'), /No se pudo consultar la última versión/)
   })
 })
