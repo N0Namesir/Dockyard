@@ -1,5 +1,5 @@
 # Imagen de Dockyard. La herramienta controla el Docker del anfitrión a través de su socket,
-# así que la imagen solo necesita el cliente de Docker y el complemento de compose, no el motor.
+# así que la imagen solo necesita el cliente de Docker y los complementos de compose y buildx, no el motor.
 
 # --- Etapa de compilación: instala dependencias y compila core, api y web.
 FROM node:24-slim AS build
@@ -12,7 +12,7 @@ RUN npm ci
 COPY . .
 RUN npm run build && npm prune --omit=dev
 
-# --- Etapa final: Node, git, unzip y el cliente de Docker con compose.
+# --- Etapa final: Node, git, unzip y el cliente de Docker con compose y buildx.
 FROM node:24-slim
 # Repositorio oficial de Docker para Debian, según https://docs.docker.com/engine/install/debian/
 RUN apt-get update \
@@ -23,7 +23,7 @@ RUN apt-get update \
  && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/debian $(. /etc/os-release && echo "$VERSION_CODENAME") stable" \
     > /etc/apt/sources.list.d/docker.list \
  && apt-get update \
- && apt-get install -y --no-install-recommends docker-ce-cli docker-compose-plugin \
+ && apt-get install -y --no-install-recommends docker-ce-cli docker-compose-plugin docker-buildx-plugin \
  && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
