@@ -20,6 +20,18 @@ export const DOCS = [
     audience: 'Para quien continúe el proyecto',
     summary: 'Arquitectura, despliegue, contrato entre partes, decisiones y pruebas.',
   },
+  {
+    slug: 'aviso-legal',
+    title: 'Aviso legal',
+    audience: 'Para todos',
+    summary: 'Hasta dónde llega Dockyard, quién responde por cada proyecto, riesgos y licencia.',
+  },
+  {
+    slug: 'privacidad',
+    title: 'Privacidad',
+    audience: 'Para todos',
+    summary: 'Dockyard no recolecta datos: qué se guarda en la PC y cómo borrarlo.',
+  },
 ] as const
 
 const files = import.meta.glob<MarkdownInstance<Record<string, unknown>>>('../../../docs/*.md', { eager: true })

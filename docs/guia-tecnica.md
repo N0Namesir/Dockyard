@@ -32,7 +32,8 @@ navegador ──► web (Astro) ──► api (Fastify + SQLite) ──► core 
 | `api/test/` | Pruebas de las rutas con un núcleo simulado |
 | `web/src/pages/index.astro` | Página principal: lista, búsqueda, registro y botones, sin otro framework |
 | `web/src/pages/docs/`, `web/src/lib/docs.ts` | Sección de documentación: publica `docs/*.md` en `/docs` al compilar |
-| `web/public/` | Logo (`favicon.svg`) e iconos generados a partir de él |
+| `web/public/` | Logo (`favicon.svg`), iconos generados a partir de él y emblema de la especialidad (`marca/`, fuera de la licencia MIT) |
+| `web/src/styles/global.css` | Colores y fuentes de la identidad de DS3, en el bloque `@theme` |
 | `ejemplos/` | Cuatro proyectos de prueba y el generador de ZIP de prueba |
 | `projects/` | Código de los proyectos registrados (no se sube a git) |
 | `data/` | Base de datos SQLite (no se sube a git) |

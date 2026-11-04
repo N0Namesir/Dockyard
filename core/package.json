@@ -2,6 +2,7 @@
   "name": "@dockyard/core",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
   "description": "Área 1: núcleo que obtiene el código de los proyectos y los controla con docker compose",
   "type": "module",
   "exports": {

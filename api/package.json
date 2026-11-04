@@ -2,6 +2,7 @@
   "name": "@dockyard/api",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
   "description": "Área 2: API Fastify y datos SQLite",
   "type": "module",
   "scripts": {

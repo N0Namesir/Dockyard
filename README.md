@@ -1,4 +1,4 @@
-<img src="web/public/favicon.svg" width="96" height="96" alt="Logo de Dockyard: una D sobre una ola">
+<img src="web/public/favicon.svg" width="96" height="96" alt="Logo de Dockyard: una D sobre una ola"> <img src="web/public/marca/ds-insamt.png" width="96" height="96" alt="Emblema de Desarrollo de Software, INSAMT">
 
 # Dockyard
 
@@ -53,3 +53,9 @@ En desarrollo no se usa el contenedor: la herramienta usa el Docker de la laptop
 - [Guía técnica](docs/guia-tecnica.md): para quien continúe el proyecto.
 - [Manual de usuario](docs/manual-usuario.md): para el docente.
 - [Guía para estudiantes](docs/guia-estudiantes.md): cómo debe ir un proyecto, para repartir a los equipos.
+- [Aviso legal](docs/aviso-legal.md): hasta dónde llega Dockyard y quién responde por cada proyecto.
+- [Política de privacidad](docs/privacidad.md): Dockyard no recolecta datos.
+
+## Licencia
+
+Código bajo [licencia MIT](LICENSE). El emblema de Desarrollo de Software no entra en esa licencia: pertenece a sus titulares y es de uso público, siempre que no sea con fines de lucro o de desinformación. Los proyectos de estudiantes conservan sus propios derechos.

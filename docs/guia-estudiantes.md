@@ -26,6 +26,7 @@ Estas prácticas funcionan en la computadora del estudiante, pero rompen el aloj
 | Rutas absolutas como `/home/usuario/datos` | Esa carpeta no existe en el servidor | Rutas relativas (`./datos`) o volúmenes con nombre |
 | Un `.env` que no está en el repositorio | Las variables quedan vacías y el proyecto falla | Valores por defecto en el compose (`${VAR:-valor}`), escritos directamente o en un `.env.example`, que la plataforma copia como `.env` |
 | `privileged: true`, montar `/var/run/docker.sock`, `network_mode: host` | Dan control del servidor y de otros proyectos | No usarlos |
+| Claves reales, respaldos de bases de datos o datos de personas reales | Viajan con el proyecto y otras personas pueden leerlos. Cada equipo responde por lo que entrega ([aviso legal](aviso-legal.md)) | Datos ficticios y claves de prueba. Si una clave real se filtró, hay que cambiarla |
 | Pasos interactivos o instalar cosas a mano dentro del contenedor | Nadie estará para responder | Automatizar todo en el `Dockerfile` o en un script de inicio |
 
 ## Plantillas para empezar
