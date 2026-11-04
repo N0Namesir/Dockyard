@@ -110,8 +110,12 @@ export function requestedContainerNames(config: any): string[] {
     .filter((name): name is string => typeof name === 'string' && name !== '')
 }
 
-function composeProjectOf(container: any): string | null {
+export function composeProjectOf(container: any): string | null {
   return /(?:^|,)com\.docker\.compose\.project=([^,]+)/.exec(container.Labels ?? '')?.[1] ?? null
+}
+
+export function composeServiceOf(container: any): string | null {
+  return /(?:^|,)com\.docker\.compose\.service=([^,]+)/.exec(container.Labels ?? '')?.[1] ?? null
 }
 
 /** Lanza un error si un container_name del proyecto ya lo tiene un contenedor de otro proyecto. */

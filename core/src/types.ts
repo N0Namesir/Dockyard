@@ -17,6 +17,26 @@ export interface StartProgress {
   lines: string[]
 }
 
+export interface ServiceResources {
+  service: string
+  /** Sobre toda la PC: 100 son todos sus núcleos. */
+  cpuPercent: number
+  memoryBytes: number
+}
+
+export interface ProjectResources {
+  cpuPercent: number
+  memoryBytes: number
+  services: ServiceResources[]
+}
+
+export interface ResourceUsage {
+  /** Memoria que Docker puede usar. 0 si no hay nada encendido. */
+  memoryLimit: number
+  /** Por nombre de proyecto de compose. Solo los encendidos. */
+  projects: Record<string, ProjectResources>
+}
+
 /** Opciones de startProject. */
 export interface StartOptions {
   onProgress?: (progress: StartProgress) => void

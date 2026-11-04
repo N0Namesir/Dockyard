@@ -37,12 +37,14 @@ Que no aparezcan avisos no garantiza que el proyecto sea seguro, así que regist
 - **Abrir:** cuando el proyecto está **Encendido**, este botón abre en otra pestaña la dirección donde funciona (por ejemplo, http://localhost:8081). Si no abre la página correcta, prueba con los números de la columna **Puertos**: cada uno es un enlace.
 - **Actualizar:** solo en proyectos de GitHub y con el proyecto apagado. Trae la última versión del repositorio y la revisa de nuevo, sin encenderla. Lee los avisos, si los hay, y usa **Encender**: esa vez reconstruye el proyecto con el código nuevo. Sus datos se conservan, así que una base de datos sigue con lo que tenía. Si el equipo entregó un ZIP nuevo, elimina el proyecto y registra el ZIP.
 - **Apagar:** detiene el proyecto sin borrar nada. Sus datos se conservan para la próxima vez.
-- **Ver registro:** muestra las últimas líneas que escribió el proyecto. Sirve para saber por qué falla y compartirlo con el equipo.
+- **Ver registro:** muestra las últimas líneas que escribió el proyecto. Sirve para saber por qué falla y compartirlo con el equipo. Si el proyecto está encendido, se actualiza solo cada pocos segundos. Si subes a leer o seleccionas texto, se detiene para no moverte; baja hasta el final para que siga.
 - **Eliminar:** borra el proyecto, su código y sus datos, y libera su nombre. Para confirmar hay que escribir el nombre del proyecto, porque no se puede deshacer.
 
 La tabla se actualiza sola cada 15 segundos. Si un proyecto aparece **Encendido** con el aviso **Con fallas**, uno de sus servicios se cayó; usa **Ver registro** para ver el motivo.
 
-Debajo de **Encendido** se indica si la página del proyecto contesta:
+Debajo de **Encendido** se ve cuánta CPU y memoria usa el proyecto, y sobre la lista, el total de los proyectos encendidos. La CPU es sobre toda la PC. Si un proyecto tiene varios servicios, deja el cursor sobre esos datos para ver el detalle. Sirve para saber cuál apagar si la PC se pone lenta.
+
+Debajo de **Encendido** también se indica si la página del proyecto contesta:
 
 - **La web responde:** Dockyard recibió una respuesta. No revisa si cada función sirve, pero la página está arriba.
 - **La web aún no responde:** es normal unos segundos o minutos después de encender, mientras arranca. Si no cambia, usa **Ver registro**.

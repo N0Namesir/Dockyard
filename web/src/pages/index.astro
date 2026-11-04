@@ -43,6 +43,7 @@ import FaviconLinks from '../components/FaviconLinks.astro'
             <div>
               <h2 class="text-lg font-bold text-slate-900">Proyectos registrados</h2>
               <p id="project-count" class="mt-1 text-sm text-slate-500">Cargando…</p>
+              <p id="resources-total" class="mt-0.5 text-xs text-slate-600"></p>
             </div>
             <label class="relative block sm:w-72">
               <span class="sr-only">Buscar por nombre o equipo</span>
@@ -243,6 +244,7 @@ import FaviconLinks from '../components/FaviconLinks.astro'
       const removeDialogCancel = document.querySelector<HTMLButtonElement>('#remove-dialog-cancel')!
       const removeDialogConfirm = document.querySelector<HTMLButtonElement>('#remove-dialog-confirm')!
       const projectCount = document.querySelector<HTMLElement>('#project-count')!
+      const resourcesTotal = document.querySelector<HTMLElement>('#resources-total')!
       const searchInput = document.querySelector<HTMLInputElement>('#search')!
       const globalMessage = document.querySelector<HTMLElement>('#global-message')!
       const form = document.querySelector<HTMLFormElement>('#register-form')!
@@ -266,6 +268,18 @@ import FaviconLinks from '../components/FaviconLinks.astro'
         }
       }
 
+      interface ProjectResources {
+        cpuPercent: number
+        memoryBytes: number
+        services: { service: string; cpuPercent: number; memoryBytes: number }[]
+      }
+
+      interface Resources {
+        memoryLimit: number
+        total: { cpuPercent: number; memoryBytes: number }
+        projects: Record<string, ProjectResources | undefined>
+      }
+
       interface Progress {
         stage: string
         lines: string[]
@@ -276,6 +290,8 @@ import FaviconLinks from '../components/FaviconLinks.astro'
 
       const REFRESH_INTERVAL_MS = 15_000
       const PROGRESS_INTERVAL_MS = 2_000
+      const LOGS_INTERVAL_MS = 3_000
+      const RESOURCES_INTERVAL_MS = 10_000
 
       const CONNECTION_MESSAGE = 'No se puede conectar con Dockyard. Verifica que esté encendido y recarga la página.'
       const RETRY_DELAY_MS = 5_000
@@ -293,6 +309,11 @@ import FaviconLinks from '../components/FaviconLinks.astro'
       /** Proyectos con la lista de avisos abierta: redibujar la tabla no debe cerrarla. */
       const openWarnings = new Set<number>()
       let pollingProgress = false
+      let pollingLogs = false
+      let pollingResources = false
+      let resources: Resources | null = null
+      /** Registros que el docente subió a leer, con su posición: el texto nuevo no debe moverlos. */
+      const logsScroll = new Map<number, number>()
 
       function element<K extends keyof HTMLElementTagNameMap>(
         tag: K,
@@ -422,6 +443,12 @@ import FaviconLinks from '../components/FaviconLinks.astro'
                     : 'La web aún no responde',
               ),
             )
+          }
+          if (!starting && project.state === 'running') {
+            const usage = element('p', 'mt-1 max-w-40 text-xs text-slate-600')
+            usage.dataset.resources = String(project.id)
+            fillResources(usage, project.id)
+            stateCell.append(usage)
           }
           row.append(stateCell)
           const portsCell = element('td', 'px-5 py-4 font-mono text-xs text-slate-600')
@@ -571,6 +598,49 @@ import FaviconLinks from '../components/FaviconLinks.astro'
         if (finished) void loadProjects(true)
       }
 
+      function cpuText(percent: number): string {
+        return percent > 0 && percent < 1 ? 'menos de 1 %' : `${Math.round(percent)} %`
+      }
+
+      function bytesText(bytes: number): string {
+        return bytes >= 1024 ** 3 ? `${(bytes / 1024 ** 3).toFixed(1)} GB` : `${Math.round(bytes / 1024 ** 2)} MB`
+      }
+
+      function fillResources(target: HTMLElement, id: number): void {
+        const usage = resources?.projects[id]
+        target.textContent = usage ? `CPU ${cpuText(usage.cpuPercent)}, memoria ${bytesText(usage.memoryBytes)}` : ''
+        target.title = usage?.services
+          .map((service) => `${service.service}: CPU ${cpuText(service.cpuPercent)}, memoria ${bytesText(service.memoryBytes)}`)
+          .join('\n') ?? ''
+      }
+
+      /** Actualiza solo los textos del consumo, sin redibujar la tabla. */
+      async function pollResources(): Promise<void> {
+        if (pollingResources || document.hidden) return
+        if (!projects.some((project) => project.state === 'running')) {
+          resources = null
+          resourcesTotal.textContent = ''
+          return
+        }
+        pollingResources = true
+        try {
+          resources = await api<Resources>('/api/projects/resources')
+          const { total, memoryLimit } = resources
+          resourcesTotal.textContent = total.memoryBytes > 0
+            ? `Los proyectos encendidos usan CPU ${cpuText(total.cpuPercent)} y ${bytesText(total.memoryBytes)} de ${bytesText(memoryLimit)} de memoria de la PC.`
+            : ''
+          for (const target of projectsBody.querySelectorAll<HTMLElement>('[data-resources]')) {
+            fillResources(target, Number(target.dataset.resources))
+          }
+        } catch {
+          // Es un dato de apoyo: si falla, se reintenta sin interrumpir al docente.
+          resources = null
+          resourcesTotal.textContent = ''
+        } finally {
+          pollingResources = false
+        }
+      }
+
       function warningsRow(project: Project): HTMLTableRowElement {
         const row = element('tr')
         const cell = element('td', 'bg-amber-50 px-5 py-3 text-sm text-amber-900')
@@ -597,25 +667,71 @@ import FaviconLinks from '../components/FaviconLinks.astro'
 
       function logsRow(project: Project): HTMLTableRowElement {
         const row = element('tr')
+        row.dataset.logs = String(project.id)
         const cell = element('td', 'bg-slate-50 px-5 py-4')
         cell.colSpan = 5
         const header = element('div', 'mb-2 flex items-center justify-between gap-3')
-        header.append(element('p', 'text-xs font-bold text-slate-700', `Últimas líneas del registro de ${project.name}`))
+        const title = element('div')
+        title.append(element('p', 'text-xs font-bold text-slate-700', `Últimas líneas del registro de ${project.name}`))
+        const follows = project.state === 'running' || isStarting(project)
+        const live = element('p', 'text-xs text-slate-600')
+        live.dataset.live = ''
+        title.append(live)
+        header.append(title)
         const refresh = element('button', 'text-xs font-semibold text-slate-600 underline hover:text-marca-texto', 'Actualizar')
         refresh.type = 'button'
         refresh.addEventListener('click', () => void loadLogs(project))
-        header.append(refresh)
+        if (!follows) header.append(refresh)
         const logs = openLogs.get(project.id)
         const output = element(
           'pre',
           'max-h-80 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-slate-900 p-3 font-mono text-xs text-slate-100',
           logs === null ? 'Cargando…' : logs?.trim() || 'Este proyecto todavía no tiene registro.',
         )
+        const showLive = () => {
+          live.textContent = !follows ? '' : logsScroll.has(project.id)
+            ? 'En pausa mientras lees. Baja hasta el final para seguir.'
+            : 'Se actualiza solo.'
+        }
+        showLive()
+        output.addEventListener('scroll', () => {
+          if (output.scrollHeight - output.scrollTop - output.clientHeight < 8) logsScroll.delete(project.id)
+          else logsScroll.set(project.id, output.scrollTop)
+          showLive()
+        })
         cell.append(header, output)
         row.append(cell)
-        // Lo más reciente queda al final.
-        requestAnimationFrame(() => { output.scrollTop = output.scrollHeight })
+        // Lo más reciente queda al final, salvo que el docente haya subido a leer.
+        requestAnimationFrame(() => { output.scrollTop = logsScroll.get(project.id) ?? output.scrollHeight })
         return row
+      }
+
+      /** Trae el registro de los proyectos encendidos con el registro abierto. No toca lo que el docente está leyendo. */
+      async function pollLogs(): Promise<void> {
+        const open = projects.filter((project) => typeof openLogs.get(project.id) === 'string'
+          && (project.state === 'running' || isStarting(project)))
+        if (pollingLogs || document.hidden || open.length === 0) return
+        pollingLogs = true
+        try {
+          await Promise.all(open.map(async (project) => {
+            const { logs } = await api<{ logs: string }>(`/api/projects/${project.id}/logs`)
+            if (!openLogs.has(project.id) || openLogs.get(project.id) === logs) return
+            openLogs.set(project.id, logs)
+            const output = projectsBody.querySelector<HTMLElement>(`[data-logs="${project.id}"] pre`)
+            if (!output || logsScroll.has(project.id) || isSelectingIn(output)) return
+            output.textContent = logs.trim() || 'Este proyecto todavía no tiene registro.'
+            output.scrollTop = output.scrollHeight
+          }))
+        } catch {
+          // Se reintenta en la siguiente vuelta; el registro en pantalla sigue siendo válido.
+        } finally {
+          pollingLogs = false
+        }
+      }
+
+      function isSelectingIn(target: HTMLElement): boolean {
+        const selection = document.getSelection()
+        return selection !== null && !selection.isCollapsed && selection.containsNode(target, true)
       }
 
       async function loadLogs(project: Project): Promise<void> {
@@ -637,6 +753,7 @@ import FaviconLinks from '../components/FaviconLinks.astro'
       async function toggleLogs(project: Project): Promise<void> {
         if (openLogs.has(project.id)) {
           openLogs.delete(project.id)
+          logsScroll.delete(project.id)
           render()
           return
         }
@@ -871,11 +988,13 @@ import FaviconLinks from '../components/FaviconLinks.astro'
       }
       setInterval(refresh, REFRESH_INTERVAL_MS)
       setInterval(() => void pollProgress(), PROGRESS_INTERVAL_MS)
+      setInterval(() => void pollLogs(), LOGS_INTERVAL_MS)
+      setInterval(() => void pollResources(), RESOURCES_INTERVAL_MS)
       document.addEventListener('visibilitychange', refresh)
 
       updateSourceFields()
       render()
-      void loadProjects()
+      void loadProjects().then(() => pollResources())
     </script>
   </body>
 </html>

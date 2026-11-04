@@ -13,7 +13,7 @@ import { basename, join } from 'node:path'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { after, before, describe, test } from 'node:test'
 import { buildZip, createTestZips, entriesFrom } from '../../ejemplos/crear-zips.ts'
-import { getProjectLogs, getProjectStatus, normalizeProjectName, prepareProject, removeProject, startProject, stopProject } from '../src/index.ts'
+import { getProjectLogs, getProjectStatus, getResources, normalizeProjectName, prepareProject, removeProject, startProject, stopProject } from '../src/index.ts'
 import { run } from '../src/run.ts'
 import type { StartProgress } from '../src/types.ts'
 
@@ -128,7 +128,13 @@ describe('encender, consultar y apagar', () => {
     assert.match(await fetchText(8081), /prueba-estatico funciona/)
     assert.deepEqual(await getProjectStatus(name), { state: 'running', ports: [8081] })
 
+    const usage = await getResources()
+    assert.ok(usage.memoryLimit > 0)
+    assert.ok(usage.projects[name]!.memoryBytes > 0)
+    assert.deepEqual(usage.projects[name]!.services.map((service) => service.service), ['web'])
+
     assert.deepEqual(await stopProject(dir, name), { state: 'stopped', ports: [] })
+    assert.equal((await getResources()).projects[name], undefined)
   })
 
   test('choque de puertos: el mensaje nombra al contenedor que ocupa el puerto', async () => {

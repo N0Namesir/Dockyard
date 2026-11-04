@@ -1,6 +1,7 @@
 export {
   getProjectLogs,
   getProjectStatus,
+  getResources,
   normalizeProjectName,
   prepareProject,
   removeProject,
@@ -15,7 +16,9 @@ export type {
   ProjectSource,
   ProjectState,
   ProjectStatus,
+  ProjectResources,
   ProjectUpdate,
+  ResourceUsage,
   StartOptions,
   StartProgress,
 } from '@dockyard/core'

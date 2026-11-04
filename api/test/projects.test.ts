@@ -57,6 +57,9 @@ function fakeCore() {
     async getProjectLogs(name) {
       return `registro de ${name}`
     },
+    async getResources() {
+      return { memoryLimit: 0, projects: {} }
+    },
     async removeProject(name) {
       statuses.delete(name)
     },
@@ -206,6 +209,56 @@ test('no se actualiza un proyecto encendido, ni uno de ZIP, ni uno que no existe
   const zip = await zipApp.inject({ method: 'POST', url: '/api/projects/1/update' })
   assert.equal(zip.statusCode, 409)
   assert.match(zip.json().message, /GitHub/)
+})
+
+test('el consumo solo incluye proyectos registrados, suma el total y comparte la muestra', async () => {
+  const { core } = fakeCore()
+  let samples = 0
+  const web = { service: 'web', cpuPercent: 2, memoryBytes: 100 }
+  const app = await testApp({
+    ...core,
+    async getResources() {
+      samples++
+      return {
+        memoryLimit: 1000,
+        projects: {
+          a: { cpuPercent: 2, memoryBytes: 100, services: [web] },
+          b: { cpuPercent: 3, memoryBytes: 200, services: [] },
+          ajeno: { cpuPercent: 50, memoryBytes: 900, services: [] },
+        },
+      }
+    },
+  })
+  await app.inject({ method: 'POST', url: '/api/projects', payload: REPO })
+  await app.inject({ method: 'POST', url: '/api/projects', payload: { ...REPO, name: 'B' } })
+  const response = await app.inject({ method: 'GET', url: '/api/projects/resources' })
+  assert.equal(response.statusCode, 200)
+  assert.deepEqual(response.json(), {
+    memoryLimit: 1000,
+    total: { cpuPercent: 5, memoryBytes: 300 },
+    projects: {
+      1: { cpuPercent: 2, memoryBytes: 100, services: [web] },
+      2: { cpuPercent: 3, memoryBytes: 200, services: [] },
+    },
+  })
+  await app.inject({ method: 'GET', url: '/api/projects/resources' })
+  assert.equal(samples, 1)
+})
+
+test('una falla al leer el consumo se informa y no queda guardada', async () => {
+  const { core } = fakeCore()
+  let samples = 0
+  const app = await testApp({
+    ...core,
+    async getResources() {
+      if (++samples === 1) throw new Error('Docker no responde.')
+      return { memoryLimit: 1000, projects: {} }
+    },
+  })
+  const failed = await app.inject({ method: 'GET', url: '/api/projects/resources' })
+  assert.equal(failed.statusCode, 500)
+  assert.equal(failed.json().message, 'Docker no responde.')
+  assert.equal((await app.inject({ method: 'GET', url: '/api/projects/resources' })).statusCode, 200)
 })
 
 test('la lista empieza vacía', async () => {

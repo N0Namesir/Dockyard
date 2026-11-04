@@ -126,6 +126,8 @@ export function projectRoutes(service: ProjectService): FastifyPluginAsync {
       async (request) => service.list(request.query.q),
     )
 
+    app.get('/projects/resources', async () => service.resources())
+
     app.get<{ Params: IdParams }>(
       '/projects/:id',
       { schema: { params: idParamsSchema } },

@@ -1,8 +1,10 @@
 import type {
   PreparedProject,
   ProjectSource,
+  ProjectResources,
   ProjectStatus,
   ProjectUpdate,
+  ResourceUsage,
   StartOptions,
   StartProgress,
 } from './core.ts'
@@ -46,6 +48,14 @@ export interface ProjectResponse {
   pendingBuild: boolean
 }
 
+export interface ResourcesResponse {
+  memoryLimit: number
+  /** Suma de los proyectos registrados. */
+  total: { cpuPercent: number; memoryBytes: number }
+  /** Por id de proyecto. Solo los registrados y encendidos. */
+  projects: Record<number, ProjectResources>
+}
+
 export interface UpdateResponse {
   project: ProjectResponse
   changed: boolean
@@ -62,6 +72,7 @@ export interface CoreAdapter {
   stopProject(dir: string, name: string): Promise<ProjectStatus>
   getProjectStatus(name: string): Promise<ProjectStatus>
   getProjectLogs(name: string): Promise<string>
+  getResources(): Promise<ResourceUsage>
   removeProject(name: string): Promise<void>
 }
 

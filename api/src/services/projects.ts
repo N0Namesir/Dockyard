@@ -1,4 +1,4 @@
-import type { ProjectSource, ProjectStatus, StartProgress } from '../core.ts'
+import type { ProjectResources, ProjectSource, ProjectStatus, ResourceUsage, StartProgress } from '../core.ts'
 import type { ProjectRepository } from '../db/projects.ts'
 import { HttpError } from '../errors.ts'
 import type {
@@ -6,6 +6,7 @@ import type {
   ProgressResponse,
   ProjectResponse,
   ProjectRow,
+  ResourcesResponse,
   UpdateResponse,
 } from '../types.ts'
 import type { CheckWeb, WebCheck } from './web-check.ts'
@@ -25,6 +26,9 @@ const NON_WEB_PORTS = new Set([1433, 1521, 3306, 5432, 5672, 6379, 9042, 11211, 
  * algunos proyectos limitan las peticiones por dirección IP.
  */
 const WEB_CHECK_TTL_MS = 60_000
+
+/** Una muestra de Docker tarda unos 2 s: varias pestañas abiertas comparten la misma. */
+const RESOURCES_TTL_MS = 5_000
 
 /** El puerto de "Abrir": el primero que parezca una página; si ninguno, el primero. */
 function mainPortOf(status: ProjectStatus): number | undefined {
@@ -83,6 +87,19 @@ export function createProjectService(
     const start = starts.get(id)
     if (!start) return null
     return { ...start.current, elapsedSeconds: Math.floor((Date.now() - start.startedAt) / 1000) }
+  }
+
+  let resourcesSample: { at: number; usage: Promise<ResourceUsage> } | null = null
+
+  function sampleResources(): Promise<ResourceUsage> {
+    if (resourcesSample && Date.now() - resourcesSample.at < RESOURCES_TTL_MS) return resourcesSample.usage
+    const sample = { at: Date.now(), usage: core.getResources() }
+    resourcesSample = sample
+    // Una falla no se conserva: la siguiente petición vuelve a intentarlo.
+    sample.usage.catch(() => {
+      if (resourcesSample === sample) resourcesSample = null
+    })
+    return sample.usage
   }
 
   const webChecks = new Map<number, { port: number; at: number; result: WebCheck }>()
@@ -148,6 +165,21 @@ export function createProjectService(
         warnings,
       })
       return hydrate(row)
+    },
+
+    /** Solo de los proyectos registrados: lo demás que corra en la PC no es asunto de Dockyard. */
+    async resources(): Promise<ResourcesResponse> {
+      const usage = await sampleResources()
+      const projects: Record<number, ProjectResources> = {}
+      const total = { cpuPercent: 0, memoryBytes: 0 }
+      for (const row of repository.list()) {
+        const resources = usage.projects[row.name]
+        if (!resources) continue
+        projects[row.id] = resources
+        total.cpuPercent += resources.cpuPercent
+        total.memoryBytes += resources.memoryBytes
+      }
+      return { memoryLimit: usage.memoryLimit, total, projects }
     },
 
     progress(id: number): { progress: ProgressResponse | null } {

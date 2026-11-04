@@ -10,6 +10,7 @@ import { assertNormalizedName, normalizeProjectName } from '../src/name.ts'
 import { findComposeFile, projectRepoDir, projectsDir } from '../src/paths.ts'
 import { cleanLine, createProgressTracker, stageOf } from '../src/progress.ts'
 import { composeWarnings, fileWarnings, secretsIn, sensitiveFileName, suspiciousEnvVars } from '../src/review.ts'
+import { parseBytes, resourcesFrom } from '../src/resources.ts'
 import { run } from '../src/run.ts'
 import { cloneRepo, updateProject, zipProblem } from '../src/sources.ts'
 import type { StartProgress } from '../src/types.ts'
@@ -516,5 +517,57 @@ describe('actualizar desde el repositorio', () => {
     await assert.rejects(updateProject(name), /No se pudo descargar la actualización/)
     assert.equal(await readFile(join(root, 'a.txt'), 'utf8'), 'uno')
     await rm(base, { recursive: true, force: true })
+  })
+})
+
+describe('consumo de recursos', () => {
+  test('entiende las unidades de Docker', () => {
+    assert.equal(parseBytes('512B'), 512)
+    assert.equal(parseBytes('1.5kB'), 1500)
+    assert.equal(parseBytes('107.1MiB'), Math.round(107.1 * 1024 ** 2))
+    assert.equal(parseBytes(' 22.77GiB'), Math.round(22.77 * 1024 ** 3))
+    assert.equal(parseBytes('--'), 0)
+  })
+
+  const labels = (project: string, service: string) =>
+    `com.docker.compose.oneoff=False,com.docker.compose.project=${project},com.docker.compose.service=${service}`
+
+  test('agrupa por proyecto y expresa la CPU sobre toda la PC', () => {
+    const usage = resourcesFrom(
+      [
+        { ID: 'a1', Names: 'a-web-1', Labels: labels('a', 'web') },
+        { ID: 'a2', Names: 'a-db-1', Labels: labels('a', 'db') },
+        { ID: 'b1', Names: 'b-web-1', Labels: labels('b', 'web') },
+      ],
+      [
+        { ID: 'a1', CPUPerc: '200.00%', MemUsage: '100MiB / 1GiB' },
+        { ID: 'a2', CPUPerc: '100.00%', MemUsage: '50MiB / 1GiB' },
+        { ID: 'b1', CPUPerc: '4.00%', MemUsage: '10MiB / 1GiB' },
+      ],
+      4,
+    )
+    assert.equal(usage.memoryLimit, 1024 ** 3)
+    assert.equal(usage.projects.a!.cpuPercent, 75)
+    assert.equal(usage.projects.a!.memoryBytes, 150 * 1024 ** 2)
+    assert.deepEqual(usage.projects.a!.services.map((service) => service.service), ['web', 'db'])
+    assert.equal(usage.projects.b!.cpuPercent, 1)
+  })
+
+  test('ignora contenedores sin compose o sin muestra, y datos que aún no existen', () => {
+    const usage = resourcesFrom(
+      [
+        { ID: 'x', Names: 'suelto', Labels: 'otra=1' },
+        { ID: 'y', Names: 'y-web-1', Labels: labels('y', 'web') },
+        { ID: 'z', Names: 'z-web-1', Labels: labels('z', 'web') },
+      ],
+      [
+        { ID: 'x', CPUPerc: '9%', MemUsage: '1MiB / 1GiB' },
+        { ID: 'z', CPUPerc: '--', MemUsage: '-- / --' },
+      ],
+      2,
+    )
+    assert.deepEqual(Object.keys(usage.projects), ['z'])
+    assert.equal(usage.projects.z!.cpuPercent, 0)
+    assert.equal(usage.projects.z!.memoryBytes, 0)
   })
 })

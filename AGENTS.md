@@ -54,6 +54,7 @@ startProject(dir: string, name: string, options?: StartOptions): Promise<Project
 stopProject(dir: string, name: string): Promise<ProjectStatus>
 getProjectStatus(name: string): Promise<ProjectStatus>
 getProjectLogs(name: string): Promise<string>                                   // últimas 200 líneas
+getResources(): Promise<ResourceUsage>                                          // { memoryLimit, projects }: consumo por proyecto de compose
 removeProject(name: string): Promise<void>                                      // se puede repetir
 reviewProject(dir: string, name: string): Promise<string[]>                     // avisos para el docente, nunca lanza por el proyecto
 // ProjectSource = { type: 'git'; url } | { type: 'zip'; filePath }
@@ -78,13 +79,14 @@ updateProject(name: string): Promise<ProjectUpdate>                             
 - Si `prepareProject` falla a mitad de camino, borra la carpeta que creó. El ZIP lo borra la API, no el núcleo.
 - El núcleo traduce la salida de Docker a etapas (`core/src/progress.ts`). La API guarda el avance solo en memoria y la interfaz solo lo muestra. Si Docker cambia su formato, deja de cambiar la etapa, pero encender sigue funcionando.
 - El repositorio de un proyecto de GitHub vive en `projects/.repos/<nombre>`, nunca dentro de su carpeta: los contenedores suelen montarla y un hook o una configuración plantados en `.git` se ejecutarían al actualizar. Git se llama siempre con `--git-dir` y `--work-tree`.
+- `getResources` expresa la CPU sobre toda la PC, no por núcleo, y tarda unos 2 s porque Docker toma una muestra. Devuelve todos los proyectos de compose; la API deja solo los registrados y comparte la muestra 5 s.
 - `updateProject` no enciende nada y no pisa archivos cambiados en la PC. La API solo actualiza proyectos apagados, repite la revisión y hace que el siguiente encendido use `--build`.
 - `startProject`, `stopProject` y `getProjectStatus` rechazan nombres sin normalizar (`assertNormalizedName`).
 - Los comandos de Docker pasan por el ayudante `docker()` de `core/src/docker.ts`, que traduce "Docker no responde" y "sin permiso". Los demás, por `run()` de `core/src/run.ts`.
 
 ### Rutas de la API (contrato con `web/`)
 
-`GET /api/projects?q=`, `POST /api/projects`, `GET /api/projects/:id`, `POST /api/projects/:id/start`, `POST /api/projects/:id/stop`, `POST /api/projects/:id/update`, `GET /api/projects/:id/logs`, `GET /api/projects/:id/progress`, `DELETE /api/projects/:id`.
+`GET /api/projects?q=`, `GET /api/projects/resources`, `POST /api/projects`, `GET /api/projects/:id`, `POST /api/projects/:id/start`, `POST /api/projects/:id/stop`, `POST /api/projects/:id/update`, `GET /api/projects/:id/logs`, `GET /api/projects/:id/progress`, `DELETE /api/projects/:id`.
 
 ## Despliegue
 
