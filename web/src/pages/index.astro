@@ -227,6 +227,8 @@ import FaviconLinks from '../components/FaviconLinks.astro'
         web: { state: 'ok' | 'error' | 'no-response'; httpStatus?: number } | null
         warnings: string[]
         progress: Progress | null
+        sourceType: 'git' | 'zip'
+        pendingBuild: boolean
       }
 
       interface ApiError {
@@ -270,7 +272,7 @@ import FaviconLinks from '../components/FaviconLinks.astro'
         elapsedSeconds: number
       }
 
-      type ProjectAction = 'start' | 'stop' | 'remove'
+      type ProjectAction = 'start' | 'stop' | 'remove' | 'update'
 
       const REFRESH_INTERVAL_MS = 15_000
       const PROGRESS_INTERVAL_MS = 2_000
@@ -395,6 +397,9 @@ import FaviconLinks from '../components/FaviconLinks.astro'
               starting ? 'Encendiendo' : project.state === 'running' ? 'Encendido' : 'Apagado',
             ),
           )
+          if (!starting && project.pendingBuild) {
+            stateCell.append(element('p', 'mt-1 max-w-40 text-xs font-medium text-amber-800', 'Actualizado: se reconstruye al encender'))
+          }
           if (!starting && project.failedServices.length > 0) {
             stateCell.append(
               element(
@@ -476,6 +481,18 @@ import FaviconLinks from '../components/FaviconLinks.astro'
           removeButton.type = 'button'
           removeButton.disabled = isPending
           removeButton.addEventListener('click', () => void removeProject(project))
+          if (project.sourceType === 'git') {
+            const update = element(
+              'button',
+              'text-slate-600 underline hover:text-marca-texto disabled:cursor-not-allowed disabled:no-underline disabled:opacity-50',
+              pending === 'update' ? 'Actualizando…' : 'Actualizar',
+            )
+            update.type = 'button'
+            update.disabled = isPending || project.state === 'running'
+            if (project.state === 'running') update.title = 'Apaga el proyecto para actualizarlo'
+            update.addEventListener('click', () => void updateProject(project))
+            secondaryActions.append(update)
+          }
           secondaryActions.append(logsButton, removeButton)
           actionStack.append(actions, secondaryActions)
 
@@ -697,6 +714,31 @@ import FaviconLinks from '../components/FaviconLinks.astro'
           )
           // Una respuesta de error no trae el proyecto: sin esto seguiría figurando como encendiéndose.
           projects = projects.map((item) => item.id === project.id ? { ...item, progress: null } : item)
+        } finally {
+          pendingActions.delete(project.id)
+          render()
+        }
+      }
+
+      async function updateProject(project: Project): Promise<void> {
+        if (pendingActions.has(project.id)) return
+        pendingActions.set(project.id, 'update')
+        actionErrors.delete(project.id)
+        render()
+        try {
+          const { project: updated, changed, commit, summary } = await requestWithRetries<{
+            project: Project
+            changed: boolean
+            commit: string
+            summary: string
+          }>(`/api/projects/${project.id}/update`, 'POST')
+          projects = projects.map((item) => item.id === updated.id ? updated : item)
+          const total = updated.warnings.length
+          if (!changed) showGlobalMessage(`${updated.name} ya estaba al día (${commit}: ${summary}).`, 'success')
+          else if (total > 0) showGlobalMessage(`${updated.name} se actualizó a ${commit}: ${summary}. La versión nueva tiene ${total} ${total === 1 ? 'aviso' : 'avisos'}: revísalos antes de encender.`, 'warning')
+          else showGlobalMessage(`${updated.name} se actualizó a ${commit}: ${summary}. Enciéndelo para ver los cambios.`, 'success')
+        } catch (error) {
+          actionErrors.set(project.id, error instanceof Error ? error.message : 'No se pudo actualizar.')
         } finally {
           pendingActions.delete(project.id)
           render()

@@ -13,6 +13,15 @@ export function projectsDir(): string {
   return resolve(process.env.PROJECTS_DIR || join(import.meta.dirname, '..', '..', 'projects'))
 }
 
+/**
+ * Dónde se guarda el repositorio de un proyecto de GitHub. Va fuera de su carpeta porque los
+ * contenedores suelen montarla: un hook o una configuración plantados en .git se ejecutarían al
+ * actualizar, dentro de la herramienta que controla Docker.
+ */
+export function projectRepoDir(name: string): string {
+  return join(projectsDir(), '.repos', name)
+}
+
 export interface ComposeLocation {
   /** Carpeta que contiene el archivo compose. */
   dir: string

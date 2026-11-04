@@ -17,6 +17,24 @@ export interface StartProgress {
   lines: string[]
 }
 
+/** Opciones de startProject. */
+export interface StartOptions {
+  onProgress?: (progress: StartProgress) => void
+  /** Reconstruye las imágenes: hace falta después de actualizar el código. */
+  build?: boolean
+}
+
+export interface ProjectUpdate {
+  /** Carpeta que contiene el archivo compose, que pudo cambiar. */
+  dir: string
+  /** false si el proyecto ya estaba al día. */
+  changed: boolean
+  /** Versión actual: commit abreviado. */
+  commit: string
+  /** Título de esa versión, tal como lo escribió el equipo. */
+  summary: string
+}
+
 export type ProjectSource =
   | { type: 'git'; url: string }
   | { type: 'zip'; filePath: string }

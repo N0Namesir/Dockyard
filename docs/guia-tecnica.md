@@ -21,7 +21,7 @@ navegador ──► web (Astro) ──► api (Fastify + SQLite) ──► core 
 | Ruta | Contenido |
 |---|---|
 | `core/src/index.ts` | Contrato público del núcleo; la API importa solo desde aquí |
-| `core/src/sources.ts` | `prepareProject`: clonado, descompresión, búsqueda del compose y limpieza |
+| `core/src/sources.ts` | `prepareProject` y `updateProject`: clonado, actualización, descompresión, búsqueda del compose y limpieza |
 | `core/src/docker.ts` | Encender, apagar, estado y detección de choques de puertos |
 | `core/src/progress.ts` | Traduce la salida de `up -d` a etapas para el docente |
 | `core/src/review.ts` | `reviewProject`: revisión del compose y de los archivos al registrar |
@@ -99,7 +99,8 @@ Cómo funciona el contenedor:
 ```ts
 normalizeProjectName(name: string): string
 prepareProject(source: ProjectSource, name: string): Promise<PreparedProject>   // { dir, name }
-startProject(dir: string, name: string, onProgress?: (progress: StartProgress) => void): Promise<ProjectStatus>   // { state, ports }
+startProject(dir: string, name: string, options?: StartOptions): Promise<ProjectStatus>   // { state, ports }
+updateProject(name: string): Promise<ProjectUpdate>   // { dir, changed, commit, summary }
 stopProject(dir: string, name: string): Promise<ProjectStatus>
 getProjectStatus(name: string): Promise<ProjectStatus>
 reviewProject(dir: string, name: string): Promise<string[]>
@@ -114,6 +115,7 @@ type ProjectSource = { type: 'git'; url: string } | { type: 'zip'; filePath: str
 | `startProject` | Revisa choques de puertos y ejecuta `up -d` | Un puerto está en uso, Docker no responde, el compose falla o los contenedores se caen al arrancar |
 | `stopProject` | Ejecuta `stop` | Docker no responde |
 | `getProjectStatus` | Lee `ps --format json` | Docker no responde |
+| `updateProject` | Trae la última versión del repositorio sin encender ni reconstruir | No hay conexión, el repositorio ya no es público, pisaría un archivo cambiado en la PC o la versión nueva no trae compose |
 | `reviewProject` | Devuelve avisos sobre el compose y los archivos, sin encender nada | Nunca por el contenido del proyecto; si algo no se pudo revisar, también lo avisa |
 
 Reglas que cumple el núcleo:
@@ -122,6 +124,7 @@ Reglas que cumple el núcleo:
 - **Nombres.** `startProject`, `stopProject` y `getProjectStatus` rechazan nombres que no estén normalizados. La API debe guardar el `name` que devuelve `prepareProject`.
 - **Conflictos antes de clonar.** La API puede llamar a `normalizeProjectName` antes de `prepareProject` para comprobar si el nombre ya existe en su base y responder 409 sin esperar un clonado.
 - **ZIP.** El núcleo no borra el ZIP: lo creó la API, así que la API lo borra al terminar. Antes de extraerlo lee su lista de archivos y lo rechaza si una ruta sale de la carpeta, si trae más de 100 000 archivos o si ocuparía más de 3 GB.
+- **Actualizar.** El repositorio vive en `projects/.repos/<nombre>` y no en la carpeta del proyecto, porque los contenedores suelen montarla: un hook o una configuración plantados en `.git` se ejecutarían dentro de Dockyard, que controla Docker. Se descarga solo la última versión (`fetch --depth 1`) y se aplica con `read-tree -m -u`, que no necesita historia en común y se niega a pisar archivos cambiados. Por eso los proyectos no encuentran `.git` en su carpeta. La API solo actualiza proyectos apagados, repite la revisión y marca `needs_build` para que el siguiente encendido use `up -d --build`, porque `up -d` no reconstruye una imagen que ya existe.
 - **Revisión al registrar.** `reviewProject` interpreta el compose con `config --format json` y recorre los archivos sin ejecutar nada. Avisa de lo que deja a un servicio salir de su contenedor (`privileged`, `network_mode: host`, permisos peligrosos, `docker.sock`, rutas de la PC), de enlaces que salen del proyecto, de archivos de credenciales o respaldos y de claves escritas en el código. Dice dónde está cada cosa y nunca incluye el valor. Los avisos se guardan en la columna `warnings` y no impiden encender, porque la decisión es del docente.
 - **Comandos.** Todos se ejecutan con `execFile` y una lista de argumentos, nunca con una cadena para un shell.
 
@@ -161,11 +164,12 @@ Las pruebas con Docker usan una carpeta temporal como `PROJECTS_DIR` y eliminan 
 
 Esta entrega no las incluye. Mientras tanto, el docente registra solo proyectos que conozca.
 
-- **La revisión al registrar no es una auditoría.** Busca patrones conocidos: no lee el código para entender lo que hace, ni lo que un Dockerfile o una imagen ejecutan al arrancar, y omite carpetas como `node_modules` y archivos de más de 1 MB. Un proyecto sin avisos no queda garantizado como seguro. Tampoco se repite después de registrar.
+- **La revisión no es una auditoría.** Busca patrones conocidos: no lee el código para entender lo que hace, ni lo que un Dockerfile o una imagen ejecutan al arrancar, y omite carpetas como `node_modules` y archivos de más de 1 MB. Un proyecto sin avisos no queda garantizado como seguro. Se repite solo al actualizar.
 - **Repositorios privados**: hoy el clonado falla de inmediato (`GIT_TERMINAL_PROMPT=0`).
 - **Reescritura automática de puertos o subdominios con Traefik**: Traefik da subdominios `.localhost`, pero exige saber qué servicio y qué puerto interno expone cada proyecto.
 - **Límites de recursos** por proyecto.
 - **Login** para el docente.
 - La comprobación de la web no alcanza un puerto publicado solo en `127.0.0.1` (como `"127.0.0.1:8101:80"`) cuando Dockyard corre en contenedor: dirá que no responde aunque abra en el navegador. Tampoco entiende HTTPS.
 - La detección de puertos solo ve contenedores. Si otro programa de la PC usa el puerto, falla `up -d` y el mensaje de Docker llega al docente.
-- Actualizar un proyecto (`git pull`): el clonado conserva `.git` para poder hacerlo, pero falta la función.
+- Actualizar no toca los datos: un volumen de base de datos conserva sus tablas, así que un `.sql` nuevo de `db/init/` no se vuelve a cargar. Tampoco cambia un `.env` que ya exista, aunque cambie `.env.example`. Para empezar limpio, elimina el proyecto y regístralo de nuevo.
+- Un proyecto de ZIP no se actualiza: se elimina y se registra el ZIP nuevo.

@@ -38,6 +38,9 @@ function fakeCore() {
     async reviewProject() {
       return []
     },
+    async updateProject() {
+      return { dir: '/projects/nuevo', changed: true, commit: 'abc1234', summary: 'Arregla el inicio' }
+    },
     async startProject(_dir, name) {
       const status: ProjectStatus = { state: 'running', ports: [8080] }
       statuses.set(name, status)
@@ -72,8 +75,8 @@ test('el avance se ve mientras enciende y desaparece al terminar', async () => {
   const { core } = fakeCore()
   const app = await testApp({
     ...core,
-    async startProject(_dir, _name, onProgress) {
-      onProgress?.({ stage: 'Construyendo imágenes', lines: ['#1 DONE'] })
+    async startProject(_dir, _name, options) {
+      options?.onProgress?.({ stage: 'Construyendo imágenes', lines: ['#1 DONE'] })
       await new Promise<void>((resolve) => { finish = resolve })
       return { state: 'running', ports: [] }
     },
@@ -111,6 +114,100 @@ test('un encendido que falla no deja avance, y pedirlo de otro proyecto da 404',
   assert.equal((await app.inject({ method: 'GET', url: '/api/projects/99/progress' })).statusCode, 404)
 })
 
+const REPO = { team: 'E', name: 'A', repoUrl: 'https://github.com/e/a' }
+
+test('actualizar guarda la revisión nueva y el siguiente encendido reconstruye una vez', async () => {
+  const { core } = fakeCore()
+  const builds: (boolean | undefined)[] = []
+  const app = await testApp({
+    ...core,
+    async reviewProject() {
+      return ['Servicio web: usa privileged.']
+    },
+    async startProject(dir, name, options) {
+      builds.push(options?.build)
+      assert.equal(dir, '/projects/nuevo')
+      return core.startProject(dir, name, options)
+    },
+  })
+  await app.inject({ method: 'POST', url: '/api/projects', payload: REPO })
+  const updated = (await app.inject({ method: 'POST', url: '/api/projects/1/update' })).json()
+  assert.equal(updated.changed, true)
+  assert.equal(updated.commit, 'abc1234')
+  assert.equal(updated.summary, 'Arregla el inicio')
+  assert.equal(updated.project.pendingBuild, true)
+  assert.deepEqual(updated.project.warnings, ['Servicio web: usa privileged.'])
+
+  const started = (await app.inject({ method: 'POST', url: '/api/projects/1/start' })).json()
+  assert.equal(started.pendingBuild, false)
+  await app.inject({ method: 'POST', url: '/api/projects/1/stop' })
+  await app.inject({ method: 'POST', url: '/api/projects/1/start' })
+  assert.deepEqual(builds, [true, false])
+})
+
+test('si el encendido falla tras actualizar, el siguiente intento también reconstruye', async () => {
+  const { core } = fakeCore()
+  const builds: (boolean | undefined)[] = []
+  const app = await testApp({
+    ...core,
+    async startProject(_dir, _name, options) {
+      builds.push(options?.build)
+      throw new Error('falló')
+    },
+  })
+  await app.inject({ method: 'POST', url: '/api/projects', payload: REPO })
+  await app.inject({ method: 'POST', url: '/api/projects/1/update' })
+  await app.inject({ method: 'POST', url: '/api/projects/1/start' })
+  await app.inject({ method: 'POST', url: '/api/projects/1/start' })
+  assert.deepEqual(builds, [true, true])
+})
+
+test('sin cambios no toca la revisión ni pide reconstruir', async () => {
+  const { core } = fakeCore()
+  let reviews = 0
+  const app = await testApp({
+    ...core,
+    async reviewProject() {
+      reviews++
+      return []
+    },
+    async updateProject() {
+      return { dir: '/x', changed: false, commit: 'abc1234', summary: 'Igual' }
+    },
+  })
+  await app.inject({ method: 'POST', url: '/api/projects', payload: REPO })
+  const updated = (await app.inject({ method: 'POST', url: '/api/projects/1/update' })).json()
+  assert.equal(updated.changed, false)
+  assert.equal(updated.project.pendingBuild, false)
+  assert.equal(reviews, 1)
+})
+
+test('no se actualiza un proyecto encendido, ni uno de ZIP, ni uno que no existe', async () => {
+  const { core } = fakeCore()
+  let updates = 0
+  const app = await testApp({
+    ...core,
+    async updateProject(name) {
+      updates++
+      return core.updateProject(name)
+    },
+  })
+  await app.inject({ method: 'POST', url: '/api/projects', payload: REPO })
+  await app.inject({ method: 'POST', url: '/api/projects/1/start' })
+  const running = await app.inject({ method: 'POST', url: '/api/projects/1/update' })
+  assert.equal(running.statusCode, 409)
+  assert.match(running.json().message, /Apaga el proyecto/)
+  assert.equal((await app.inject({ method: 'POST', url: '/api/projects/99/update' })).statusCode, 404)
+  assert.equal(updates, 0)
+
+  const repository = createProjectRepository(':memory:')
+  repository.insert({ name: 'z', team: 'E', sourceType: 'zip', source: 'z.zip', dir: '/z', warnings: [] })
+  const zipApp = await buildApp({ repository, core, checkWeb: async () => ({ state: 'ok', httpStatus: 200 }) })
+  const zip = await zipApp.inject({ method: 'POST', url: '/api/projects/1/update' })
+  assert.equal(zip.statusCode, 409)
+  assert.match(zip.json().message, /GitHub/)
+})
+
 test('la lista empieza vacía', async () => {
   const app = await testApp()
   const response = await app.inject({ method: 'GET', url: '/api/projects' })
@@ -146,6 +243,8 @@ test('registra por GitHub, consulta, busca, enciende y apaga', async () => {
     web: null,
     warnings: [],
     progress: null,
+    pendingBuild: false,
+    sourceType: 'git',
   })
 
   const found = await app.inject({

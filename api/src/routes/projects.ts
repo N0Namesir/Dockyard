@@ -198,6 +198,12 @@ export function projectRoutes(service: ProjectService): FastifyPluginAsync {
     )
 
     app.post<{ Params: IdParams }>(
+      '/projects/:id/update',
+      { schema: { params: idParamsSchema } },
+      async (request) => service.update(Number(request.params.id)),
+    )
+
+    app.post<{ Params: IdParams }>(
       '/projects/:id/stop',
       { schema: { params: idParamsSchema } },
       async (request) => service.stop(Number(request.params.id)),

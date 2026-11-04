@@ -2,10 +2,10 @@ import { rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { assertNormalizedName } from './name.ts'
-import { findComposeFile, projectsDir } from './paths.ts'
+import { findComposeFile, projectRepoDir, projectsDir } from './paths.ts'
 import { createProgressTracker } from './progress.ts'
 import { CommandError, run, type RunOptions } from './run.ts'
-import type { ProjectStatus, StartProgress } from './types.ts'
+import type { ProjectStatus, StartOptions } from './types.ts'
 
 const START_TIMEOUT = 10 * 60_000
 const STOP_TIMEOUT = 2 * 60_000
@@ -223,16 +223,16 @@ async function settledContainers(name: string): Promise<any[]> {
 export async function startProject(
   dir: string,
   name: string,
-  onProgress?: (progress: StartProgress) => void,
+  options: StartOptions = {},
 ): Promise<ProjectStatus> {
-  const progress = createProgressTracker(onProgress)
+  const progress = createProgressTracker(options.onProgress)
   const prefix = await composePrefix(dir, name)
   progress.setStage('Revisando puertos y nombres')
   await checkConflicts(prefix, name)
   progress.setStage('Pidiendo a Docker que encienda el proyecto')
 
   try {
-    await docker([...prefix, 'up', '-d'], { timeoutMs: START_TIMEOUT, onLine: progress.addLine })
+    await docker([...prefix, 'up', '-d', ...(options.build ? ['--build'] : [])], { timeoutMs: START_TIMEOUT, onLine: progress.addLine })
   } catch (err) {
     if (err instanceof CommandError) {
       if (err.timedOut) {
@@ -300,6 +300,7 @@ export async function removeProject(name: string): Promise<void> {
 
   try {
     await rm(target, { recursive: true, force: true })
+    await rm(projectRepoDir(name), { recursive: true, force: true })
   } catch (err: any) {
     if (err.code === 'EACCES' || err.code === 'EPERM') {
       // Los contenedores del proyecto pueden haber creado archivos de root en sus carpetas montadas.

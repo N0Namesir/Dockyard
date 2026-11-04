@@ -6,6 +6,7 @@ import type {
   ProgressResponse,
   ProjectResponse,
   ProjectRow,
+  UpdateResponse,
 } from '../types.ts'
 import type { CheckWeb, WebCheck } from './web-check.ts'
 
@@ -41,6 +42,7 @@ function toResponse(
     id: row.id,
     name: row.name,
     team: row.team,
+    sourceType: row.source_type,
     state: status.state,
     ports: status.ports,
     url: mainPort === undefined ? null : `http://localhost:${mainPort}`,
@@ -49,6 +51,7 @@ function toResponse(
     web,
     warnings: JSON.parse(row.warnings) as string[],
     progress,
+    pendingBuild: row.needs_build === 1,
   }
 }
 
@@ -62,7 +65,7 @@ export function createProjectService(
 
   function once<T>(
     id: number,
-    action: 'start' | 'stop' | 'remove',
+    action: 'start' | 'stop' | 'remove' | 'update',
     run: () => Promise<T>,
   ): Promise<T> {
     const key = `${id}:${action}`
@@ -159,8 +162,8 @@ export function createProjectService(
 
     async remove(id: number): Promise<void> {
       const project = requireProject(id)
-      if (inFlight.has(`${id}:start`) || inFlight.has(`${id}:stop`)) {
-        throw new HttpError(409, 'El proyecto se está encendiendo o apagando. Espera a que termine.')
+      if (inFlight.has(`${id}:start`) || inFlight.has(`${id}:stop`) || inFlight.has(`${id}:update`)) {
+        throw new HttpError(409, 'El proyecto se está encendiendo, apagando o actualizando. Espera a que termine.')
       }
       return once(id, 'remove', async () => {
         await core.removeProject(project.name)
@@ -171,19 +174,49 @@ export function createProjectService(
 
     async start(id: number): Promise<ProjectResponse> {
       const project = requireProject(id)
+      if (inFlight.has(`${id}:update`)) {
+        throw new HttpError(409, 'El proyecto se está actualizando. Espera a que termine.')
+      }
       return once(id, 'start', async () => {
         const start = { startedAt: Date.now(), current: { stage: '', lines: [] } as StartProgress }
         starts.set(id, start)
         let status: ProjectStatus
         try {
-          status = await core.startProject(project.dir, project.name, (progress) => {
-            start.current = progress
+          status = await core.startProject(project.dir, project.name, {
+            build: project.needs_build === 1,
+            onProgress: (progress) => {
+              start.current = progress
+            },
           })
+          repository.clearNeedsBuild(id)
         } finally {
           starts.delete(id)
         }
         webChecks.delete(id)
-        return respond(project, status)
+        return respond(requireProject(id), status)
+      })
+    },
+
+    async update(id: number): Promise<UpdateResponse> {
+      const project = requireProject(id)
+      if (project.source_type !== 'git') {
+        throw new HttpError(409, 'Solo se actualizan los proyectos registrados desde GitHub. Si el equipo entregó un ZIP nuevo, elimina este proyecto y regístralo de nuevo.')
+      }
+      if (['start', 'stop', 'remove'].some((action) => inFlight.has(`${id}:${action}`))) {
+        throw new HttpError(409, 'El proyecto se está encendiendo, apagando o eliminando. Espera a que termine.')
+      }
+      return once(id, 'update', async () => {
+        // Apagado, para que el docente vea los avisos de la versión nueva antes de que se ejecute.
+        const status = await core.getProjectStatus(project.name)
+        if (status.state === 'running') {
+          throw new HttpError(409, 'Apaga el proyecto antes de actualizarlo.')
+        }
+        const { dir, changed, commit, summary } = await core.updateProject(project.name)
+        if (changed) {
+          const warnings = await core.reviewProject(dir, project.name)
+          repository.applyUpdate(id, { dir, warnings })
+        }
+        return { project: await hydrate(requireProject(id)), changed, commit, summary }
       })
     },
 

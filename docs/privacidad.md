@@ -25,7 +25,7 @@ Para el campo Equipo, usa un nombre como "Equipo 3" en lugar de nombres de estud
 
 Solo para obtener lo que hace falta, nunca para enviar información sobre su uso:
 
-- **Al registrar desde GitHub:** clona la URL indicada.
+- **Al registrar o actualizar desde GitHub:** descarga el repositorio de la URL indicada.
 - **Al encender un proyecto:** Docker descarga las imágenes y dependencias que ese proyecto pide.
 - **Al instalar o compilar Dockyard:** se descargan Docker, Node y las dependencias.
 

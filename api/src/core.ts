@@ -7,6 +7,7 @@ export {
   reviewProject,
   startProject,
   stopProject,
+  updateProject,
 } from '@dockyard/core'
 
 export type {
@@ -14,5 +15,7 @@ export type {
   ProjectSource,
   ProjectState,
   ProjectStatus,
+  ProjectUpdate,
+  StartOptions,
   StartProgress,
 } from '@dockyard/core'

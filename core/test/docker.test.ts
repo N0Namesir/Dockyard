@@ -120,7 +120,7 @@ describe('encender, consultar y apagar', () => {
     assert.deepEqual(await getProjectStatus(name), { state: 'stopped', ports: [] })
 
     const seen: StartProgress[] = []
-    assert.deepEqual(await startProject(dir, name, (progress) => seen.push(progress)), { state: 'running', ports: [8081] })
+    assert.deepEqual(await startProject(dir, name, { onProgress: (progress) => seen.push(progress) }), { state: 'running', ports: [8081] })
     assert.equal(seen[0]?.stage, 'Revisando puertos y nombres')
     assert.equal(seen.at(-1)?.stage, 'Comprobando que sigan encendidos')
     assert.ok(seen.some((progress) => progress.stage === 'Arrancando contenedores'), 'Docker no reportó el arranque')

@@ -1,11 +1,11 @@
 import { constants } from 'node:fs'
 import { access, copyFile, mkdir, rm, stat } from 'node:fs/promises'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { assertProjectNameFree } from './docker.ts'
-import { normalizeProjectName } from './name.ts'
-import { findComposeFile, projectsDir } from './paths.ts'
+import { assertNormalizedName, normalizeProjectName } from './name.ts'
+import { findComposeFile, projectRepoDir, projectsDir } from './paths.ts'
 import { CommandError, run } from './run.ts'
-import type { PreparedProject, ProjectSource } from './types.ts'
+import type { PreparedProject, ProjectSource, ProjectUpdate } from './types.ts'
 
 const FETCH_TIMEOUT = 5 * 60_000
 /** Límites al descomprimir: el ZIP subido no pasa de 200 MB, pero puede ocupar mucho más al abrirse. */
@@ -34,7 +34,7 @@ export async function prepareProject(source: ProjectSource, name: string): Promi
     await assertProjectNameFree(normalized)
 
     if (source.type === 'git') {
-      await cloneRepo(source.url, target)
+      await cloneRepo(source.url, target, projectRepoDir(normalized))
     } else {
       await extractZip(source.filePath, target)
     }
@@ -48,6 +48,7 @@ export async function prepareProject(source: ProjectSource, name: string): Promi
     return { dir: location.dir, name: normalized }
   } catch (err) {
     await rm(target, { recursive: true, force: true })
+    await rm(projectRepoDir(normalized), { recursive: true, force: true })
     throw err
   }
 }
@@ -71,10 +72,14 @@ function validateSource(source: ProjectSource): void {
   }
 }
 
-async function cloneRepo(url: string, target: string): Promise<void> {
+/** Clona dejando el repositorio en gitDir, fuera de la carpeta del proyecto (ver projectRepoDir). */
+export async function cloneRepo(url: string, target: string, gitDir: string): Promise<void> {
+  await mkdir(dirname(gitDir), { recursive: true })
+  await rm(gitDir, { recursive: true, force: true })
   try {
-    // "--" evita que una URL que empiece con "-" se interprete como opción. Se conserva .git para poder hacer git pull.
-    await run('git', ['clone', '--depth', '1', '--', url, target], { timeoutMs: FETCH_TIMEOUT })
+    // "--" evita que una URL que empiece con "-" se interprete como opción.
+    await run('git', ['clone', '--depth', '1', '--separate-git-dir', gitDir, '--', url, target], { timeoutMs: FETCH_TIMEOUT })
+    await rm(join(target, '.git'), { force: true })
   } catch (err) {
     if (err instanceof CommandError) {
       if (err.timedOut) throw new Error('El clonado del repositorio tardó más de 5 minutos y se canceló.')
@@ -84,6 +89,71 @@ async function cloneRepo(url: string, target: string): Promise<void> {
       throw new Error(`No se pudo clonar el repositorio: ${err.stderr.split('\n').slice(-3).join(' ')}`)
     }
     throw err
+  }
+}
+
+/**
+ * Trae la última versión de un proyecto de GitHub. Conserva lo que no viene en el repositorio,
+ * como .env y los datos, y no acepta pisar archivos cambiados en la PC. El clonado es superficial
+ * y read-tree no necesita historia en común, así que también funciona si el equipo reescribió la
+ * historia. No enciende ni reconstruye nada.
+ */
+export async function updateProject(name: string): Promise<ProjectUpdate> {
+  assertNormalizedName(name)
+  const root = join(projectsDir(), name)
+  const gitDir = projectRepoDir(name)
+  const exists = await stat(gitDir).then((info) => info.isDirectory(), () => false)
+  if (!exists) {
+    throw new Error('Este proyecto no se puede actualizar porque se registró antes de que existiera esta función o desde un ZIP. Elimínalo y regístralo de nuevo.')
+  }
+  const git = (args: string[], okExitCodes?: number[]) =>
+    run('git', ['--git-dir', gitDir, '--work-tree', root, ...args], { timeoutMs: FETCH_TIMEOUT, okExitCodes })
+
+  try {
+    await git(['fetch', '--depth', '1', 'origin', 'HEAD'])
+  } catch (err) {
+    if (err instanceof CommandError) {
+      if (err.timedOut) throw new Error('La descarga de la actualización tardó más de 5 minutos y se canceló.')
+      throw new Error('No se pudo descargar la actualización. Verifica que haya internet y que el repositorio siga existiendo y sea público.')
+    }
+    throw err
+  }
+
+  const current = (await git(['rev-parse', 'HEAD'])).trim()
+  const latest = (await git(['rev-parse', 'FETCH_HEAD'])).trim()
+  if (latest !== current) {
+    await applyVersion(git, current, latest)
+    if (!await findComposeFile(root)) {
+      await git(['read-tree', '-m', '-u', latest, current])
+      throw new Error('La última versión del repositorio ya no trae un archivo compose, así que el proyecto se dejó como estaba. Pide al equipo que lo agregue.')
+    }
+    await git(['reset', '--soft', latest])
+  }
+
+  const location = (await findComposeFile(root))!
+  await copyEnvExample(location.dir)
+  const [commit = '', summary = ''] = (await git(['log', '-1', '--format=%h%n%s', latest])).split('\n')
+  return { dir: location.dir, changed: latest !== current, commit, summary: summary.slice(0, 120) }
+}
+
+type Git = (args: string[], okExitCodes?: number[]) => Promise<string>
+
+/** Pasa la carpeta del proyecto de una versión a otra, o lanza un error sin haber cambiado nada. */
+async function applyVersion(git: Git, from: string, to: string): Promise<void> {
+  try {
+    // Docker puede cambiar las fechas de los archivos; sin esto parecerían modificados. Sale con 1 si alguno lo está.
+    await git(['update-index', '-q', '--refresh'], [1])
+    await git(['read-tree', '-m', '-u', from, to])
+  } catch (err) {
+    if (!(err instanceof CommandError)) throw err
+    if (/permission denied/i.test(err.stderr)) {
+      throw new Error('El proyecto dejó archivos sin permiso de escritura. Elimínalo y regístralo de nuevo.')
+    }
+    const file = /'([^']+)'/.exec(err.stderr)?.[1]
+    if (/not uptodate|would be overwritten|would be lost/i.test(err.stderr)) {
+      throw new Error(`La actualización pisaría un archivo que cambió en esta PC${file ? ` (${file})` : ''}, así que no se aplicó. Puede pasar si el proyecto escribe en su propia carpeta. Para empezar limpio, elimínalo y regístralo de nuevo, aunque se borran sus datos.`)
+    }
+    throw new Error(`No se pudo aplicar la actualización: ${err.stderr.split('\n').slice(-3).join(' ')}`)
   }
 }
 

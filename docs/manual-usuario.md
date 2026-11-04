@@ -35,6 +35,7 @@ Que no aparezcan avisos no garantiza que el proyecto sea seguro, así que regist
 - **Buscar:** escribe parte del nombre del proyecto o del equipo en **Buscar nombre o equipo**. No importan las mayúsculas ni las tildes.
 - **Encender:** la primera vez puede tardar varios minutos, porque Docker descarga y construye las imágenes del proyecto. Mientras tanto, el botón dice **Encendiendo…** y debajo del proyecto se ve qué está haciendo Docker, cuánto lleva y sus últimas líneas. Puedes recargar la página sin interrumpirlo, pero si falla mientras tanto no verás el motivo: usa **Ver registro**. Las siguientes veces es rápido.
 - **Abrir:** cuando el proyecto está **Encendido**, este botón abre en otra pestaña la dirección donde funciona (por ejemplo, http://localhost:8081). Si no abre la página correcta, prueba con los números de la columna **Puertos**: cada uno es un enlace.
+- **Actualizar:** solo en proyectos de GitHub y con el proyecto apagado. Trae la última versión del repositorio y la revisa de nuevo, sin encenderla. Lee los avisos, si los hay, y usa **Encender**: esa vez reconstruye el proyecto con el código nuevo. Sus datos se conservan, así que una base de datos sigue con lo que tenía. Si el equipo entregó un ZIP nuevo, elimina el proyecto y registra el ZIP.
 - **Apagar:** detiene el proyecto sin borrar nada. Sus datos se conservan para la próxima vez.
 - **Ver registro:** muestra las últimas líneas que escribió el proyecto. Sirve para saber por qué falla y compartirlo con el equipo.
 - **Eliminar:** borra el proyecto, su código y sus datos, y libera su nombre. Para confirmar hay que escribir el nombre del proyecto, porque no se puede deshacer.
@@ -65,4 +66,5 @@ Se comprueba solo el puerto que usa **Abrir**.
 | Los contenedores se borraron, pero el proyecto dejó archivos sin permiso de borrado | El proyecto creó archivos como administrador | Ejecuta en una terminal el comando `sudo rm -rf …` que indica el mensaje y presiona **Eliminar** otra vez |
 | No se puede conectar con Dockyard | La herramienta no responde | Recarga la página; si sigue igual, ejecuta `./install.sh` en la carpeta de Dockyard |
 | No se pudo descomprimir el archivo | El ZIP está dañado o no es un ZIP | Pide al equipo que lo vuelva a generar |
+| La actualización pisaría un archivo que cambió en esta PC | El proyecto escribe en su propia carpeta y la versión nueva cambia ese archivo | Elimina el proyecto y regístralo de nuevo. Se borran sus datos |
 | Ya existe un proyecto con ese nombre | Ya registraste un proyecto con ese nombre, o quedó su carpeta | Usa otro nombre, por ejemplo agregando el número de equipo |

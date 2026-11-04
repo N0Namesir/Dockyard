@@ -1,17 +1,17 @@
 // Pruebas que no necesitan Docker: npm test -w core
 
 import assert from 'node:assert/strict'
-import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
+import { access, mkdir, mkdtemp, readFile, rm, symlink, unlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { after, describe, test } from 'node:test'
 import { parsePs, portsInUse, requestedContainerNames, requestedPorts, statusFromContainers } from '../src/docker.ts'
 import { assertNormalizedName, normalizeProjectName } from '../src/name.ts'
-import { findComposeFile } from '../src/paths.ts'
+import { findComposeFile, projectRepoDir, projectsDir } from '../src/paths.ts'
 import { cleanLine, createProgressTracker, stageOf } from '../src/progress.ts'
 import { composeWarnings, fileWarnings, secretsIn, sensitiveFileName, suspiciousEnvVars } from '../src/review.ts'
 import { run } from '../src/run.ts'
-import { zipProblem } from '../src/sources.ts'
+import { cloneRepo, updateProject, zipProblem } from '../src/sources.ts'
 import type { StartProgress } from '../src/types.ts'
 
 describe('normalizeProjectName', () => {
@@ -351,5 +351,170 @@ describe('avance del encendido', () => {
     const out = await run('sh', ['-c', 'printf "a\\nb\\rc"; printf "d\\n" >&2'], { onLine: (line) => lines.push(line) })
     assert.equal(out, 'a\nb\rc')
     assert.deepEqual(lines.sort(), ['a', 'b', 'c', 'd'])
+  })
+})
+
+describe('actualizar desde el repositorio', () => {
+  const COMPOSE = 'services:\n  web:\n    image: nginx:alpine\n'
+  const IDENTITY = ['-c', 'user.name=Prueba', '-c', 'user.email=prueba@example.invalid']
+  const previousDir = process.env.PROJECTS_DIR
+  let base = ''
+  let origin = ''
+  let count = 0
+
+  const inOrigin = (...args: string[]) => run('git', ['-C', origin, ...IDENTITY, ...args])
+  const exists = (path: string) => access(path).then(() => true, () => false)
+
+  async function commit(message: string, files: Record<string, string | null>) {
+    for (const [file, content] of Object.entries(files)) {
+      if (content === null) await unlink(join(origin, file))
+      else {
+        await mkdir(join(origin, file, '..'), { recursive: true })
+        await writeFile(join(origin, file), content)
+      }
+    }
+    await inOrigin('add', '-A')
+    await inOrigin('commit', '-q', '-m', message)
+  }
+
+  /** Un origen con compose y dos archivos, y un proyecto ya clonado de él. */
+  async function setup() {
+    base = await mkdtemp(join(tmpdir(), 'dockyard-actualizar-'))
+    process.env.PROJECTS_DIR = join(base, 'projects')
+    origin = join(base, 'origen')
+    await mkdir(origin)
+    await inOrigin('init', '-q')
+    await commit('Primera', { 'compose.yaml': COMPOSE, 'a.txt': 'uno', 'b.txt': 'borrar' })
+    const name = `equipo-${++count}`
+    const root = join(projectsDir(), name)
+    await cloneRepo(`file://${origin}`, root, projectRepoDir(name))
+    return { name, root }
+  }
+
+  after(() => {
+    if (previousDir === undefined) delete process.env.PROJECTS_DIR
+    else process.env.PROJECTS_DIR = previousDir
+  })
+
+  test('el repositorio queda fuera de la carpeta que ven los contenedores', async () => {
+    const { name, root } = await setup()
+    assert.equal(await exists(join(root, '.git')), false)
+    assert.equal(await exists(join(projectRepoDir(name), 'HEAD')), true)
+    await rm(base, { recursive: true, force: true })
+  })
+
+  test('sin cambios lo dice', async () => {
+    const { name, root } = await setup()
+    const update = await updateProject(name)
+    assert.equal(update.changed, false)
+    assert.equal(update.dir, root)
+    assert.equal(update.summary, 'Primera')
+    await rm(base, { recursive: true, force: true })
+  })
+
+  test('aplica cambios y borrados, y conserva lo que no viene en el repositorio', async () => {
+    const { name, root } = await setup()
+    await writeFile(join(root, '.env'), 'CLAVE=local')
+    await mkdir(join(root, 'datos'))
+    await writeFile(join(root, 'datos', 'subida.png'), 'x')
+    await commit('Segunda', { 'a.txt': 'dos', 'b.txt': null, 'nuevo.txt': 'hola' })
+
+    const update = await updateProject(name)
+    assert.equal(update.changed, true)
+    assert.equal(update.summary, 'Segunda')
+    assert.equal(await readFile(join(root, 'a.txt'), 'utf8'), 'dos')
+    assert.equal(await readFile(join(root, 'nuevo.txt'), 'utf8'), 'hola')
+    assert.equal(await exists(join(root, 'b.txt')), false)
+    assert.equal(await readFile(join(root, '.env'), 'utf8'), 'CLAVE=local')
+    assert.equal(await exists(join(root, 'datos', 'subida.png')), true)
+    assert.equal((await updateProject(name)).changed, false)
+    await rm(base, { recursive: true, force: true })
+  })
+
+  test('funciona aunque el equipo haya reescrito la historia', async () => {
+    const { name, root } = await setup()
+    await writeFile(join(origin, 'a.txt'), 'reescrito')
+    await inOrigin('add', '-A')
+    await inOrigin('commit', '-q', '--amend', '-m', 'Reescrita')
+    assert.equal((await updateProject(name)).summary, 'Reescrita')
+    assert.equal(await readFile(join(root, 'a.txt'), 'utf8'), 'reescrito')
+    await rm(base, { recursive: true, force: true })
+  })
+
+  test('no pisa un archivo cambiado en la PC, y se puede actualizar lo demás después', async () => {
+    const { name, root } = await setup()
+    await writeFile(join(root, 'a.txt'), 'cambio local')
+    await commit('Segunda', { 'a.txt': 'dos', 'nuevo.txt': 'hola' })
+    await assert.rejects(updateProject(name), /pisaría un archivo .*a\.txt/)
+    assert.equal(await readFile(join(root, 'a.txt'), 'utf8'), 'cambio local')
+    assert.equal(await exists(join(root, 'nuevo.txt')), false)
+
+    await writeFile(join(root, 'a.txt'), 'uno')
+    assert.equal((await updateProject(name)).changed, true)
+    assert.equal(await readFile(join(root, 'a.txt'), 'utf8'), 'dos')
+    await rm(base, { recursive: true, force: true })
+  })
+
+  test('tampoco pisa un archivo sin versionar que la versión nueva trae', async () => {
+    const { name, root } = await setup()
+    await writeFile(join(root, '.env'), 'CLAVE=local')
+    await commit('Trae .env', { '.env': 'CLAVE=del-repo' })
+    await assert.rejects(updateProject(name), /pisaría un archivo/)
+    assert.equal(await readFile(join(root, '.env'), 'utf8'), 'CLAVE=local')
+    await rm(base, { recursive: true, force: true })
+  })
+
+  test('si la versión nueva no trae compose, deja el proyecto como estaba', async () => {
+    const { name, root } = await setup()
+    await commit('Sin compose', { 'compose.yaml': null, 'a.txt': 'dos' })
+    await assert.rejects(updateProject(name), /ya no trae un archivo compose/)
+    assert.equal(await readFile(join(root, 'compose.yaml'), 'utf8'), COMPOSE)
+    assert.equal(await readFile(join(root, 'a.txt'), 'utf8'), 'uno')
+
+    await commit('Con compose', { 'compose.yaml': COMPOSE })
+    assert.equal((await updateProject(name)).summary, 'Con compose')
+    assert.equal(await readFile(join(root, 'a.txt'), 'utf8'), 'dos')
+    await rm(base, { recursive: true, force: true })
+  })
+
+  test('sigue al compose si cambia de carpeta y copia un .env.example nuevo', async () => {
+    const { name, root } = await setup()
+    await commit('Mueve', {
+      'compose.yaml': null,
+      'a.txt': null,
+      'b.txt': null,
+      'app/compose.yaml': COMPOSE,
+      'app/.env.example': 'CLAVE=ejemplo',
+    })
+    const update = await updateProject(name)
+    assert.equal(update.dir, join(root, 'app'))
+    assert.equal(await readFile(join(root, 'app', '.env'), 'utf8'), 'CLAVE=ejemplo')
+    await rm(base, { recursive: true, force: true })
+  })
+
+  test('un .git plantado en la carpeta del proyecto no se usa', async () => {
+    const { name, root } = await setup()
+    const marker = join(base, 'hook-ejecutado')
+    await mkdir(join(root, '.git', 'hooks'), { recursive: true })
+    await writeFile(join(root, '.git', 'config'), `[core]\n\tfsmonitor = touch ${marker}\n\thooksPath = ${join(root, '.git', 'hooks')}\n`)
+    await writeFile(join(root, '.git', 'hooks', 'post-merge'), `#!/bin/sh\ntouch ${marker}\n`, { mode: 0o755 })
+    await commit('Segunda', { 'a.txt': 'dos' })
+    assert.equal((await updateProject(name)).changed, true)
+    assert.equal(await exists(marker), false)
+    await rm(base, { recursive: true, force: true })
+  })
+
+  test('un proyecto sin repositorio pide registrarlo de nuevo', async () => {
+    await setup()
+    await assert.rejects(updateProject('sin-repositorio'), /regístralo de nuevo/)
+    await rm(base, { recursive: true, force: true })
+  })
+
+  test('un origen que ya no existe da un mensaje claro y no cambia nada', async () => {
+    const { name, root } = await setup()
+    await rm(origin, { recursive: true, force: true })
+    await assert.rejects(updateProject(name), /No se pudo descargar la actualización/)
+    assert.equal(await readFile(join(root, 'a.txt'), 'utf8'), 'uno')
+    await rm(base, { recursive: true, force: true })
   })
 })
