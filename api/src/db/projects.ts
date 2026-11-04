@@ -11,7 +11,8 @@ const schema = `
     source_type TEXT NOT NULL CHECK (source_type IN ('git', 'zip')),
     source TEXT NOT NULL,
     dir TEXT NOT NULL,
-    created_at TEXT NOT NULL
+    created_at TEXT NOT NULL,
+    warnings TEXT NOT NULL DEFAULT '[]'
   ) STRICT;
 `
 
@@ -55,34 +56,39 @@ export function createProjectRepository(
   db.exec('PRAGMA foreign_keys = ON;')
   db.exec('PRAGMA journal_mode = WAL;')
   db.exec(schema)
+  // Una base creada antes de la revisión al registrar no tiene esta columna.
+  const columns = db.prepare('PRAGMA table_info(projects)').all() as unknown as { name: string }[]
+  if (!columns.some((column) => column.name === 'warnings')) {
+    db.exec("ALTER TABLE projects ADD COLUMN warnings TEXT NOT NULL DEFAULT '[]'")
+  }
   db.function('normalizar', { deterministic: true }, (value) =>
     normalizeForSearch(String(value)),
   )
 
   const listAll = db.prepare(`
-    SELECT id, name, team, source_type, source, dir, created_at
+    SELECT id, name, team, source_type, source, dir, created_at, warnings
     FROM projects
     ORDER BY created_at DESC, id DESC
   `)
   const search = db.prepare(`
-    SELECT id, name, team, source_type, source, dir, created_at
+    SELECT id, name, team, source_type, source, dir, created_at, warnings
     FROM projects
     WHERE normalizar(name) LIKE ? ESCAPE '\\' OR normalizar(team) LIKE ? ESCAPE '\\'
     ORDER BY created_at DESC, id DESC
   `)
   const byId = db.prepare(`
-    SELECT id, name, team, source_type, source, dir, created_at
+    SELECT id, name, team, source_type, source, dir, created_at, warnings
     FROM projects
     WHERE id = ?
   `)
   const byName = db.prepare(`
-    SELECT id, name, team, source_type, source, dir, created_at
+    SELECT id, name, team, source_type, source, dir, created_at, warnings
     FROM projects
     WHERE name = ?
   `)
   const insert = db.prepare(`
-    INSERT INTO projects (name, team, source_type, source, dir, created_at)
-    VALUES (?, ?, ?, ?, ?, ?)
+    INSERT INTO projects (name, team, source_type, source, dir, created_at, warnings)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
   `)
 
   const remove = db.prepare('DELETE FROM projects WHERE id = ?')
@@ -114,6 +120,7 @@ export function createProjectRepository(
         project.source,
         project.dir,
         createdAt,
+        JSON.stringify(project.warnings),
       )
       const row = byId.get(Number(result.lastInsertRowid)) as unknown as
         | ProjectRow

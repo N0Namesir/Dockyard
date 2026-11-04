@@ -225,6 +225,7 @@ import FaviconLinks from '../components/FaviconLinks.astro'
         urls: string[]
         failedServices: string[]
         web: { state: 'ok' | 'error' | 'no-response'; httpStatus?: number } | null
+        warnings: string[]
       }
 
       interface ApiError {
@@ -279,6 +280,8 @@ import FaviconLinks from '../components/FaviconLinks.astro'
       /** Registros abiertos por proyecto; null mientras se cargan. */
       const openLogs = new Map<number, string | null>()
       const actionErrors = new Map<number, string>()
+      /** Proyectos con la lista de avisos abierta: redibujar la tabla no debe cerrarla. */
+      const openWarnings = new Set<number>()
 
       function element<K extends keyof HTMLElementTagNameMap>(
         tag: K,
@@ -311,12 +314,14 @@ import FaviconLinks from '../components/FaviconLinks.astro'
         return response.json() as Promise<T>
       }
 
-      function showGlobalMessage(message: string, kind: 'error' | 'success'): void {
+      function showGlobalMessage(message: string, kind: 'error' | 'success' | 'warning'): void {
         globalMessage.textContent = message
         globalMessage.className = `mb-6 rounded-md border px-4 py-3 text-sm ${
           kind === 'error'
             ? 'border-red-200 bg-red-50 text-red-800'
-            : 'border-emerald-200 bg-emerald-50 text-emerald-800'
+            : kind === 'warning'
+              ? 'border-amber-300 bg-amber-50 text-amber-900'
+              : 'border-emerald-200 bg-emerald-50 text-emerald-800'
         }`
       }
 
@@ -469,8 +474,33 @@ import FaviconLinks from '../components/FaviconLinks.astro'
           row.append(actionsCell)
           projectsBody.append(row)
 
+          if (project.warnings.length > 0) projectsBody.append(warningsRow(project))
           if (openLogs.has(project.id)) projectsBody.append(logsRow(project))
         }
+      }
+
+      function warningsRow(project: Project): HTMLTableRowElement {
+        const row = element('tr')
+        const cell = element('td', 'bg-amber-50 px-5 py-3 text-sm text-amber-900')
+        cell.colSpan = 5
+        const details = element('details')
+        details.open = openWarnings.has(project.id)
+        details.addEventListener('toggle', () => {
+          if (details.open) openWarnings.add(project.id)
+          else openWarnings.delete(project.id)
+        })
+        const total = project.warnings.length
+        details.append(element(
+          'summary',
+          'cursor-pointer font-semibold',
+          `Revisar antes de encender: ${total} ${total === 1 ? 'aviso' : 'avisos'}`,
+        ))
+        const list = element('ul', 'mt-2 list-disc space-y-1 pl-5 break-words')
+        for (const warning of project.warnings) list.append(element('li', '', warning))
+        details.append(list)
+        cell.append(details)
+        row.append(cell)
+        return row
       }
 
       function logsRow(project: Project): HTMLTableRowElement {
@@ -691,12 +721,16 @@ import FaviconLinks from '../components/FaviconLinks.astro'
             init = { method: 'POST', body: upload }
           }
 
-          await api<Project>('/api/projects', init)
+          const created = await api<Project>('/api/projects', init)
           form.reset()
           updateSourceFields()
           searchInput.value = ''
           if (await loadProjects()) {
-            showGlobalMessage('El proyecto se registró correctamente.', 'success')
+            if (created.warnings.length > 0) {
+              showGlobalMessage('El proyecto se registró, pero la revisión encontró avisos. Léelos en su fila antes de encenderlo.', 'warning')
+            } else {
+              showGlobalMessage('El proyecto se registró correctamente.', 'success')
+            }
           }
         } catch (error) {
           formError.textContent = error instanceof Error ? error.message : 'No se pudo registrar el proyecto.'

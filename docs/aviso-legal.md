@@ -29,7 +29,7 @@ Registrar un proyecto en Dockyard no significa que sus autores lo hayan revisado
 
 ## Riesgos que debes conocer
 
-- **Los proyectos ejecutan código en tu PC.** Dockyard no valida el archivo de compose ni protege la descompresión de ZIP. Un proyecto malicioso o mal hecho podría dañar la PC o acceder a sus archivos. Registra solo proyectos que conozcas.
+- **Los proyectos ejecutan código en tu PC.** Al registrar un proyecto, Dockyard rechaza algunos ZIP peligrosos y avisa de algunos riesgos, pero esa revisión no es una auditoría: puede pasar cosas por alto, y un proyecto sin avisos no queda garantizado como seguro. Un proyecto malicioso o mal hecho podría dañar la PC o acceder a sus archivos. Registra solo proyectos que conozcas.
 - **La herramienta no tiene inicio de sesión y controla el Docker de la PC.** Por eso solo se publica en `127.0.0.1`. Quien use esa PC puede registrar, encender y eliminar proyectos. No la expongas a la red ni a internet.
 - **Los proyectos pueden verse desde la red local.** Un puerto escrito como `"8101:80"` queda abierto en todas las interfaces de la PC, así que otros equipos conectados a la misma red podrían abrirlo.
 - **Eliminar no se puede deshacer.** Borra los contenedores, el código y los datos del proyecto en esa PC.

@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict'
-import { access } from 'node:fs/promises'
+import { access, mkdtemp, rm } from 'node:fs/promises'
 import { createServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { DatabaseSync } from 'node:sqlite'
 import test from 'node:test'
 import type { InjectOptions } from 'fastify'
 import { buildApp, isAllowedRequest } from '../src/app.ts'
@@ -31,6 +34,9 @@ function fakeCore() {
       const normalized = normalize(name)
       statuses.set(normalized, { state: 'stopped', ports: [] })
       return { dir: `/projects/${normalized}`, name: normalized }
+    },
+    async reviewProject() {
+      return []
     },
     async startProject(_dir, name) {
       const status: ProjectStatus = { state: 'running', ports: [8080] }
@@ -94,6 +100,7 @@ test('registra por GitHub, consulta, busca, enciende y apaga', async () => {
     urls: [],
     failedServices: [],
     web: null,
+    warnings: [],
   })
 
   const found = await app.inject({
@@ -643,4 +650,39 @@ test('el comprobador distingue respuesta, error del servidor y falta de respuest
   server.closeAllConnections()
   await new Promise((resolve) => server.close(resolve))
   assert.deepEqual(await check(port), { state: 'no-response' })
+})
+
+test('guarda los avisos de la revisión y los devuelve sin impedir encender', async () => {
+  const fake = fakeCore()
+  const app = await testApp({
+    ...fake.core,
+    async reviewProject() {
+      return ['Servicio web: usa privileged, que le da control total de la PC.']
+    },
+  })
+  const created = await app.inject({ method: 'POST', url: '/api/projects', payload: repoProject })
+  assert.equal(created.statusCode, 201)
+  const warnings = ['Servicio web: usa privileged, que le da control total de la PC.']
+  assert.deepEqual(created.json().warnings, warnings)
+  assert.deepEqual((await app.inject({ method: 'GET', url: '/api/projects' })).json()[0].warnings, warnings)
+  assert.equal((await app.inject({ method: 'POST', url: '/api/projects/1/start' })).statusCode, 200)
+  await app.close()
+})
+
+test('una base creada antes de la revisión recibe la columna de avisos', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'dockyard-db-'))
+  const path = join(dir, 'app.db')
+  const old = new DatabaseSync(path)
+  old.exec(`CREATE TABLE projects (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE, team TEXT NOT NULL,
+    source_type TEXT NOT NULL, source TEXT NOT NULL, dir TEXT NOT NULL, created_at TEXT NOT NULL
+  ) STRICT`)
+  old.exec(`INSERT INTO projects (name, team, source_type, source, dir, created_at)
+    VALUES ('viejo', 'E', 'git', 'https://github.com/e/p', '/p', '2026-01-01')`)
+  old.close()
+
+  const repository = createProjectRepository(path)
+  assert.equal(repository.list()[0]?.warnings, '[]')
+  repository.close()
+  await rm(dir, { recursive: true, force: true })
 })

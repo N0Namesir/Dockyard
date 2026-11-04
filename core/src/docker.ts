@@ -16,7 +16,7 @@ const SETTLE_CHECKS = 3
 const SETTLE_CHECK_GAP_MS = 500
 
 /** Ejecuta un comando de docker y traduce las fallas de conexión a un mensaje claro para el docente. */
-async function docker(args: string[], opts: RunOptions = {}): Promise<string> {
+export async function docker(args: string[], opts: RunOptions = {}): Promise<string> {
   try {
     return await run('docker', args, opts)
   } catch (err) {

@@ -8,6 +8,9 @@ import { CommandError, run } from './run.ts'
 import type { PreparedProject, ProjectSource } from './types.ts'
 
 const FETCH_TIMEOUT = 5 * 60_000
+/** Límites al descomprimir: el ZIP subido no pasa de 200 MB, pero puede ocupar mucho más al abrirse. */
+const MAX_ZIP_BYTES = 3 * 1024 ** 3
+const MAX_ZIP_ENTRIES = 100_000
 
 /**
  * Crea projects/<nombre>, obtiene el código desde un repositorio o un ZIP y devuelve la carpeta
@@ -88,6 +91,8 @@ async function extractZip(filePath: string, target: string): Promise<void> {
   const info = await stat(filePath).catch(() => null)
   if (!info?.isFile()) throw new Error(`No se encontró el archivo ZIP ${filePath}.`)
 
+  await assertZipIsSafe(filePath)
+
   try {
     // unzip sale con 1 cuando hubo advertencias pero extrajo todo.
     await run('unzip', ['-q', filePath, '-d', target], { timeoutMs: FETCH_TIMEOUT, okExitCodes: [1] })
@@ -98,6 +103,43 @@ async function extractZip(filePath: string, target: string): Promise<void> {
     }
     throw err
   }
+}
+
+/** Motivo para rechazar un ZIP según su contenido, o null si se puede abrir. */
+export function zipProblem(names: string[], totalBytes: number): string | null {
+  const unsafe = names.find((name) => {
+    const path = name.replaceAll('\\', '/')
+    return path.startsWith('/') || /^[a-zA-Z]:/.test(path) || path.split('/').includes('..')
+  })
+  if (unsafe !== undefined) {
+    return `El ZIP se rechazó porque un archivo intenta salir de su carpeta: ${unsafe}. Pide al equipo que lo genere de nuevo.`
+  }
+  if (names.length > MAX_ZIP_ENTRIES) {
+    return `El ZIP se rechazó porque tiene más de ${MAX_ZIP_ENTRIES} archivos. Pide al equipo que quite carpetas como node_modules.`
+  }
+  if (totalBytes > MAX_ZIP_BYTES) {
+    return 'El ZIP se rechazó porque ocuparía más de 3 GB al descomprimirse. Pide al equipo que quite lo que no haga falta para encender.'
+  }
+  return null
+}
+
+/** Mira el contenido del ZIP sin extraerlo y lanza un error si no se debe abrir. */
+async function assertZipIsSafe(filePath: string): Promise<void> {
+  let names: string
+  let totals: string
+  try {
+    // Sale con 1 cuando el ZIP está vacío; luego falla por no traer archivo compose.
+    names = await run('unzip', ['-Z1', filePath], { timeoutMs: FETCH_TIMEOUT, okExitCodes: [1] })
+    totals = await run('unzip', ['-Zt', filePath], { timeoutMs: FETCH_TIMEOUT, okExitCodes: [1] })
+  } catch (err) {
+    if (err instanceof CommandError) {
+      throw new Error('No se pudo descomprimir el archivo. Verifica que sea un ZIP válido y que no esté dañado.')
+    }
+    throw err
+  }
+  const totalBytes = Number(/([\d,]+) bytes uncompressed/.exec(totals)?.[1]?.replaceAll(',', '') ?? 0)
+  const problem = zipProblem(names.split('\n').filter(Boolean), totalBytes)
+  if (problem) throw new Error(problem)
 }
 
 /** Si existe .env.example y no .env, lo copia: los valores de ejemplo suelen bastar para encender. */

@@ -13,6 +13,8 @@ export interface ProjectRow {
   source: string
   dir: string
   created_at: string
+  /** Lista de avisos de la revisión al registrar, como JSON. */
+  warnings: string
 }
 
 export interface ProjectResponse {
@@ -26,11 +28,14 @@ export interface ProjectResponse {
   failedServices: string[]
   /** null si está apagado o solo publica puertos que no son páginas. */
   web: WebCheck | null
+  /** Lo que encontró la revisión al registrar. No impide encender. */
+  warnings: string[]
 }
 
 export interface CoreAdapter {
   normalizeProjectName(name: string): string
   prepareProject(source: ProjectSource, name: string): Promise<PreparedProject>
+  reviewProject(dir: string, name: string): Promise<string[]>
   startProject(dir: string, name: string): Promise<ProjectStatus>
   stopProject(dir: string, name: string): Promise<ProjectStatus>
   getProjectStatus(name: string): Promise<ProjectStatus>
@@ -44,4 +49,5 @@ export interface NewProjectRow {
   sourceType: ProjectRow['source_type']
   source: string
   dir: string
+  warnings: string[]
 }

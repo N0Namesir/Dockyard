@@ -23,6 +23,7 @@ navegador ──► web (Astro) ──► api (Fastify + SQLite) ──► core 
 | `core/src/index.ts` | Contrato público del núcleo; la API importa solo desde aquí |
 | `core/src/sources.ts` | `prepareProject`: clonado, descompresión, búsqueda del compose y limpieza |
 | `core/src/docker.ts` | Encender, apagar, estado y detección de choques de puertos |
+| `core/src/review.ts` | `reviewProject`: revisión del compose y de los archivos al registrar |
 | `core/src/run.ts` | Ayudante que ejecuta comandos con `execFile` |
 | `core/test/` | Pruebas unitarias e integración con Docker |
 | `api/src/routes/projects.ts` | Rutas del contrato, validación y subida del ZIP a un archivo temporal |
@@ -99,6 +100,7 @@ prepareProject(source: ProjectSource, name: string): Promise<PreparedProject>   
 startProject(dir: string, name: string): Promise<ProjectStatus>                 // { state, ports }
 stopProject(dir: string, name: string): Promise<ProjectStatus>
 getProjectStatus(name: string): Promise<ProjectStatus>
+reviewProject(dir: string, name: string): Promise<string[]>
 
 type ProjectSource = { type: 'git'; url: string } | { type: 'zip'; filePath: string }
 ```
@@ -110,13 +112,15 @@ type ProjectSource = { type: 'git'; url: string } | { type: 'zip'; filePath: str
 | `startProject` | Revisa choques de puertos y ejecuta `up -d` | Un puerto está en uso, Docker no responde, el compose falla o los contenedores se caen al arrancar |
 | `stopProject` | Ejecuta `stop` | Docker no responde |
 | `getProjectStatus` | Lee `ps --format json` | Docker no responde |
+| `reviewProject` | Devuelve avisos sobre el compose y los archivos, sin encender nada | Nunca por el contenido del proyecto; si algo no se pudo revisar, también lo avisa |
 
 Reglas que cumple el núcleo:
 
 - **Errores.** Toda falla es un `Error` con un mensaje en español que dice la causa y qué hacer. La API lo devuelve al docente tal cual.
 - **Nombres.** `startProject`, `stopProject` y `getProjectStatus` rechazan nombres que no estén normalizados. La API debe guardar el `name` que devuelve `prepareProject`.
 - **Conflictos antes de clonar.** La API puede llamar a `normalizeProjectName` antes de `prepareProject` para comprobar si el nombre ya existe en su base y responder 409 sin esperar un clonado.
-- **ZIP.** El núcleo no borra el ZIP: lo creó la API, así que la API lo borra al terminar.
+- **ZIP.** El núcleo no borra el ZIP: lo creó la API, así que la API lo borra al terminar. Antes de extraerlo lee su lista de archivos y lo rechaza si una ruta sale de la carpeta, si trae más de 100 000 archivos o si ocuparía más de 3 GB.
+- **Revisión al registrar.** `reviewProject` interpreta el compose con `config --format json` y recorre los archivos sin ejecutar nada. Avisa de lo que deja a un servicio salir de su contenedor (`privileged`, `network_mode: host`, permisos peligrosos, `docker.sock`, rutas de la PC), de enlaces que salen del proyecto, de archivos de credenciales o respaldos y de claves escritas en el código. Dice dónde está cada cosa y nunca incluye el valor. Los avisos se guardan en la columna `warnings` y no impiden encender, porque la decisión es del docente.
 - **Comandos.** Todos se ejecutan con `execFile` y una lista de argumentos, nunca con una cadena para un shell.
 
 ### Cómo agregar una función nueva al núcleo
@@ -155,8 +159,7 @@ Las pruebas con Docker usan una carpeta temporal como `PROJECTS_DIR` y eliminan 
 
 Esta entrega no las incluye. Mientras tanto, el docente registra solo proyectos que conozca.
 
-- **Validar los compose antes de encender**: modo privilegiado, montajes de rutas del sistema y acceso al socket de Docker. dclint cubre otras reglas (puertos duplicados, etiquetas de imagen), pero no estas.
-- **Proteger la descompresión de ZIP** contra archivos que escriban fuera de la carpeta o que ocupen un tamaño enorme.
+- **La revisión al registrar no es una auditoría.** Busca patrones conocidos: no lee el código para entender lo que hace, ni lo que un Dockerfile o una imagen ejecutan al arrancar, y omite carpetas como `node_modules` y archivos de más de 1 MB. Un proyecto sin avisos no queda garantizado como seguro. Tampoco se repite después de registrar.
 - **Repositorios privados**: hoy el clonado falla de inmediato (`GIT_TERMINAL_PROMPT=0`).
 - **Reescritura automática de puertos o subdominios con Traefik**: Traefik da subdominios `.localhost`, pero exige saber qué servicio y qué puerto interno expone cada proyecto.
 - **Límites de recursos** por proyecto.

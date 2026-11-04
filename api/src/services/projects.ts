@@ -41,6 +41,7 @@ function toResponse(row: ProjectRow, status: ProjectStatus, web: WebCheck | null
     urls: status.ports.map((port) => `http://localhost:${port}`),
     failedServices: status.failedServices ?? [],
     web,
+    warnings: JSON.parse(row.warnings) as string[],
   }
 }
 
@@ -117,12 +118,14 @@ export function createProjectService(
       }
 
       const prepared = await core.prepareProject(input.source, input.name)
+      const warnings = await core.reviewProject(prepared.dir, prepared.name)
       const row = repository.insert({
         name: prepared.name,
         team: input.team,
         sourceType: input.source.type,
         source: input.sourceLabel,
         dir: prepared.dir,
+        warnings,
       })
       return hydrate(row)
     },

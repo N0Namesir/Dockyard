@@ -22,6 +22,14 @@ En el panel **Registrar proyecto**, llena **Equipo** y **Nombre del proyecto**, 
 
 En los dos casos, el proyecto debe traer su archivo compose. Reparte entre los equipos la [Guía para estudiantes](guia-estudiantes.md) para evitar problemas. Toda la documentación se puede leer dentro de Dockyard, en la sección **Documentación**.
 
+### Revisar antes de encender
+
+Al registrar un proyecto, Dockyard lo revisa sin ejecutarlo. Si encuentra algo, la fila del proyecto muestra **Revisar antes de encender** con la lista de avisos. Por ejemplo, que el proyecto pide control de la PC, que monta carpetas de fuera de su carpeta o que trae claves o respaldos de base de datos.
+
+Los avisos no impiden encender: tú decides. Si no entiendes uno, pregúntale al equipo antes de encender el proyecto. Si avisa de claves, pídele al equipo que las cambie y que las quite del proyecto, porque ya quedaron expuestas.
+
+Que no aparezcan avisos no garantiza que el proyecto sea seguro, así que registra solo proyectos que conozcas.
+
 ## Buscar, encender, apagar y abrir
 
 - **Buscar:** escribe parte del nombre del proyecto o del equipo en **Buscar nombre o equipo**. No importan las mayúsculas ni las tildes.

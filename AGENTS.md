@@ -55,6 +55,7 @@ stopProject(dir: string, name: string): Promise<ProjectStatus>
 getProjectStatus(name: string): Promise<ProjectStatus>
 getProjectLogs(name: string): Promise<string>                                   // últimas 200 líneas
 removeProject(name: string): Promise<void>                                      // se puede repetir
+reviewProject(dir: string, name: string): Promise<string[]>                     // avisos para el docente, nunca lanza por el proyecto
 // ProjectSource = { type: 'git'; url } | { type: 'zip'; filePath }
 ```
 
@@ -65,6 +66,8 @@ removeProject(name: string): Promise<void>                                      
 - Apagar es `stop`, no `down`.
 - Los choques de puertos y de `container_name` se detectan antes de `up -d` (con `config --format json` contra `docker ps`) y se avisan. Los puertos y el compose nunca se reescriben.
 - `prepareProject` rechaza un nombre que ya usan contenedores de otro proyecto de compose de la PC.
+- `prepareProject` rechaza, antes de extraerlo, un ZIP con rutas que salen de su carpeta, con más de 100 000 archivos o que ocuparía más de 3 GB.
+- `reviewProject` solo lee: nada del proyecto se ejecuta. Sus avisos dicen dónde está el problema y nunca incluyen el valor de una clave. No impiden encender. La API los guarda al registrar y la interfaz solo los muestra.
 - La comprobación de que la web responde (`web` en la respuesta) la hace la API en `api/src/services/web-check.ts`, porque el núcleo no usa HTTP.
 - `failedServices` nombra los servicios caídos (salida distinta de 0) o reiniciándose de un proyecto encendido, y solo aparece si hay alguno.
 - `removeProject` usa `down -v` y borra la carpeta. Si quedan archivos de root, lanza el comando `sudo` a ejecutar.

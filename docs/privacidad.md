@@ -11,12 +11,13 @@ Esta política cubre a Dockyard, no a los proyectos alojados en ella.
 | Qué | Dónde | Cuánto dura |
 |---|---|---|
 | Nombre del proyecto, equipo, origen (URL del repositorio o nombre del ZIP), carpeta y fecha de registro | Base de datos en `data/` | Hasta eliminar el proyecto |
+| Avisos de la revisión al registrar, con nombres de archivos y de variables, nunca sus valores | Base de datos en `data/` | Hasta eliminar el proyecto |
 | Código del proyecto | Carpeta `projects/` | Hasta eliminar el proyecto |
 | ZIP subido | Carpeta temporal | Se borra al terminar de prepararlo |
 | Peticiones a la herramienta, con la ruta pedida y la dirección IP de origen | Registro del contenedor de Dockyard | Hasta que se recrea el contenedor |
 | Registros y datos de cada proyecto | Contenedores y volúmenes de Docker | Hasta eliminar el proyecto |
 
-Nada de esto se envía a los autores de Dockyard.
+Nada de esto se envía a los autores de Dockyard. La revisión al registrar también ocurre solo en la PC.
 
 Para el campo Equipo, usa un nombre como "Equipo 3" en lugar de nombres de estudiantes. Dockyard no necesita datos personales.
 

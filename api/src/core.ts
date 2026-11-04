@@ -4,6 +4,7 @@ export {
   normalizeProjectName,
   prepareProject,
   removeProject,
+  reviewProject,
   startProject,
   stopProject,
 } from '@dockyard/core'
