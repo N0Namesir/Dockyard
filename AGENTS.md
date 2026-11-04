@@ -50,13 +50,14 @@ Respeta esas fronteras aunque el responsable sea el mismo: la API no ejecuta Doc
 ```ts
 normalizeProjectName(name: string): string
 prepareProject(source: ProjectSource, name: string): Promise<PreparedProject>   // { dir, name }
-startProject(dir: string, name: string): Promise<ProjectStatus>                 // { state, ports, failedServices? }
+startProject(dir: string, name: string, onProgress?: (progress: StartProgress) => void): Promise<ProjectStatus>   // { state, ports, failedServices? }
 stopProject(dir: string, name: string): Promise<ProjectStatus>
 getProjectStatus(name: string): Promise<ProjectStatus>
 getProjectLogs(name: string): Promise<string>                                   // últimas 200 líneas
 removeProject(name: string): Promise<void>                                      // se puede repetir
 reviewProject(dir: string, name: string): Promise<string[]>                     // avisos para el docente, nunca lanza por el proyecto
 // ProjectSource = { type: 'git'; url } | { type: 'zip'; filePath }
+// StartProgress = { stage, lines }: etapa en español y últimas líneas de Docker
 ```
 
 - Toda falla se lanza como `Error` con un mensaje en español que dice la causa y qué hacer. La API se lo devuelve tal cual al docente.
@@ -73,12 +74,13 @@ reviewProject(dir: string, name: string): Promise<string[]>                     
 - `removeProject` usa `down -v` y borra la carpeta. Si quedan archivos de root, lanza el comando `sudo` a ejecutar.
 - Un contenedor en estado `restarting` cuenta como encendido para poder apagarlo. Si tras `up -d` ninguno queda `running`, `startProject` los detiene y lanza su registro.
 - Si `prepareProject` falla a mitad de camino, borra la carpeta que creó. El ZIP lo borra la API, no el núcleo.
+- El núcleo traduce la salida de Docker a etapas (`core/src/progress.ts`). La API guarda el avance solo en memoria y la interfaz solo lo muestra. Si Docker cambia su formato, deja de cambiar la etapa, pero encender sigue funcionando.
 - `startProject`, `stopProject` y `getProjectStatus` rechazan nombres sin normalizar (`assertNormalizedName`).
 - Los comandos de Docker pasan por el ayudante `docker()` de `core/src/docker.ts`, que traduce "Docker no responde" y "sin permiso". Los demás, por `run()` de `core/src/run.ts`.
 
 ### Rutas de la API (contrato con `web/`)
 
-`GET /api/projects?q=`, `POST /api/projects`, `GET /api/projects/:id`, `POST /api/projects/:id/start`, `POST /api/projects/:id/stop`, `GET /api/projects/:id/logs`, `DELETE /api/projects/:id`.
+`GET /api/projects?q=`, `POST /api/projects`, `GET /api/projects/:id`, `POST /api/projects/:id/start`, `POST /api/projects/:id/stop`, `GET /api/projects/:id/logs`, `GET /api/projects/:id/progress`, `DELETE /api/projects/:id`.
 
 ## Despliegue
 

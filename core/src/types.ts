@@ -11,6 +11,12 @@ export interface ProjectStatus {
   failedServices?: string[]
 }
 
+/** Avance de un encendido: una etapa para el docente y las últimas líneas de Docker. */
+export interface StartProgress {
+  stage: string
+  lines: string[]
+}
+
 export type ProjectSource =
   | { type: 'git'; url: string }
   | { type: 'zip'; filePath: string }

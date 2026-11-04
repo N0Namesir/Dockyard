@@ -67,6 +67,50 @@ async function testApp(core = fakeCore().core, checkWeb: CheckWeb = async () => 
   return buildApp({ repository, core, checkWeb })
 }
 
+test('el avance se ve mientras enciende y desaparece al terminar', async () => {
+  let finish = () => {}
+  const { core } = fakeCore()
+  const app = await testApp({
+    ...core,
+    async startProject(_dir, _name, onProgress) {
+      onProgress?.({ stage: 'Construyendo imágenes', lines: ['#1 DONE'] })
+      await new Promise<void>((resolve) => { finish = resolve })
+      return { state: 'running', ports: [] }
+    },
+  })
+  await app.inject({ method: 'POST', url: '/api/projects', payload: { team: 'E', name: 'A', repoUrl: 'https://github.com/e/a' } })
+  const idle = await app.inject({ method: 'GET', url: '/api/projects/1/progress' })
+  assert.deepEqual(idle.json(), { progress: null })
+
+  const started = app.inject({ method: 'POST', url: '/api/projects/1/start' })
+  while ((await app.inject({ method: 'GET', url: '/api/projects/1/progress' })).json().progress?.lines.length !== 1) {
+    await new Promise((resolve) => setTimeout(resolve, 5))
+  }
+  const { progress } = (await app.inject({ method: 'GET', url: '/api/projects/1/progress' })).json()
+  assert.equal(progress.stage, 'Construyendo imágenes')
+  assert.deepEqual(progress.lines, ['#1 DONE'])
+  assert.equal(typeof progress.elapsedSeconds, 'number')
+  assert.equal((await app.inject({ method: 'GET', url: '/api/projects' })).json()[0].progress.stage, 'Construyendo imágenes')
+
+  finish()
+  assert.equal((await started).json().progress, null)
+  assert.deepEqual((await app.inject({ method: 'GET', url: '/api/projects/1/progress' })).json(), { progress: null })
+})
+
+test('un encendido que falla no deja avance, y pedirlo de otro proyecto da 404', async () => {
+  const { core } = fakeCore()
+  const app = await testApp({
+    ...core,
+    async startProject() {
+      throw new Error('falló')
+    },
+  })
+  await app.inject({ method: 'POST', url: '/api/projects', payload: { team: 'E', name: 'A', repoUrl: 'https://github.com/e/a' } })
+  assert.equal((await app.inject({ method: 'POST', url: '/api/projects/1/start' })).statusCode, 500)
+  assert.deepEqual((await app.inject({ method: 'GET', url: '/api/projects/1/progress' })).json(), { progress: null })
+  assert.equal((await app.inject({ method: 'GET', url: '/api/projects/99/progress' })).statusCode, 404)
+})
+
 test('la lista empieza vacía', async () => {
   const app = await testApp()
   const response = await app.inject({ method: 'GET', url: '/api/projects' })
@@ -101,6 +145,7 @@ test('registra por GitHub, consulta, busca, enciende y apaga', async () => {
     failedServices: [],
     web: null,
     warnings: [],
+    progress: null,
   })
 
   const found = await app.inject({

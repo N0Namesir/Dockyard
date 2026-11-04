@@ -15,6 +15,7 @@ import { after, before, describe, test } from 'node:test'
 import { buildZip, createTestZips, entriesFrom } from '../../ejemplos/crear-zips.ts'
 import { getProjectLogs, getProjectStatus, normalizeProjectName, prepareProject, removeProject, startProject, stopProject } from '../src/index.ts'
 import { run } from '../src/run.ts'
+import type { StartProgress } from '../src/types.ts'
 
 const EJEMPLOS = join(import.meta.dirname, '..', '..', 'ejemplos')
 const used = new Set<string>()
@@ -118,7 +119,12 @@ describe('encender, consultar y apagar', () => {
     const { dir } = await prepareProject({ type: 'zip', filePath: zips.raiz }, name)
     assert.deepEqual(await getProjectStatus(name), { state: 'stopped', ports: [] })
 
-    assert.deepEqual(await startProject(dir, name), { state: 'running', ports: [8081] })
+    const seen: StartProgress[] = []
+    assert.deepEqual(await startProject(dir, name, (progress) => seen.push(progress)), { state: 'running', ports: [8081] })
+    assert.equal(seen[0]?.stage, 'Revisando puertos y nombres')
+    assert.equal(seen.at(-1)?.stage, 'Comprobando que sigan encendidos')
+    assert.ok(seen.some((progress) => progress.stage === 'Arrancando contenedores'), 'Docker no reportó el arranque')
+    assert.ok(seen.at(-1)?.lines.some((line) => /Container .* Started/.test(line)), 'faltan las líneas de Docker')
     assert.match(await fetchText(8081), /prueba-estatico funciona/)
     assert.deepEqual(await getProjectStatus(name), { state: 'running', ports: [8081] })
 

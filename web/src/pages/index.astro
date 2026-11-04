@@ -226,6 +226,7 @@ import FaviconLinks from '../components/FaviconLinks.astro'
         failedServices: string[]
         web: { state: 'ok' | 'error' | 'no-response'; httpStatus?: number } | null
         warnings: string[]
+        progress: Progress | null
       }
 
       interface ApiError {
@@ -263,9 +264,16 @@ import FaviconLinks from '../components/FaviconLinks.astro'
         }
       }
 
+      interface Progress {
+        stage: string
+        lines: string[]
+        elapsedSeconds: number
+      }
+
       type ProjectAction = 'start' | 'stop' | 'remove'
 
       const REFRESH_INTERVAL_MS = 15_000
+      const PROGRESS_INTERVAL_MS = 2_000
 
       const CONNECTION_MESSAGE = 'No se puede conectar con Dockyard. Verifica que esté encendido y recarga la página.'
       const RETRY_DELAY_MS = 5_000
@@ -282,6 +290,7 @@ import FaviconLinks from '../components/FaviconLinks.astro'
       const actionErrors = new Map<number, string>()
       /** Proyectos con la lista de avisos abierta: redibujar la tabla no debe cerrarla. */
       const openWarnings = new Set<number>()
+      let pollingProgress = false
 
       function element<K extends keyof HTMLElementTagNameMap>(
         tag: K,
@@ -370,19 +379,23 @@ import FaviconLinks from '../components/FaviconLinks.astro'
           row.append(element('td', 'px-5 py-4 font-bold text-slate-900', project.name))
           row.append(element('td', 'px-5 py-4', project.team))
 
+          // A medio encender, los contenedores que aún arrancan parecerían una falla.
+          const starting = isStarting(project)
           const stateCell = element('td', 'px-5 py-4')
           stateCell.append(
             element(
               'span',
               `inline-flex items-center rounded-full px-2.5 py-1 text-xs font-bold ${
-                project.state === 'running'
-                  ? 'bg-emerald-100 text-emerald-800'
-                  : 'bg-slate-200 text-slate-700'
+                starting
+                  ? 'bg-amber-100 text-amber-900'
+                  : project.state === 'running'
+                    ? 'bg-emerald-100 text-emerald-800'
+                    : 'bg-slate-200 text-slate-700'
               }`,
-              project.state === 'running' ? 'Encendido' : 'Apagado',
+              starting ? 'Encendiendo' : project.state === 'running' ? 'Encendido' : 'Apagado',
             ),
           )
-          if (project.failedServices.length > 0) {
+          if (!starting && project.failedServices.length > 0) {
             stateCell.append(
               element(
                 'p',
@@ -391,7 +404,7 @@ import FaviconLinks from '../components/FaviconLinks.astro'
               ),
             )
           }
-          if (project.web) {
+          if (!starting && project.web) {
             const { state, httpStatus } = project.web
             stateCell.append(
               element(
@@ -422,12 +435,12 @@ import FaviconLinks from '../components/FaviconLinks.astro'
           const actionStack = element('div', 'flex flex-col items-end gap-2')
           const actions = element('div', 'flex items-center justify-end gap-2')
           const pending = pendingActions.get(project.id)
-          const isPending = pending !== undefined
+          const isPending = pending !== undefined || starting
           const pendingLabel = pending === 'stop' ? 'Apagando…' : 'Encendiendo…'
           const action = element(
             'button',
             'rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 hover:border-marca-tinta hover:text-marca-texto disabled:cursor-wait disabled:opacity-50',
-            pending === 'start' || pending === 'stop'
+            starting || pending === 'stop'
               ? pendingLabel
               : project.state === 'running' ? 'Apagar' : 'Encender',
           )
@@ -436,7 +449,7 @@ import FaviconLinks from '../components/FaviconLinks.astro'
           action.addEventListener('click', () => void changeState(project))
           actions.append(action)
 
-          if (project.state === 'running' && project.url) {
+          if (!starting && project.state === 'running' && project.url) {
             const open = element(
               'a',
               'rounded-lg bg-marca px-3 py-1.5 text-xs font-bold text-marca-tinta hover:bg-marca-fuerte',
@@ -474,9 +487,71 @@ import FaviconLinks from '../components/FaviconLinks.astro'
           row.append(actionsCell)
           projectsBody.append(row)
 
+          if (starting) projectsBody.append(progressRow(project))
           if (project.warnings.length > 0) projectsBody.append(warningsRow(project))
           if (openLogs.has(project.id)) projectsBody.append(logsRow(project))
         }
+      }
+
+      function isStarting(project: Project): boolean {
+        return pendingActions.get(project.id) === 'start' || project.progress !== null
+      }
+
+      function elapsedText(seconds: number): string {
+        const minutes = Math.floor(seconds / 60)
+        return minutes > 0 ? `Lleva ${minutes} min ${seconds % 60} s` : `Lleva ${seconds} s`
+      }
+
+      function fillProgress(row: HTMLElement, progress: Progress | null): void {
+        row.querySelector('[data-stage]')!.textContent = progress?.stage || 'Preparando el encendido'
+        row.querySelector('[data-elapsed]')!.textContent = progress ? elapsedText(progress.elapsedSeconds) : ''
+        const output = row.querySelector<HTMLElement>('pre')!
+        output.textContent = progress?.lines.join('\n') ?? ''
+        output.classList.toggle('hidden', !progress?.lines.length)
+      }
+
+      function progressRow(project: Project): HTMLTableRowElement {
+        const row = element('tr')
+        row.dataset.progress = String(project.id)
+        const cell = element('td', 'bg-slate-50 px-5 py-4')
+        cell.colSpan = 5
+        const header = element('div', 'flex flex-wrap items-center gap-x-3 gap-y-1 text-sm')
+        const spinner = element('span', 'size-3.5 shrink-0 animate-spin rounded-full border-2 border-slate-300 border-t-marca-tinta motion-reduce:animate-none')
+        spinner.setAttribute('aria-hidden', 'true')
+        const stage = element('p', 'font-bold text-slate-800')
+        stage.dataset.stage = ''
+        stage.setAttribute('aria-live', 'polite')
+        const elapsed = element('p', 'text-xs text-slate-600')
+        elapsed.dataset.elapsed = ''
+        header.append(spinner, stage, elapsed)
+        const output = element('pre', 'mt-2 overflow-hidden whitespace-pre-wrap break-words rounded-lg bg-slate-900 p-3 font-mono text-xs text-slate-100')
+        cell.append(header, output)
+        row.append(cell)
+        fillProgress(row, project.progress)
+        return row
+      }
+
+      /** Actualiza solo la fila del avance: redibujar la tabla cada 2 s perdería el foco y la selección. */
+      async function pollProgress(): Promise<void> {
+        const starting = projects.filter(isStarting)
+        if (pollingProgress || document.hidden || starting.length === 0) return
+        pollingProgress = true
+        let finished = false
+        try {
+          await Promise.all(starting.map(async (project) => {
+            const { progress } = await api<{ progress: Progress | null }>(`/api/projects/${project.id}/progress`)
+            // Sin petición propia en curso (se recargó la página), nadie más avisaría que terminó.
+            if (progress === null && !pendingActions.has(project.id)) finished = true
+            project.progress = progress
+            const row = projectsBody.querySelector<HTMLElement>(`[data-progress="${project.id}"]`)
+            if (row) fillProgress(row, progress)
+          }))
+        } catch {
+          // Se reintenta en la siguiente vuelta: un corte aquí no afecta al encendido.
+        } finally {
+          pollingProgress = false
+        }
+        if (finished) void loadProjects(true)
       }
 
       function warningsRow(project: Project): HTMLTableRowElement {
@@ -620,6 +695,8 @@ import FaviconLinks from '../components/FaviconLinks.astro'
             project.id,
             error instanceof Error ? error.message : 'No se pudo cambiar el estado.',
           )
+          // Una respuesta de error no trae el proyecto: sin esto seguiría figurando como encendiéndose.
+          projects = projects.map((item) => item.id === project.id ? { ...item, progress: null } : item)
         } finally {
           pendingActions.delete(project.id)
           render()
@@ -751,6 +828,7 @@ import FaviconLinks from '../components/FaviconLinks.astro'
         if (!document.hidden && !loading) void loadProjects(true)
       }
       setInterval(refresh, REFRESH_INTERVAL_MS)
+      setInterval(() => void pollProgress(), PROGRESS_INTERVAL_MS)
       document.addEventListener('visibilitychange', refresh)
 
       updateSourceFields()

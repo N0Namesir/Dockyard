@@ -23,6 +23,7 @@ navegador ──► web (Astro) ──► api (Fastify + SQLite) ──► core 
 | `core/src/index.ts` | Contrato público del núcleo; la API importa solo desde aquí |
 | `core/src/sources.ts` | `prepareProject`: clonado, descompresión, búsqueda del compose y limpieza |
 | `core/src/docker.ts` | Encender, apagar, estado y detección de choques de puertos |
+| `core/src/progress.ts` | Traduce la salida de `up -d` a etapas para el docente |
 | `core/src/review.ts` | `reviewProject`: revisión del compose y de los archivos al registrar |
 | `core/src/run.ts` | Ayudante que ejecuta comandos con `execFile` |
 | `core/test/` | Pruebas unitarias e integración con Docker |
@@ -87,6 +88,7 @@ Cómo funciona el contenedor:
 - **ZIP:** se guarda en una carpeta temporal, con un límite de 200 MB, y se borra al terminar el registro, salga bien o mal.
 - **Peticiones cortadas:** la ruta responde cuando el núcleo termina, hasta 10 minutos después. Firefox corta las peticiones pendientes cuando cambian las redes de la PC, y encender un proyecto crea una red de Docker (comprobado con Firefox 159; sin cambios de red, esperó 7 minutos sin problema). Por eso, si la petición se corta, la interfaz la repite, y la API la une a la operación en curso (`once` en `api/src/services/projects.ts`) en vez de lanzar otra. Así el docente recibe el resultado real, incluido el error.
 - **Eliminar:** `DELETE /api/projects/:id` llama a `removeProject` y luego borra la fila. Si falla, la fila queda para poder reintentar. No se permite mientras el proyecto enciende o apaga (409).
+- **Avance del encendido:** `GET /api/projects/:id/progress` devuelve `{ progress }`, con la etapa, las últimas 8 líneas de Docker y los segundos transcurridos, o `null` si no se está encendiendo. También llega en el campo `progress` de cada proyecto, para que recargar la página no lo pierda. Se guarda solo en memoria. La interfaz lo consulta cada 2 s.
 - **Registro:** `GET /api/projects/:id/logs` devuelve las últimas 200 líneas. No es en vivo: se actualiza con un botón.
 - **Documentación:** `docs/*.md` es la única fuente: Astro la convierte en páginas al compilar, así que un cambio se ve al reconstruir. Un documento nuevo se agrega a la lista de `web/src/lib/docs.ts`.
 - **Refresco:** la interfaz consulta la lista cada 15 segundos y al volver a la pestaña, sin redibujar si nada cambió.
@@ -97,7 +99,7 @@ Cómo funciona el contenedor:
 ```ts
 normalizeProjectName(name: string): string
 prepareProject(source: ProjectSource, name: string): Promise<PreparedProject>   // { dir, name }
-startProject(dir: string, name: string): Promise<ProjectStatus>                 // { state, ports }
+startProject(dir: string, name: string, onProgress?: (progress: StartProgress) => void): Promise<ProjectStatus>   // { state, ports }
 stopProject(dir: string, name: string): Promise<ProjectStatus>
 getProjectStatus(name: string): Promise<ProjectStatus>
 reviewProject(dir: string, name: string): Promise<string[]>

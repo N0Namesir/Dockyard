@@ -8,8 +8,11 @@ import { after, describe, test } from 'node:test'
 import { parsePs, portsInUse, requestedContainerNames, requestedPorts, statusFromContainers } from '../src/docker.ts'
 import { assertNormalizedName, normalizeProjectName } from '../src/name.ts'
 import { findComposeFile } from '../src/paths.ts'
+import { cleanLine, createProgressTracker, stageOf } from '../src/progress.ts'
 import { composeWarnings, fileWarnings, secretsIn, sensitiveFileName, suspiciousEnvVars } from '../src/review.ts'
+import { run } from '../src/run.ts'
 import { zipProblem } from '../src/sources.ts'
+import type { StartProgress } from '../src/types.ts'
 
 describe('normalizeProjectName', () => {
   const cases: [string, string][] = [
@@ -303,5 +306,50 @@ describe('revisión del ZIP', () => {
   })
   test('rechaza un ZIP con demasiados archivos', () => {
     assert.match(zipProblem(Array.from({ length: 100_001 }, (_, i) => `f${i}`), 10)!, /más de 100000/)
+  })
+})
+
+describe('avance del encendido', () => {
+  test('reconoce la etapa en la salida real de Docker', () => {
+    assert.equal(stageOf('Image busybox:1.36.1 Pulling'), 'Descargando imágenes')
+    assert.equal(stageOf('034d6572bf28 Downloading 1.049MB'), 'Descargando imágenes')
+    assert.equal(stageOf('Image equipo-web Building'), 'Construyendo imágenes')
+    assert.equal(stageOf('#5 [web 2/3] RUN npm ci'), 'Construyendo imágenes')
+    assert.equal(stageOf('Network equipo_default Creating'), 'Creando contenedores')
+    assert.equal(stageOf('Container equipo-web-1 Started'), 'Arrancando contenedores')
+    assert.equal(stageOf('Container equipo-db-1 Waiting'), 'Esperando a que los servicios estén listos')
+    assert.equal(stageOf('algo sin relación'), null)
+  })
+
+  test('lo que imprime un proyecto al construirse no cambia a otra etapa', () => {
+    assert.equal(stageOf('#7 0.5 Container falso Started'), 'Construyendo imágenes')
+    assert.equal(stageOf('el servidor ya Started'), null)
+    assert.equal(stageOf('web Pulling'), 'Descargando imágenes')
+  })
+
+  test('quita colores y caracteres de control, y corta las líneas largas', () => {
+    assert.equal(cleanLine('\x1b[32m  listo\x07\x1b[0m '), 'listo')
+    assert.equal(cleanLine('x'.repeat(300)).length, 201)
+  })
+
+  test('conserva las últimas líneas, sin vacías ni repetidas seguidas', () => {
+    let last: StartProgress | undefined
+    const tracker = createProgressTracker((progress) => { last = progress })
+    tracker.setStage('Inicio')
+    assert.deepEqual(last, { stage: 'Inicio', lines: [] })
+    tracker.addLine('   ')
+    tracker.addLine('sin etapa')
+    tracker.addLine('sin etapa')
+    assert.deepEqual(last, { stage: 'Inicio', lines: ['sin etapa'] })
+    for (let i = 0; i < 10; i++) tracker.addLine(`línea ${i}`)
+    assert.equal(last?.lines.length, 8)
+    assert.equal(last?.lines.at(-1), 'línea 9')
+  })
+
+  test('run entrega las líneas de stdout y stderr, también la última sin salto', async () => {
+    const lines: string[] = []
+    const out = await run('sh', ['-c', 'printf "a\\nb\\rc"; printf "d\\n" >&2'], { onLine: (line) => lines.push(line) })
+    assert.equal(out, 'a\nb\rc')
+    assert.deepEqual(lines.sort(), ['a', 'b', 'c', 'd'])
   })
 })

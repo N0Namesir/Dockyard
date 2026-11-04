@@ -2,6 +2,7 @@ import type {
   PreparedProject,
   ProjectSource,
   ProjectStatus,
+  StartProgress,
 } from './core.ts'
 import type { WebCheck } from './services/web-check.ts'
 
@@ -17,6 +18,10 @@ export interface ProjectRow {
   warnings: string
 }
 
+export interface ProgressResponse extends StartProgress {
+  elapsedSeconds: number
+}
+
 export interface ProjectResponse {
   id: number
   name: string
@@ -30,13 +35,15 @@ export interface ProjectResponse {
   web: WebCheck | null
   /** Lo que encontró la revisión al registrar. No impide encender. */
   warnings: string[]
+  /** Avance del encendido en curso; null si no se está encendiendo. */
+  progress: ProgressResponse | null
 }
 
 export interface CoreAdapter {
   normalizeProjectName(name: string): string
   prepareProject(source: ProjectSource, name: string): Promise<PreparedProject>
   reviewProject(dir: string, name: string): Promise<string[]>
-  startProject(dir: string, name: string): Promise<ProjectStatus>
+  startProject(dir: string, name: string, onProgress?: (progress: StartProgress) => void): Promise<ProjectStatus>
   stopProject(dir: string, name: string): Promise<ProjectStatus>
   getProjectStatus(name: string): Promise<ProjectStatus>
   getProjectLogs(name: string): Promise<string>

@@ -3,8 +3,9 @@ import { join } from 'node:path'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { assertNormalizedName } from './name.ts'
 import { findComposeFile, projectsDir } from './paths.ts'
+import { createProgressTracker } from './progress.ts'
 import { CommandError, run, type RunOptions } from './run.ts'
-import type { ProjectStatus } from './types.ts'
+import type { ProjectStatus, StartProgress } from './types.ts'
 
 const START_TIMEOUT = 10 * 60_000
 const STOP_TIMEOUT = 2 * 60_000
@@ -219,12 +220,19 @@ async function settledContainers(name: string): Promise<any[]> {
   return containers
 }
 
-export async function startProject(dir: string, name: string): Promise<ProjectStatus> {
+export async function startProject(
+  dir: string,
+  name: string,
+  onProgress?: (progress: StartProgress) => void,
+): Promise<ProjectStatus> {
+  const progress = createProgressTracker(onProgress)
   const prefix = await composePrefix(dir, name)
+  progress.setStage('Revisando puertos y nombres')
   await checkConflicts(prefix, name)
+  progress.setStage('Pidiendo a Docker que encienda el proyecto')
 
   try {
-    await docker([...prefix, 'up', '-d'], { timeoutMs: START_TIMEOUT })
+    await docker([...prefix, 'up', '-d'], { timeoutMs: START_TIMEOUT, onLine: progress.addLine })
   } catch (err) {
     if (err instanceof CommandError) {
       if (err.timedOut) {
@@ -235,6 +243,7 @@ export async function startProject(dir: string, name: string): Promise<ProjectSt
     throw err
   }
 
+  progress.setStage('Comprobando que sigan encendidos')
   await sleep(SETTLE_MS)
   const containers = await settledContainers(name)
   if (!containers.some((c) => c.State === 'running')) {

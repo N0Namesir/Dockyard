@@ -1,8 +1,9 @@
-import type { ProjectSource, ProjectStatus } from '../core.ts'
+import type { ProjectSource, ProjectStatus, StartProgress } from '../core.ts'
 import type { ProjectRepository } from '../db/projects.ts'
 import { HttpError } from '../errors.ts'
 import type {
   CoreAdapter,
+  ProgressResponse,
   ProjectResponse,
   ProjectRow,
 } from '../types.ts'
@@ -29,7 +30,12 @@ function mainPortOf(status: ProjectStatus): number | undefined {
   return status.ports.find((port) => !NON_WEB_PORTS.has(port)) ?? status.ports[0]
 }
 
-function toResponse(row: ProjectRow, status: ProjectStatus, web: WebCheck | null): ProjectResponse {
+function toResponse(
+  row: ProjectRow,
+  status: ProjectStatus,
+  web: WebCheck | null,
+  progress: ProgressResponse | null,
+): ProjectResponse {
   const mainPort = mainPortOf(status)
   return {
     id: row.id,
@@ -42,6 +48,7 @@ function toResponse(row: ProjectRow, status: ProjectStatus, web: WebCheck | null
     failedServices: status.failedServices ?? [],
     web,
     warnings: JSON.parse(row.warnings) as string[],
+    progress,
   }
 }
 
@@ -66,6 +73,15 @@ export function createProjectService(
     return operation
   }
 
+  // Solo en memoria: el avance no sirve una vez terminado el encendido.
+  const starts = new Map<number, { startedAt: number; current: StartProgress }>()
+
+  function progressOf(id: number): ProgressResponse | null {
+    const start = starts.get(id)
+    if (!start) return null
+    return { ...start.current, elapsedSeconds: Math.floor((Date.now() - start.startedAt) / 1000) }
+  }
+
   const webChecks = new Map<number, { port: number; at: number; result: WebCheck }>()
 
   async function webCheckOf(row: ProjectRow, status: ProjectStatus): Promise<WebCheck | null> {
@@ -86,7 +102,8 @@ export function createProjectService(
   }
 
   async function respond(row: ProjectRow, status: ProjectStatus): Promise<ProjectResponse> {
-    return toResponse(row, status, await webCheckOf(row, status))
+    const web = await webCheckOf(row, status)
+    return toResponse(row, status, web, progressOf(row.id))
   }
 
   async function hydrate(row: ProjectRow): Promise<ProjectResponse> {
@@ -130,6 +147,11 @@ export function createProjectService(
       return hydrate(row)
     },
 
+    progress(id: number): { progress: ProgressResponse | null } {
+      requireProject(id)
+      return { progress: progressOf(id) }
+    },
+
     async logs(id: number): Promise<{ logs: string }> {
       const project = requireProject(id)
       return { logs: await core.getProjectLogs(project.name) }
@@ -150,7 +172,16 @@ export function createProjectService(
     async start(id: number): Promise<ProjectResponse> {
       const project = requireProject(id)
       return once(id, 'start', async () => {
-        const status = await core.startProject(project.dir, project.name)
+        const start = { startedAt: Date.now(), current: { stage: '', lines: [] } as StartProgress }
+        starts.set(id, start)
+        let status: ProjectStatus
+        try {
+          status = await core.startProject(project.dir, project.name, (progress) => {
+            start.current = progress
+          })
+        } finally {
+          starts.delete(id)
+        }
         webChecks.delete(id)
         return respond(project, status)
       })
