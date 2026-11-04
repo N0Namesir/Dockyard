@@ -1,28 +1,53 @@
+@import "@fontsource/barlow/400.css";
+@import "@fontsource/barlow/500.css";
+@import "@fontsource/barlow/600.css";
+@import "@fontsource/barlow/700.css";
+@import "@fontsource/barlow-condensed/700.css";
+@import "@fontsource/barlow-condensed/800.css";
 @import "tailwindcss";
+
+/*
+ * Identidad de Desarrollo de Software (DS3), tomada de su emblema. Para cambiarla, basta con
+ * estos valores. El ámbar no se lee como texto sobre blanco (1.7:1): para eso está marca-texto.
+ */
+@theme {
+  --color-marca: #ffb800;
+  --color-marca-fuerte: #f29b00;
+  --color-marca-suave: #fff4d1;
+  --color-marca-texto: #7a4f00;
+  --color-marca-tinta: #101928;
+  --font-sans: Barlow, ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Barlow Condensed", Barlow, ui-sans-serif, system-ui, sans-serif;
+}
 
 :root {
   color-scheme: light;
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  background: #f4f7f8;
-  color: #172a34;
+  background: #f6f7f9;
+  color: var(--color-marca-tinta);
 }
 
 body {
   min-width: 320px;
-  min-height: 100vh;
-  background:
-    radial-gradient(circle at 8% 0%, rgb(14 116 144 / 0.08), transparent 28rem),
-    #f4f7f8;
-}
-
-button,
-input {
-  font: inherit;
+  background: #f6f7f9;
 }
 
 :focus-visible {
-  outline: 3px solid rgb(8 145 178 / 0.35);
+  outline: 3px solid var(--color-marca-tinta);
   outline-offset: 2px;
+}
+
+.sitio-cabecera :focus-visible {
+  outline-color: var(--color-marca);
+}
+
+/* La franja de seguridad de un muelle, en los colores del emblema. */
+.cinta-muelle {
+  height: 0.5rem;
+  background: repeating-linear-gradient(
+    -45deg,
+    var(--color-marca) 0 0.875rem,
+    var(--color-marca-tinta) 0.875rem 1.75rem
+  );
 }
 
 /* Evita que la página de atrás se desplace mientras un diálogo modal está abierto. */
@@ -44,16 +69,15 @@ dialog::backdrop {
 
 .doc-content :is(h1, h2, h3) {
   scroll-margin-top: 1.5rem;
-  color: #0f172a;
+  color: var(--color-marca-tinta);
+  font-family: var(--font-display);
   font-weight: 800;
-  line-height: 1.25;
+  line-height: 1.15;
 }
 
 .doc-content h1 {
   margin-bottom: 1.25rem;
-  font-size: 2.25rem;
-  font-weight: 900;
-  letter-spacing: -0.02em;
+  font-size: 3rem;
 }
 
 .doc-content h2 {
@@ -61,13 +85,13 @@ dialog::backdrop {
   margin-bottom: 0.75rem;
   border-top: 1px solid #e2e8f0;
   padding-top: 1.75rem;
-  font-size: 1.5rem;
+  font-size: 1.875rem;
 }
 
 .doc-content h3 {
   margin-top: 1.75rem;
   margin-bottom: 0.5rem;
-  font-size: 1.125rem;
+  font-size: 1.375rem;
 }
 
 .doc-content :is(p, ul, ol, pre, .doc-table) {
@@ -98,7 +122,7 @@ dialog::backdrop {
 }
 
 .doc-content a {
-  color: #155e75;
+  color: var(--color-marca-texto);
   font-weight: 500;
   text-decoration: underline;
 }

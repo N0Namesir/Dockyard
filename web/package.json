@@ -2,15 +2,18 @@
   "name": "@dockyard/web",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
   "description": "Área 3: interfaz con Astro y Tailwind",
   "type": "module",
   "scripts": {
-    "dev": "astro dev",
-    "build": "astro build",
-    "start": "astro preview",
-    "typecheck": "astro sync && tsc --noEmit"
+    "dev": "ASTRO_TELEMETRY_DISABLED=1 astro dev",
+    "build": "ASTRO_TELEMETRY_DISABLED=1 astro build",
+    "start": "ASTRO_TELEMETRY_DISABLED=1 astro preview",
+    "typecheck": "ASTRO_TELEMETRY_DISABLED=1 astro sync && tsc --noEmit"
   },
   "dependencies": {
+    "@fontsource/barlow": "^5.3.0",
+    "@fontsource/barlow-condensed": "^5.3.0",
     "@tailwindcss/vite": "^4.3.3",
     "astro": "^7.4.4",
     "tailwindcss": "^4.3.3"

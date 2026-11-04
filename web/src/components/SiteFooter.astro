@@ -1,0 +1,18 @@
+---
+const links = [
+  { href: '/docs/aviso-legal/', label: 'Aviso legal' },
+  { href: '/docs/privacidad/', label: 'Privacidad' },
+  { href: '/docs/aviso-legal/#licencia', label: 'Licencia MIT' },
+]
+---
+
+<footer class="mt-auto border-t border-slate-200 bg-white">
+  <div class="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-x-8 gap-y-3 px-5 py-5 text-sm text-slate-600 sm:px-8">
+    <p>
+      Corre solo en esta PC y no recolecta datos. Hecho en Desarrollo de Software, DS3.
+    </p>
+    <nav aria-label="Legal" class="flex flex-wrap gap-x-5 gap-y-1 font-semibold">
+      {links.map((link) => <a href={link.href} class="underline hover:text-marca-texto">{link.label}</a>)}
+    </nav>
+  </div>
+</footer>

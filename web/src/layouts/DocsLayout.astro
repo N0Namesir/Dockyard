@@ -1,6 +1,7 @@
 ---
 import '../styles/global.css'
 import SiteHeader from '../components/SiteHeader.astro'
+import SiteFooter from '../components/SiteFooter.astro'
 import FaviconLinks from '../components/FaviconLinks.astro'
 import { DOCS } from '../lib/docs.ts'
 
@@ -22,12 +23,12 @@ const sections = headings.filter((heading) => heading.depth === 2)
     <FaviconLinks />
     <title>{title} · Dockyard</title>
   </head>
-  <body>
+  <body class="flex min-h-screen flex-col">
     <SiteHeader current="docs" />
-    <div class="mx-auto grid max-w-7xl gap-8 px-5 py-8 sm:px-8 lg:grid-cols-[16rem_minmax(0,1fr)] lg:py-12">
+    <div class="mx-auto grid w-full max-w-7xl gap-8 px-5 py-8 sm:px-8 lg:grid-cols-[16rem_minmax(0,1fr)] lg:py-12">
       <aside class="lg:sticky lg:top-6 lg:max-h-[calc(100vh-3rem)] lg:self-start lg:overflow-y-auto">
         <nav aria-label="Documentos" class="text-sm">
-          <a href="/docs/" class="mb-2 block text-xs font-bold tracking-[0.16em] text-cyan-700 uppercase">
+          <a href="/docs/" class="mb-2 block text-sm font-bold text-marca-texto">
             Documentación
           </a>
           <ul class="space-y-1">
@@ -39,7 +40,7 @@ const sections = headings.filter((heading) => heading.depth === 2)
                     aria-current={doc.slug === current ? 'page' : undefined}
                     class:list={[
                       'block rounded-lg px-3 py-2 font-medium hover:bg-slate-100',
-                      doc.slug === current ? 'bg-cyan-50 text-cyan-800' : 'text-slate-700',
+                      doc.slug === current ? 'bg-marca-suave text-marca-texto' : 'text-slate-700',
                     ]}
                   >
                     {doc.title}
@@ -52,11 +53,11 @@ const sections = headings.filter((heading) => heading.depth === 2)
         {
           sections.length > 0 && (
             <nav aria-label="En esta página" class="mt-6 hidden text-sm lg:block">
-              <p class="mb-2 text-xs font-bold tracking-[0.16em] text-slate-500 uppercase">En esta página</p>
+              <p class="mb-2 text-sm font-bold text-slate-500">En esta página</p>
               <ul class="space-y-1 border-l border-slate-200">
                 {sections.map((section) => (
                   <li>
-                    <a href={`#${section.slug}`} class="block px-3 py-1 text-slate-600 hover:text-cyan-800">
+                    <a href={`#${section.slug}`} class="block px-3 py-1 text-slate-600 hover:text-marca-texto">
                       {section.text}
                     </a>
                   </li>
@@ -70,5 +71,6 @@ const sections = headings.filter((heading) => heading.depth === 2)
         <slot />
       </main>
     </div>
+    <SiteFooter />
   </body>
 </html>
