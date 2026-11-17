@@ -91,7 +91,7 @@ updateProject(name: string): Promise<ProjectUpdate>                             
 
 ### Rutas de la API (contrato con `web/`)
 
-`GET /api/projects?q=`, `GET /api/projects/resources`, `POST /api/projects`, `GET /api/projects/:id`, `POST /api/projects/:id/start`, `POST /api/projects/:id/stop`, `POST /api/projects/:id/update`, `GET /api/projects/:id/logs`, `GET /api/projects/:id/progress`, `DELETE /api/projects/:id`, `GET /api/version`.
+`GET /api/projects?q=`, `GET /api/projects/resources`, `POST /api/projects`, `GET /api/projects/:id`, `POST /api/projects/:id/start`, `POST /api/projects/:id/stop`, `POST /api/projects/stop-all`, `POST /api/projects/:id/update`, `GET /api/projects/:id/logs`, `GET /api/projects/:id/progress`, `DELETE /api/projects/:id`, `GET /api/version`.
 
 ## Despliegue
 

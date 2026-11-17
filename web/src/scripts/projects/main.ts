@@ -11,6 +11,7 @@ import { setupRegisterForm } from './register-form.ts'
 import { setupRemoveDialog } from './remove-dialog.ts'
 import { pollResources } from './resources.ts'
 import { state } from './state.ts'
+import { stopAll } from './stop-all.ts'
 import { render, setRowHandlers } from './table.ts'
 import { pollVersion } from './version.ts'
 
@@ -31,6 +32,7 @@ setRowHandlers({
 })
 setupRemoveDialog()
 setupConfirmDialog()
+page.stopAll.addEventListener('click', () => void stopAll())
 setupRegisterForm()
 
 let searchTimer: ReturnType<typeof setTimeout> | undefined

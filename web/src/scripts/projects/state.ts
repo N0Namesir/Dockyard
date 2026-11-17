@@ -13,6 +13,8 @@ export const state = {
   actionErrors: new Map<number, string>(),
   /** Proyecto que no dejó encender a otro por un puerto: la fila ofrece apagarlo. */
   actionConflicts: new Map<number, PortConflict>(),
+  /** Hay una tanda de "Apagar todos" en curso desde esta pestaña. */
+  stoppingAll: false,
   /** Registros abiertos por proyecto; null mientras se cargan. */
   openLogs: new Map<number, string | null>(),
   /** Registros que el docente subió a leer, con su posición: el texto nuevo no debe moverlos. */

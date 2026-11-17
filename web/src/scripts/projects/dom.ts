@@ -28,6 +28,7 @@ export const page = {
   projectCount: required<HTMLElement>('#project-count'),
   resourcesTotal: required<HTMLElement>('#resources-total'),
   searchInput: required<HTMLInputElement>('#search'),
+  stopAll: required<HTMLButtonElement>('#stop-all'),
   globalMessage: required<HTMLElement>('#global-message'),
 }
 

@@ -521,6 +521,97 @@ test('un choque con algo que Dockyard no registró conserva el mensaje del núcl
   }
 })
 
+async function registerNamed(app: Awaited<ReturnType<typeof testApp>>, ...names: string[]) {
+  for (const name of names) {
+    await app.inject({ method: 'POST', url: '/api/projects', payload: { team: 'E', name, repoUrl: `https://github.com/e/${name}` } })
+  }
+}
+
+test('apagar todos apaga solo los registrados encendidos e informa las fallas', async () => {
+  const fake = fakeCore()
+  const stopped: string[] = []
+  const app = await testApp({
+    ...fake.core,
+    async getProjectStatuses() {
+      // "ajeno" corre en la PC pero no está registrado: no se toca.
+      return { ...(await fake.core.getProjectStatuses()), ajeno: { state: 'running', ports: [9000] } }
+    },
+    async stopProject(dir, name) {
+      if (name === 'roto') throw new Error('Docker no responde.')
+      stopped.push(name)
+      return fake.core.stopProject(dir, name)
+    },
+  })
+  await registerNamed(app, 'Uno', 'Dos', 'Roto', 'Apagado')
+  for (const id of [1, 2, 3]) await app.inject({ method: 'POST', url: `/api/projects/${id}/start` })
+
+  const response = await app.inject({ method: 'POST', url: '/api/projects/stop-all' })
+  assert.equal(response.statusCode, 200)
+  assert.deepEqual(response.json(), {
+    stopped: ['dos', 'uno'],
+    skipped: [],
+    failed: [{ name: 'roto', message: 'Docker no responde.' }],
+  })
+  assert.deepEqual(stopped.sort(), ['dos', 'uno'])
+  const list = (await app.inject({ method: 'GET', url: '/api/projects' })).json()
+  assert.deepEqual(list.map((p: { name: string; state: string }) => `${p.name}:${p.state}`).sort(),
+    ['apagado:stopped', 'dos:stopped', 'roto:running', 'uno:stopped'])
+  await app.close()
+})
+
+test('apagar todos sin nada encendido no falla y repetirlo se une a la tanda en curso', async () => {
+  const fake = fakeCore()
+  let calls = 0
+  let finish: () => void = () => {}
+  const gate = new Promise<void>((done) => { finish = done })
+  const app = await testApp({
+    ...fake.core,
+    async stopProject(dir, name) {
+      calls++
+      await gate
+      return fake.core.stopProject(dir, name)
+    },
+  })
+  const empty = await app.inject({ method: 'POST', url: '/api/projects/stop-all' })
+  assert.deepEqual(empty.json(), { stopped: [], skipped: [], failed: [] })
+
+  await registerNamed(app, 'Uno')
+  await app.inject({ method: 'POST', url: '/api/projects/1/start' })
+  const first = app.inject({ method: 'POST', url: '/api/projects/stop-all' })
+  const second = app.inject({ method: 'POST', url: '/api/projects/stop-all' })
+  await new Promise((done) => setTimeout(done, 50))
+  finish()
+  const [a, b] = await Promise.all([first, second])
+  assert.equal(calls, 1)
+  assert.deepEqual(a.json(), { stopped: ['uno'], skipped: [], failed: [] })
+  assert.deepEqual(b.json(), a.json())
+  await app.close()
+})
+
+test('apagar todos salta los proyectos que se están encendiendo', async () => {
+  const fake = fakeCore()
+  let finish: () => void = () => {}
+  const gate = new Promise<void>((done) => { finish = done })
+  const app = await testApp({
+    ...fake.core,
+    async startProject(dir, name) {
+      const status = await fake.core.startProject(dir, name)
+      if (name === 'lento') await gate
+      return status
+    },
+  })
+  await registerNamed(app, 'Uno', 'Lento')
+  await app.inject({ method: 'POST', url: '/api/projects/1/start' })
+  const starting = app.inject({ method: 'POST', url: '/api/projects/2/start' })
+  await new Promise((done) => setTimeout(done, 50))
+
+  const response = await app.inject({ method: 'POST', url: '/api/projects/stop-all' })
+  assert.deepEqual(response.json(), { stopped: ['uno'], skipped: ['lento'], failed: [] })
+  finish()
+  assert.equal((await starting).json().state, 'running')
+  await app.close()
+})
+
 test('una petición repetida se une a la operación en curso', async () => {
   const fake = fakeCore()
   let calls = 0

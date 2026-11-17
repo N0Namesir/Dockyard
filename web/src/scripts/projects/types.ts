@@ -47,6 +47,12 @@ export interface UpdateResult {
   summary: string
 }
 
+export interface StopAllResult {
+  stopped: string[]
+  skipped: string[]
+  failed: { name: string; message: string }[]
+}
+
 export type ProjectAction = 'start' | 'stop' | 'remove' | 'update'
 
 /** Otro proyecto registrado que ocupa un puerto de este; la API lo manda al fallar el encendido. */

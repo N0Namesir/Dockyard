@@ -1,12 +1,13 @@
 import type { ProjectResources, ProjectSource, ProjectStatus, ResourceUsage, StartProgress } from '../core.ts'
 import type { ProjectRepository } from '../db/projects.ts'
-import { HttpError } from '../errors.ts'
+import { errorMessage, HttpError } from '../errors.ts'
 import type {
   CoreAdapter,
   ProgressResponse,
   ProjectResponse,
   ProjectRow,
   ResourcesResponse,
+  StopAllResponse,
   UpdateResponse,
 } from '../types.ts'
 import type { CheckWeb, WebCheck } from './web-check.ts'
@@ -29,6 +30,9 @@ const WEB_CHECK_TTL_MS = 60_000
 
 /** Una muestra de Docker tarda unos 2 s: varias pestañas abiertas comparten la misma. */
 const RESOURCES_TTL_MS = 5_000
+
+/** Apagar todos va de a pocos: cada stop lanza un proceso de docker compose. */
+const STOP_ALL_CONCURRENCY = 4
 
 /** El puerto de "Abrir": el primero que parezca una página; si ninguno, el primero. */
 function mainPortOf(status: ProjectStatus): number | undefined {
@@ -131,6 +135,44 @@ export function createProjectService(
   }
 
   const STOPPED: ProjectStatus = { state: 'stopped', ports: [] }
+
+  function stopRow(row: ProjectRow): Promise<ProjectResponse> {
+    return once(row.id, 'stop', async () =>
+      respond(row, await core.stopProject(row.dir, row.name)),
+    )
+  }
+
+  // Una sola tanda a la vez: una petición repetida espera el resultado de la que ya corre.
+  let stoppingAll: Promise<StopAllResponse> | null = null
+
+  async function runStopAll(): Promise<StopAllResponse> {
+    const statuses = await core.getProjectStatuses()
+    const running = repository.list().filter((row) => statuses[row.name]?.state === 'running')
+    const result: StopAllResponse = { stopped: [], skipped: [], failed: [] }
+    const queue = [...running]
+    async function worker(): Promise<void> {
+      for (let row = queue.shift(); row; row = queue.shift()) {
+        if (['start', 'update', 'remove'].some((action) => inFlight.has(`${row!.id}:${action}`))) {
+          result.skipped.push(row.name)
+          continue
+        }
+        try {
+          await stopRow(row)
+          result.stopped.push(row.name)
+        } catch (error) {
+          result.failed.push({ name: row.name, message: errorMessage(error) })
+        }
+      }
+    }
+    await Promise.all(Array.from({ length: STOP_ALL_CONCURRENCY }, worker))
+    // El orden de la lista, no el de llegada: así el mensaje no cambia de una vez a otra.
+    const order = new Map(running.map((row, index) => [row.name, index]))
+    const byList = (a: string, b: string) => order.get(a)! - order.get(b)!
+    result.stopped.sort(byList)
+    result.skipped.sort(byList)
+    result.failed.sort((a, b) => byList(a.name, b.name))
+    return result
+  }
 
   /**
    * Un choque de puertos con otro proyecto registrado se responde con ese proyecto, para que la
@@ -277,10 +319,15 @@ export function createProjectService(
     },
 
     async stop(id: number): Promise<ProjectResponse> {
-      const project = requireProject(id)
-      return once(id, 'stop', async () =>
-        respond(project, await core.stopProject(project.dir, project.name)),
-      )
+      return stopRow(requireProject(id))
+    },
+
+    /** Apaga todos los proyectos registrados que estén encendidos, sin borrar nada. */
+    stopAll(): Promise<StopAllResponse> {
+      stoppingAll ??= runStopAll().finally(() => {
+        stoppingAll = null
+      })
+      return stoppingAll
     },
   }
 }

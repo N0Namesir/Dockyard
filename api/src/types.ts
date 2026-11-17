@@ -56,6 +56,14 @@ export interface ResourcesResponse {
   projects: Record<number, ProjectResources>
 }
 
+export interface StopAllResponse {
+  /** Nombres de los proyectos que se apagaron. */
+  stopped: string[]
+  /** Encendiéndose, actualizándose o eliminándose: no se tocaron. */
+  skipped: string[]
+  failed: { name: string; message: string }[]
+}
+
 export interface UpdateResponse {
   project: ProjectResponse
   changed: boolean

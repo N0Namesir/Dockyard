@@ -24,6 +24,10 @@ function messageRow(text: string): HTMLTableRowElement {
 export function render(): void {
   if (!handlers) throw new Error('Falta conectar las acciones de la tabla (setRowHandlers).')
   const { projects, loading, loadFailed } = state
+  // Se ofrece si hay algo encendido a la vista; la API apaga también lo que la búsqueda oculta.
+  page.stopAll.hidden = loading || loadFailed || (!state.stoppingAll && !projects.some((project) => project.state === 'running'))
+  page.stopAll.disabled = state.stoppingAll
+  page.stopAll.textContent = state.stoppingAll ? 'Apagando todos…' : 'Apagar todos'
   page.projectsBody.replaceChildren()
   page.projectCount.textContent = loading
     ? 'Cargando…'
