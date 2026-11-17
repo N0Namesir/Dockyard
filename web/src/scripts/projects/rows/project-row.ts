@@ -114,6 +114,17 @@ function actionsCell(project: Project, handlers: RowHandlers): HTMLTableCellElem
     if (project.state === 'running') update.title = 'Apaga el proyecto para actualizarlo'
     update.addEventListener('click', () => handlers.updateProject(project))
     secondary.append(update)
+  } else {
+    const replace = element(
+      'button',
+      'text-slate-600 underline hover:text-marca-texto disabled:cursor-not-allowed disabled:no-underline disabled:opacity-50',
+      pending === 'replace' ? 'Reemplazando…' : 'Reemplazar ZIP',
+    )
+    replace.type = 'button'
+    replace.disabled = isPending || project.state === 'running'
+    if (project.state === 'running') replace.title = 'Apaga el proyecto para reemplazar su ZIP'
+    replace.addEventListener('click', () => handlers.replaceZip(project))
+    secondary.append(replace)
   }
   const logs = element(
     'button',

@@ -349,6 +349,8 @@ export async function removeProject(name: string): Promise<void> {
   try {
     await rm(target, { recursive: true, force: true })
     await rm(projectRepoDir(name), { recursive: true, force: true })
+    // Restos de un reemplazo de ZIP: si tienen archivos de root, ya se avisó al reemplazar.
+    await rm(join(projectsDir(), '.reemplazos', name), { recursive: true, force: true }).catch(() => {})
   } catch (err: any) {
     if (err.code === 'EACCES' || err.code === 'EPERM') {
       // Los contenedores del proyecto pueden haber creado archivos de root en sus carpetas montadas.

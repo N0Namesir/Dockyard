@@ -8,6 +8,7 @@ export {
   normalizeProjectName,
   prepareProject,
   removeProject,
+  replaceProjectZip,
   reviewProject,
   startProject,
   stopProject,
@@ -24,4 +25,5 @@ export type {
   ResourceUsage,
   StartOptions,
   StartProgress,
+  ZipReplacement,
 } from '@dockyard/core'

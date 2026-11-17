@@ -1,11 +1,11 @@
 import { constants } from 'node:fs'
-import { access, copyFile, mkdir, rm, stat } from 'node:fs/promises'
+import { access, copyFile, mkdir, rename, rm, stat } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { assertProjectNameFree } from './docker.ts'
 import { assertNormalizedName, normalizeProjectName } from './name.ts'
 import { findComposeFile, projectRepoDir, projectsDir } from './paths.ts'
 import { CommandError, run } from './run.ts'
-import type { PreparedProject, ProjectSource, ProjectUpdate } from './types.ts'
+import type { PreparedProject, ProjectSource, ProjectUpdate, ZipReplacement } from './types.ts'
 
 const FETCH_TIMEOUT = 5 * 60_000
 /** Límites al descomprimir: el ZIP subido no pasa de 200 MB, pero puede ocupar mucho más al abrirse. */
@@ -134,6 +134,70 @@ export async function updateProject(name: string): Promise<ProjectUpdate> {
   await copyEnvExample(location.dir)
   const [commit = '', summary = ''] = (await git(['log', '-1', '--format=%h%n%s', latest])).split('\n')
   return { dir: location.dir, changed: latest !== current, commit, summary: summary.slice(0, 120) }
+}
+
+/**
+ * Cambia el código de un proyecto registrado desde un ZIP por el de un ZIP nuevo. El ZIP se abre y
+ * se revisa en una carpeta aparte: si falla, el proyecto queda como estaba. Solo al final se cambia
+ * la carpeta y se borra la anterior, con lo que el proyecto hubiera guardado en ella. Los volúmenes
+ * de Docker no se tocan. No enciende ni reconstruye nada, y el proyecto debe estar apagado.
+ */
+export async function replaceProjectZip(name: string, filePath: string): Promise<ZipReplacement> {
+  assertNormalizedName(name)
+  const target = join(projectsDir(), name)
+  const exists = await stat(target).then((info) => info.isDirectory(), () => false)
+  if (!exists) throw new Error(`No se encontró la carpeta del proyecto en ${target}. Elimínalo y regístralo de nuevo.`)
+
+  const staging = join(projectsDir(), '.reemplazos', name)
+  const incoming = join(staging, 'nuevo')
+  const previous = join(staging, 'anterior')
+  await mkdir(staging, { recursive: true })
+  await removeOrExplain(incoming)
+  await removeOrExplain(previous)
+  await mkdir(incoming)
+
+  try {
+    await extractZip(filePath, incoming)
+    if (!await findComposeFile(incoming)) {
+      throw new Error('El ZIP nuevo no trae un archivo compose en su raíz, así que el proyecto se dejó como estaba. Debe llamarse compose.yaml, compose.yml, docker-compose.yaml o docker-compose.yml.')
+    }
+  } catch (err) {
+    await rm(incoming, { recursive: true, force: true })
+    throw err
+  }
+
+  // Renombrar no depende de los permisos de lo que hay dentro, así que no falla a medias.
+  await rename(target, previous)
+  try {
+    await rename(incoming, target)
+  } catch (err) {
+    await rename(previous, target)
+    throw err
+  }
+
+  const location = (await findComposeFile(target))!
+  await copyEnvExample(location.dir)
+
+  let leftover: string | null = null
+  try {
+    await rm(previous, { recursive: true, force: true })
+  } catch (err: any) {
+    if (err.code !== 'EACCES' && err.code !== 'EPERM') throw err
+    leftover = previous
+  }
+  return { dir: location.dir, leftover }
+}
+
+/** Borra una carpeta de un reemplazo anterior; si tiene archivos de root, dice cómo borrarla. */
+async function removeOrExplain(dir: string): Promise<void> {
+  try {
+    await rm(dir, { recursive: true, force: true })
+  } catch (err: any) {
+    if (err.code === 'EACCES' || err.code === 'EPERM') {
+      throw new Error(`Quedó la versión anterior de un reemplazo con archivos sin permiso de borrado. Ejecuta en una terminal: sudo rm -rf ${dir} y vuelve a intentarlo.`)
+    }
+    throw err
+  }
 }
 
 type Git = (args: string[], okExitCodes?: number[]) => Promise<string>

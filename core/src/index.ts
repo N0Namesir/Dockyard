@@ -2,11 +2,11 @@
 // Toda falla se lanza como Error con un mensaje en español listo para mostrarse al docente.
 
 export { normalizeProjectName } from './name.ts'
-export { prepareProject, updateProject } from './sources.ts'
+export { prepareProject, replaceProjectZip, updateProject } from './sources.ts'
 export { reviewProject } from './review.ts'
 export { startProject, stopProject, getProjectStatus, getProjectStatuses, getProjectLogs, removeProject } from './docker.ts'
 export { getResources } from './resources.ts'
 export { getLatestVersion, isNewerVersion } from './version.ts'
 export { projectsDir } from './paths.ts'
 export { PortConflictError } from './types.ts'
-export type { ProjectState, ProjectStatus, ProjectSource, PreparedProject, ProjectResources, ProjectUpdate, ResourceUsage, ServiceResources, StartOptions, StartProgress } from './types.ts'
+export type { ProjectState, ProjectStatus, ProjectSource, PreparedProject, ProjectResources, ProjectUpdate, ResourceUsage, ServiceResources, StartOptions, StartProgress, ZipReplacement } from './types.ts'

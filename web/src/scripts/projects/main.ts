@@ -9,6 +9,7 @@ import { loadLogs, pollLogs, toggleLogs } from './logs.ts'
 import { pollProgress } from './progress.ts'
 import { setupRegisterForm } from './register-form.ts'
 import { setupRemoveDialog } from './remove-dialog.ts'
+import { replaceZip } from './replace-zip.ts'
 import { pollResources } from './resources.ts'
 import { state } from './state.ts'
 import { stopAll } from './stop-all.ts'
@@ -25,6 +26,7 @@ const SEARCH_DELAY_MS = 300
 setRowHandlers({
   changeState: (project) => void changeState(project),
   updateProject: (project) => void updateProject(project),
+  replaceZip: (project) => void replaceZip(project),
   removeProject: (project) => void removeProject(project),
   replaceConflicting: (project) => void replaceConflicting(project),
   toggleLogs: (project) => void toggleLogs(project),

@@ -55,6 +55,16 @@ export interface ProjectUpdate {
   summary: string
 }
 
+export interface ZipReplacement {
+  /** Carpeta que contiene el archivo compose del ZIP nuevo, que pudo cambiar. */
+  dir: string
+  /**
+   * Carpeta de la versión anterior que no se pudo borrar porque el proyecto dejó archivos de
+   * root, o null si se borró. No estorba, pero ocupa espacio hasta borrarla con sudo.
+   */
+  leftover: string | null
+}
+
 export type ProjectSource =
   | { type: 'git'; url: string }
   | { type: 'zip'; filePath: string }

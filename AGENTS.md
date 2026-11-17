@@ -63,6 +63,7 @@ isNewerVersion(candidate: string, current: string): boolean
 reviewProject(dir: string, name: string): Promise<string[]>                     // avisos para el docente, nunca lanza por el proyecto
 // ProjectSource = { type: 'git'; url } | { type: 'zip'; filePath }
 updateProject(name: string): Promise<ProjectUpdate>                             // { dir, changed, commit, summary }
+replaceProjectZip(name: string, filePath: string): Promise<ZipReplacement>     // { dir, leftover }: código nuevo desde un ZIP
 // StartOptions = { onProgress?, build? }
 // StartProgress = { stage, lines }: etapa en español y últimas líneas de Docker
 ```
@@ -86,12 +87,13 @@ updateProject(name: string): Promise<ProjectUpdate>                             
 - `getResources` expresa la CPU sobre toda la PC, no por núcleo, y tarda unos 2 s porque Docker toma una muestra. Devuelve todos los proyectos de compose; la API deja solo los registrados y comparte la muestra 5 s.
 - `getLatestVersion` usa `git ls-remote --tags` e ignora las etiquetas que no sean `vX.Y.Z`. La API decide cuándo consultar (`api/src/services/version.ts`): como máximo cada 6 horas y solo si la piden, nunca al arrancar. `UPDATE_CHECK=off` la apaga e `install.sh` conserva ese valor.
 - `updateProject` no enciende nada y no pisa archivos cambiados en la PC. La API solo actualiza proyectos apagados, repite la revisión y hace que el siguiente encendido use `--build`.
+- `replaceProjectZip` abre y revisa el ZIP nuevo en `projects/.reemplazos/<nombre>/nuevo` y solo entonces cambia la carpeta con `rename`: si el ZIP no sirve, el proyecto queda como estaba. Borra la versión anterior con lo que el proyecto guardó en su carpeta; los volúmenes de Docker no se tocan. Si la anterior tiene archivos de root, la deja en `.reemplazos/<nombre>/anterior` y la devuelve en `leftover`. La API solo reemplaza proyectos de ZIP apagados, repite la revisión y hace que el siguiente encendido use `--build`. En la interfaz pide escribir el nombre, como eliminar.
 - `startProject`, `stopProject` y `getProjectStatus` rechazan nombres sin normalizar (`assertNormalizedName`).
 - Los comandos de Docker pasan por el ayudante `docker()` de `core/src/docker.ts`, que traduce "Docker no responde" y "sin permiso". Los demás, por `run()` de `core/src/run.ts`.
 
 ### Rutas de la API (contrato con `web/`)
 
-`GET /api/projects?q=`, `GET /api/projects/resources`, `POST /api/projects`, `GET /api/projects/:id`, `POST /api/projects/:id/start`, `POST /api/projects/:id/stop`, `POST /api/projects/stop-all`, `POST /api/projects/:id/update`, `GET /api/projects/:id/logs`, `GET /api/projects/:id/progress`, `DELETE /api/projects/:id`, `GET /api/version`.
+`GET /api/projects?q=`, `GET /api/projects/resources`, `POST /api/projects`, `GET /api/projects/:id`, `POST /api/projects/:id/start`, `POST /api/projects/:id/stop`, `POST /api/projects/stop-all`, `POST /api/projects/:id/update`, `POST /api/projects/:id/replace` (multipart, campo `file`), `GET /api/projects/:id/logs`, `GET /api/projects/:id/progress`, `DELETE /api/projects/:id`, `GET /api/version`.
 
 ## Despliegue
 

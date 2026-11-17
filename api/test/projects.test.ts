@@ -42,6 +42,10 @@ function fakeCore() {
     async updateProject() {
       return { dir: '/projects/nuevo', changed: true, commit: 'abc1234', summary: 'Arregla el inicio' }
     },
+    async replaceProjectZip(name, filePath) {
+      await access(filePath)
+      return { dir: `/projects/${name}/nueva`, leftover: null }
+    },
     async startProject(_dir, name) {
       const status: ProjectStatus = { state: 'running', ports: [8080] }
       statuses.set(name, status)
@@ -433,6 +437,91 @@ test('registra un ZIP por multipart y borra el archivo temporal', async () => {
   assert.equal(source?.type, 'zip')
   if (!source || source.type !== 'zip') assert.fail('No se recibió la fuente ZIP')
   await assert.rejects(access(source.filePath))
+  await app.close()
+})
+
+/** Cuerpo multipart con un archivo en el campo "file", como lo manda el navegador. */
+function zipUpload(filename: string, fields: Record<string, string> = {}) {
+  const boundary = 'dockyard-test-boundary'
+  const payload = Buffer.from([
+    ...Object.entries(fields).map(([key, value]) => `--${boundary}\r\nContent-Disposition: form-data; name="${key}"\r\n\r\n${value}\r\n`),
+    `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="${filename}"\r\nContent-Type: application/zip\r\n\r\ncontenido\r\n`,
+    `--${boundary}--\r\n`,
+  ].join(''))
+  return { headers: { 'content-type': `multipart/form-data; boundary=${boundary}` }, payload }
+}
+
+test('reemplazar el ZIP repite la revisión, marca reconstruir y borra el archivo temporal', async () => {
+  const fake = fakeCore()
+  let received = ''
+  let reviews = 0
+  let started: { dir: string; build?: boolean } | undefined
+  const app = await testApp({
+    ...fake.core,
+    async startProject(dir, name, options) {
+      started = { dir, build: options?.build }
+      return fake.core.startProject(dir, name)
+    },
+    async replaceProjectZip(name, filePath) {
+      received = filePath
+      return fake.core.replaceProjectZip(name, filePath)
+    },
+    async reviewProject(dir) {
+      reviews++
+      return dir.endsWith('/nueva') ? ['El compose nuevo publica la base de datos.'] : []
+    },
+  })
+  const created = await app.inject({ method: 'POST', url: '/api/projects', ...zipUpload('entrega.zip', { team: 'E', name: 'Tienda' }) })
+  assert.equal(created.statusCode, 201)
+
+  const response = await app.inject({ method: 'POST', url: '/api/projects/1/replace', ...zipUpload('entrega-corregida.zip') })
+  assert.equal(response.statusCode, 200)
+  const { project, leftover } = response.json()
+  assert.equal(leftover, null)
+  assert.equal(project.name, 'tienda')
+  assert.equal(project.team, 'E')
+  assert.equal(project.pendingBuild, true)
+  assert.deepEqual(project.warnings, ['El compose nuevo publica la base de datos.'])
+  assert.equal(reviews, 2)
+  await assert.rejects(access(received))
+
+  // El siguiente encendido usa la carpeta nueva y reconstruye.
+  await app.inject({ method: 'POST', url: '/api/projects/1/start' })
+  assert.deepEqual(started, { dir: '/projects/tienda/nueva', build: true })
+  await app.close()
+})
+
+test('reemplazar el ZIP: rechaza GitHub, proyectos encendidos y peticiones sin archivo', async () => {
+  const fake = fakeCore()
+  let calls = 0
+  const app = await testApp({
+    ...fake.core,
+    async replaceProjectZip(name, filePath) {
+      calls++
+      return fake.core.replaceProjectZip(name, filePath)
+    },
+  })
+  await app.inject({ method: 'POST', url: '/api/projects', payload: { team: 'E', name: 'Git', repoUrl: 'https://github.com/e/git' } })
+  await app.inject({ method: 'POST', url: '/api/projects', ...zipUpload('a.zip', { team: 'E', name: 'Zip' }) })
+
+  const git = await app.inject({ method: 'POST', url: '/api/projects/1/replace', ...zipUpload('b.zip') })
+  assert.equal(git.statusCode, 409)
+  assert.match(git.json().message, /Para uno de GitHub, usa Actualizar/)
+
+  const missing = await app.inject({ method: 'POST', url: '/api/projects/99/replace', ...zipUpload('b.zip') })
+  assert.equal(missing.statusCode, 404)
+
+  const noFile = await app.inject({ method: 'POST', url: '/api/projects/2/replace', payload: {} })
+  assert.equal(noFile.statusCode, 400)
+  const wrongType = await app.inject({ method: 'POST', url: '/api/projects/2/replace', ...zipUpload('b.rar') })
+  assert.equal(wrongType.statusCode, 400)
+  assert.match(wrongType.json().message, /\.zip/)
+
+  await app.inject({ method: 'POST', url: '/api/projects/2/start' })
+  const running = await app.inject({ method: 'POST', url: '/api/projects/2/replace', ...zipUpload('b.zip') })
+  assert.equal(running.statusCode, 409)
+  assert.match(running.json().message, /Apaga el proyecto/)
+  assert.equal(calls, 0)
   await app.close()
 })
 

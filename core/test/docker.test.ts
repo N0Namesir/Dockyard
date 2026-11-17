@@ -13,7 +13,7 @@ import { basename, join } from 'node:path'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { after, before, describe, test } from 'node:test'
 import { buildZip, createTestZips, entriesFrom } from '../../ejemplos/crear-zips.ts'
-import { getProjectLogs, getProjectStatus, getProjectStatuses, getResources, normalizeProjectName, PortConflictError, prepareProject, removeProject, startProject, stopProject } from '../src/index.ts'
+import { getProjectLogs, getProjectStatus, getProjectStatuses, getResources, normalizeProjectName, PortConflictError, prepareProject, removeProject, replaceProjectZip, startProject, stopProject } from '../src/index.ts'
 import { run } from '../src/run.ts'
 import type { StartProgress } from '../src/types.ts'
 
@@ -318,5 +318,78 @@ describe('encender, consultar y apagar', () => {
   test('rechaza nombres sin normalizar', async () => {
     await assert.rejects(getProjectStatus('Mi Proyecto'), /no es válido/)
     await assert.rejects(startProject(join(EJEMPLOS, 'prueba-estatico'), '../x'), /no es válido/)
+  })
+})
+
+describe('replaceProjectZip', () => {
+  /** ZIP de prueba-estatico con otra página: así se nota qué versión sirve. */
+  async function zipWithPage(file: string, text: string): Promise<string> {
+    const entries = (await entriesFrom(join(EJEMPLOS, 'prueba-estatico')))
+      .map((entry) => entry.name === 'html/index.html' ? { ...entry, data: Buffer.from(`<h1>${text}</h1>`) } : entry)
+    const zip = join(base, 'zips', file)
+    await writeFile(zip, buildZip(entries))
+    return zip
+  }
+
+  test('cambia el código, borra lo que había en la carpeta y el proyecto sirve la versión nueva', async () => {
+    const name = uniqueName('reemplazo')
+    const { dir } = await prepareProject({ type: 'zip', filePath: zips.raiz }, name)
+    assert.equal((await startProject(dir, name)).state, 'running')
+    assert.match(await fetchText(8081), /prueba-estatico funciona/)
+    await stopProject(dir, name)
+    await writeFile(join(dir, 'dato-viejo.txt'), 'x')
+
+    const zip = await zipWithPage('version-2.zip', 'versión 2')
+    const result = await replaceProjectZip(name, zip)
+    assert.deepEqual(result, { dir, leftover: null })
+    assert.ok(!existsSync(join(dir, 'dato-viejo.txt')))
+    assert.ok(existsSync(zip), 'el núcleo no borra el ZIP')
+    assert.deepEqual(await readdir(join(process.env.PROJECTS_DIR!, '.reemplazos', name)), [])
+
+    try {
+      assert.equal((await startProject(dir, name, { build: true })).state, 'running')
+      assert.match(await fetchText(8081), /versión 2/)
+    } finally {
+      await stopProject(dir, name)
+    }
+  })
+
+  test('si el ZIP nuevo no sirve, el proyecto queda como estaba', async () => {
+    const name = uniqueName('reemplazo-falla')
+    const { dir } = await prepareProject({ type: 'zip', filePath: zips.raiz }, name)
+    const before = await readFile(join(dir, 'html', 'index.html'), 'utf8')
+
+    await assert.rejects(replaceProjectZip(name, zips.sinCompose), /no trae un archivo compose.*se dejó como estaba/)
+    await assert.rejects(replaceProjectZip(name, zips.danado), /ZIP válido/)
+    await assert.rejects(replaceProjectZip(name, join(base, 'no-existe.zip')), /No se encontró el archivo ZIP/)
+    assert.equal(await readFile(join(dir, 'html', 'index.html'), 'utf8'), before)
+    assert.deepEqual(await readdir(join(process.env.PROJECTS_DIR!, '.reemplazos', name)), [])
+    await assert.rejects(replaceProjectZip(uniqueName('reemplazo-sin-carpeta'), zips.raiz), /No se encontró la carpeta del proyecto/)
+    await assert.rejects(replaceProjectZip('../x', zips.raiz), /no es válido/)
+  })
+
+  test('si la versión anterior tiene archivos de root, reemplaza igual y dice dónde quedó', { skip: process.getuid?.() === 0 }, async () => {
+    const name = uniqueName('reemplazo-root')
+    const dir = join(process.env.PROJECTS_DIR!, name)
+    await mkdir(dir)
+    await writeFile(
+      join(dir, 'compose.yaml'),
+      'services:\n  app:\n    image: busybox\n    command: ["sh", "-c", "mkdir -p /datos/sub; touch /datos/sub/x; sleep 600"]\n    volumes: ["./datos:/datos"]\n',
+    )
+    await startProject(dir, name)
+    await stopProject(dir, name)
+
+    const { leftover } = await replaceProjectZip(name, zips.raiz)
+    const previous = join(process.env.PROJECTS_DIR!, '.reemplazos', name, 'anterior')
+    assert.equal(leftover, previous)
+    assert.ok(existsSync(join(previous, 'datos', 'sub', 'x')))
+    assert.ok(existsSync(join(dir, 'html', 'index.html')))
+
+    // Un segundo reemplazo pide borrar los restos con sudo antes de seguir.
+    await assert.rejects(replaceProjectZip(name, zips.raiz), new RegExp(`sudo rm -rf ${previous}`))
+    await run('docker', ['run', '--rm', '-v', `${previous}:/d`, 'busybox', 'chown', '-R', `${process.getuid!()}`, '/d'])
+    assert.equal((await replaceProjectZip(name, zips.raiz)).leftover, null)
+    await removeProject(name)
+    assert.ok(!existsSync(join(process.env.PROJECTS_DIR!, '.reemplazos', name)))
   })
 })

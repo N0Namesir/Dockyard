@@ -21,7 +21,7 @@ navegador ──► web (Astro) ──► api (Fastify + SQLite) ──► core 
 | Ruta | Contenido |
 |---|---|
 | `core/src/index.ts` | Contrato público del núcleo; la API importa solo desde aquí |
-| `core/src/sources.ts` | `prepareProject` y `updateProject`: clonado, actualización, descompresión, búsqueda del compose y limpieza |
+| `core/src/sources.ts` | `prepareProject`, `updateProject` y `replaceProjectZip`: clonado, actualización, descompresión, reemplazo del ZIP, búsqueda del compose y limpieza |
 | `core/src/docker.ts` | Encender, apagar, estado y detección de choques de puertos |
 | `core/src/resources.ts` | Consumo de CPU y memoria por proyecto, a partir de `docker stats` |
 | `core/src/progress.ts` | Traduce la salida de `up -d` a etapas para el docente |
@@ -55,7 +55,8 @@ navegador ──► web (Astro) ──► api (Fastify + SQLite) ──► core 
 | `table.ts` | Dibuja la tabla a partir del estado |
 | `rows/` | Una fila por archivo: proyecto, avance del encendido, avisos y registro |
 | `list.ts`, `progress.ts`, `logs.ts`, `resources.ts`, `version.ts` | Cargar la lista y consultar cada cierto tiempo el avance, el registro, el consumo y la versión |
-| `actions.ts`, `stop-all.ts`, `remove-dialog.ts`, `confirm-dialog.ts`, `register-form.ts` | Encender, apagar, apagar el que choca, apagar todos, actualizar y eliminar; confirmación con el nombre para eliminar y de un clic para lo que se puede deshacer; formulario de registro |
+| `run-action.ts`, `actions.ts`, `stop-all.ts`, `replace-zip.ts` | Marcar la acción en curso y su error; encender, apagar, apagar el que choca, actualizar y eliminar; apagar todos; reemplazar el ZIP |
+| `remove-dialog.ts`, `confirm-dialog.ts`, `register-form.ts` | Confirmación escribiendo el nombre para lo que no se puede deshacer (eliminar, reemplazar el ZIP) y de un clic para lo demás; formulario de registro |
 | `main.ts` | Conecta las acciones con la tabla, el buscador y los intervalos de refresco |
 
 Para agregar un botón a la fila: la acción va en `actions.ts`, el botón en `rows/project-row.ts`, y se conectan en `RowHandlers` y en `main.ts`. Como es TypeScript normal, `npm run typecheck` revisa también este código, cosa que no hacía mientras estaba dentro del `.astro`. Las clases de Tailwind escritas aquí se generan igual que las del `.astro`.
@@ -138,6 +139,7 @@ normalizeProjectName(name: string): string
 prepareProject(source: ProjectSource, name: string): Promise<PreparedProject>   // { dir, name }
 startProject(dir: string, name: string, options?: StartOptions): Promise<ProjectStatus>   // { state, ports }
 updateProject(name: string): Promise<ProjectUpdate>   // { dir, changed, commit, summary }
+replaceProjectZip(name: string, filePath: string): Promise<ZipReplacement>   // { dir, leftover }
 stopProject(dir: string, name: string): Promise<ProjectStatus>
 getProjectStatus(name: string): Promise<ProjectStatus>
 getProjectStatuses(): Promise<Record<string, ProjectStatus>>   // por nombre de proyecto de compose
@@ -158,6 +160,7 @@ type ProjectSource = { type: 'git'; url: string } | { type: 'zip'; filePath: str
 | `getProjectStatus` | Lee `ps --format json` | Docker no responde |
 | `getProjectStatuses` | Lee `docker ps -a` una sola vez y agrupa por proyecto de compose. Un proyecto sin contenedores no aparece: está apagado | Docker no responde |
 | `updateProject` | Trae la última versión del repositorio sin encender ni reconstruir | No hay conexión, el repositorio ya no es público, pisaría un archivo cambiado en la PC o la versión nueva no trae compose |
+| `replaceProjectZip` | Cambia el código por el de un ZIP nuevo sin encender ni reconstruir. `leftover` es la carpeta anterior que no se pudo borrar por tener archivos de root | El ZIP está dañado, no es seguro, no trae compose o no existe la carpeta del proyecto. En todos esos casos el proyecto queda como estaba |
 | `getResources` | Une `docker ps` y `docker stats` por proyecto de compose | Docker no responde |
 | `getLatestVersion` | Devuelve la etiqueta `vX.Y.Z` más alta del repositorio con `git ls-remote`, sin descargarlo. Ignora otros formatos | No hay conexión o el repositorio no responde en 15 s |
 | `isNewerVersion` | Compara dos versiones por número | Nunca; un formato distinto no cuenta como más nuevo |
@@ -170,6 +173,7 @@ Reglas que cumple el núcleo:
 - **Conflictos antes de clonar.** La API puede llamar a `normalizeProjectName` antes de `prepareProject` para comprobar si el nombre ya existe en su base y responder 409 sin esperar un clonado.
 - **ZIP.** El núcleo no borra el ZIP: lo creó la API, así que la API lo borra al terminar. Antes de extraerlo lee su lista de archivos y lo rechaza si una ruta sale de la carpeta, si trae más de 100 000 archivos o si ocuparía más de 3 GB.
 - **Actualizar.** El repositorio vive en `projects/.repos/<nombre>` y no en la carpeta del proyecto, porque los contenedores suelen montarla: un hook o una configuración plantados en `.git` se ejecutarían dentro de Dockyard, que controla Docker. Se descarga solo la última versión (`fetch --depth 1`) y se aplica con `read-tree -m -u`, que no necesita historia en común y se niega a pisar archivos cambiados. Por eso los proyectos no encuentran `.git` en su carpeta. La API solo actualiza proyectos apagados, repite la revisión y marca `needs_build` para que el siguiente encendido use `up -d --build`, porque `up -d` no reconstruye una imagen que ya existe.
+- **Reemplazar ZIP.** Es el equivalente de **Actualizar** para las entregas en ZIP: `POST /api/projects/:id/replace` recibe el archivo igual que el registro y lo borra al terminar. El núcleo abre el ZIP en `projects/.reemplazos/<nombre>/nuevo`, con las mismas revisiones que al registrar, y solo si trae compose cambia las carpetas con `rename`, que no depende de los permisos de lo que hay dentro. Así, un ZIP que no sirve deja el proyecto intacto. La versión anterior se borra entera, incluido lo que el proyecto guardó en su carpeta: no se puede saber qué era código borrado y qué eran datos. Los volúmenes de Docker siguen, porque el nombre del proyecto de compose no cambia. Si la versión anterior tiene archivos de root, queda en `.reemplazos/<nombre>/anterior` y la interfaz da el comando `sudo` para borrarla; el siguiente reemplazo pide borrarla antes. Como se pierde lo de la carpeta, la interfaz pide escribir el nombre, igual que al eliminar.
 - **Revisión al registrar.** `reviewProject` interpreta el compose con `config --format json` y recorre los archivos sin ejecutar nada. Avisa de lo que deja a un servicio salir de su contenedor (`privileged`, `network_mode: host`, permisos peligrosos, `docker.sock`, rutas de la PC), de enlaces que salen del proyecto, de archivos de credenciales o respaldos y de claves escritas en el código. Dice dónde está cada cosa y nunca incluye el valor. Los avisos se guardan en la columna `warnings` y no impiden encender, porque la decisión es del docente.
 - **Comandos.** Todos se ejecutan con `execFile` y una lista de argumentos, nunca con una cadena para un shell.
 
@@ -217,4 +221,4 @@ Esta entrega no las incluye. Mientras tanto, el docente registra solo proyectos 
 - La comprobación de la web no alcanza un puerto publicado solo en `127.0.0.1` (como `"127.0.0.1:8101:80"`) cuando Dockyard corre en contenedor: dirá que no responde aunque abra en el navegador. Tampoco entiende HTTPS.
 - La detección de puertos solo ve contenedores. Si otro programa de la PC usa el puerto, falla `up -d` y el mensaje de Docker llega al docente.
 - Actualizar no toca los datos: un volumen de base de datos conserva sus tablas, así que un `.sql` nuevo de `db/init/` no se vuelve a cargar. Tampoco cambia un `.env` que ya exista, aunque cambie `.env.example`. Para empezar limpio, elimina el proyecto y regístralo de nuevo.
-- Un proyecto de ZIP no se actualiza: se elimina y se registra el ZIP nuevo.
+- Un proyecto de ZIP no se actualiza: se reemplaza su ZIP. Como en Actualizar, un volumen de base de datos conserva sus tablas y un `.sql` nuevo de `db/init/` no se vuelve a cargar. El `.env`, en cambio, sale del ZIP nuevo o de su `.env.example`, porque la carpeta se cambia entera. Para empezar limpio, elimina el proyecto y regístralo de nuevo.

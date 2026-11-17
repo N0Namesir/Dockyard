@@ -69,10 +69,17 @@ function validateRepositoryUrl(value: string): string {
   return url.toString()
 }
 
-async function readMultipartProject(
+interface MultipartZip {
+  fields: Map<string, string>
+  filePath: string
+  originalFilename: string
+}
+
+/** Lee un formulario con un archivo ZIP en el campo "file" y lo guarda en temporaryDir. */
+async function readMultipartZip(
   request: FastifyRequest,
   temporaryDir: string,
-): Promise<MultipartProject> {
+): Promise<MultipartZip> {
   const fields = new Map<string, string>()
   let filePath: string | undefined
   let originalFilename: string | undefined
@@ -107,7 +114,14 @@ async function readMultipartProject(
   if (!filePath || !originalFilename) {
     throw new HttpError(400, 'Falta el archivo ZIP del proyecto.')
   }
+  return { fields, filePath, originalFilename }
+}
 
+async function readMultipartProject(
+  request: FastifyRequest,
+  temporaryDir: string,
+): Promise<MultipartProject> {
+  const { fields, filePath, originalFilename } = await readMultipartZip(request, temporaryDir)
   return {
     team: requiredText(fields.get('team'), 'el nombre del equipo'),
     name: requiredText(fields.get('name'), 'el nombre del proyecto'),
@@ -205,6 +219,22 @@ export function projectRoutes(service: ProjectService): FastifyPluginAsync {
       '/projects/:id/update',
       { schema: { params: idParamsSchema } },
       async (request) => service.update(Number(request.params.id)),
+    )
+
+    app.post<{ Params: IdParams }>(
+      '/projects/:id/replace',
+      { schema: { params: idParamsSchema } },
+      async (request) => {
+        if (!request.isMultipart()) throw new HttpError(400, 'Falta el archivo ZIP del proyecto.')
+        // El ZIP se borra al terminar, salga bien o mal, igual que al registrar.
+        const temporaryDir = await mkdtemp(join(tmpdir(), 'dockyard-'))
+        try {
+          const { filePath, originalFilename } = await readMultipartZip(request, temporaryDir)
+          return await service.replace(Number(request.params.id), { filePath, sourceLabel: originalFilename })
+        } finally {
+          await rm(temporaryDir, { recursive: true, force: true })
+        }
+      },
     )
 
     app.post<{ Params: IdParams }>(

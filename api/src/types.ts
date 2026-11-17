@@ -7,6 +7,7 @@ import type {
   ResourceUsage,
   StartOptions,
   StartProgress,
+  ZipReplacement,
 } from './core.ts'
 import type { WebCheck } from './services/web-check.ts'
 
@@ -64,6 +65,12 @@ export interface StopAllResponse {
   failed: { name: string; message: string }[]
 }
 
+export interface ReplaceResponse {
+  project: ProjectResponse
+  /** Carpeta de la versión anterior que quedó con archivos de root, o null. */
+  leftover: string | null
+}
+
 export interface UpdateResponse {
   project: ProjectResponse
   changed: boolean
@@ -76,6 +83,7 @@ export interface CoreAdapter {
   prepareProject(source: ProjectSource, name: string): Promise<PreparedProject>
   reviewProject(dir: string, name: string): Promise<string[]>
   updateProject(name: string): Promise<ProjectUpdate>
+  replaceProjectZip(name: string, filePath: string): Promise<ZipReplacement>
   startProject(dir: string, name: string, options?: StartOptions): Promise<ProjectStatus>
   stopProject(dir: string, name: string): Promise<ProjectStatus>
   getProjectStatus(name: string): Promise<ProjectStatus>

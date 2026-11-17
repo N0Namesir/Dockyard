@@ -6,6 +6,7 @@ import type {
   ProgressResponse,
   ProjectResponse,
   ProjectRow,
+  ReplaceResponse,
   ResourcesResponse,
   StopAllResponse,
   UpdateResponse,
@@ -73,7 +74,7 @@ export function createProjectService(
 
   function once<T>(
     id: number,
-    action: 'start' | 'stop' | 'remove' | 'update',
+    action: 'start' | 'stop' | 'remove' | 'update' | 'replace',
     run: () => Promise<T>,
   ): Promise<T> {
     const key = `${id}:${action}`
@@ -152,7 +153,7 @@ export function createProjectService(
     const queue = [...running]
     async function worker(): Promise<void> {
       for (let row = queue.shift(); row; row = queue.shift()) {
-        if (['start', 'update', 'remove'].some((action) => inFlight.has(`${row!.id}:${action}`))) {
+        if (['start', 'update', 'replace', 'remove'].some((action) => inFlight.has(`${row!.id}:${action}`))) {
           result.skipped.push(row.name)
           continue
         }
@@ -258,7 +259,7 @@ export function createProjectService(
 
     async remove(id: number): Promise<void> {
       const project = requireProject(id)
-      if (inFlight.has(`${id}:start`) || inFlight.has(`${id}:stop`) || inFlight.has(`${id}:update`)) {
+      if (['start', 'stop', 'update', 'replace'].some((action) => inFlight.has(`${id}:${action}`))) {
         throw new HttpError(409, 'El proyecto se está encendiendo, apagando o actualizando. Espera a que termine.')
       }
       return once(id, 'remove', async () => {
@@ -270,7 +271,7 @@ export function createProjectService(
 
     async start(id: number): Promise<ProjectResponse> {
       const project = requireProject(id)
-      if (inFlight.has(`${id}:update`)) {
+      if (inFlight.has(`${id}:update`) || inFlight.has(`${id}:replace`)) {
         throw new HttpError(409, 'El proyecto se está actualizando. Espera a que termine.')
       }
       return once(id, 'start', async () => {
@@ -298,7 +299,7 @@ export function createProjectService(
     async update(id: number): Promise<UpdateResponse> {
       const project = requireProject(id)
       if (project.source_type !== 'git') {
-        throw new HttpError(409, 'Solo se actualizan los proyectos registrados desde GitHub. Si el equipo entregó un ZIP nuevo, elimina este proyecto y regístralo de nuevo.')
+        throw new HttpError(409, 'Solo se actualizan los proyectos registrados desde GitHub. Para un proyecto registrado desde un ZIP, usa Reemplazar ZIP.')
       }
       if (['start', 'stop', 'remove'].some((action) => inFlight.has(`${id}:${action}`))) {
         throw new HttpError(409, 'El proyecto se está encendiendo, apagando o eliminando. Espera a que termine.')
@@ -315,6 +316,29 @@ export function createProjectService(
           repository.applyUpdate(id, { dir, warnings })
         }
         return { project: await hydrate(requireProject(id)), changed, commit, summary }
+      })
+    },
+
+    /** Cambia el código de un proyecto registrado desde un ZIP por el de un ZIP nuevo. */
+    async replace(id: number, input: { filePath: string; sourceLabel: string }): Promise<ReplaceResponse> {
+      const project = requireProject(id)
+      if (project.source_type !== 'zip') {
+        throw new HttpError(409, 'Solo se reemplaza el ZIP de los proyectos registrados desde un ZIP. Para uno de GitHub, usa Actualizar.')
+      }
+      if (['start', 'stop', 'remove'].some((action) => inFlight.has(`${id}:${action}`))) {
+        throw new HttpError(409, 'El proyecto se está encendiendo, apagando o eliminando. Espera a que termine.')
+      }
+      return once(id, 'replace', async () => {
+        // Apagado, para que el docente vea los avisos del ZIP nuevo antes de que se ejecute.
+        const status = await core.getProjectStatus(project.name)
+        if (status.state === 'running') {
+          throw new HttpError(409, 'Apaga el proyecto antes de reemplazar su ZIP.')
+        }
+        const { dir, leftover } = await core.replaceProjectZip(project.name, input.filePath)
+        const warnings = await core.reviewProject(dir, project.name)
+        repository.applyUpdate(id, { dir, warnings, source: input.sourceLabel })
+        webChecks.delete(id)
+        return { project: await hydrate(requireProject(id)), leftover }
       })
     },
 

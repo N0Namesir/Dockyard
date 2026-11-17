@@ -37,7 +37,8 @@ export interface ProjectRepository {
   findById(id: number): ProjectRow | undefined
   findByName(name: string): ProjectRow | undefined
   insert(project: NewProjectRow): ProjectRow
-  applyUpdate(id: number, update: { dir: string; warnings: string[] }): void
+  /** Código nuevo: guarda la carpeta, los avisos y, si cambió, el origen. El próximo encendido reconstruye. */
+  applyUpdate(id: number, update: { dir: string; warnings: string[]; source?: string }): void
   clearNeedsBuild(id: number): void
   delete(id: number): void
   close(): void
@@ -99,7 +100,7 @@ export function createProjectRepository(
     VALUES (?, ?, ?, ?, ?, ?, ?)
   `)
 
-  const update = db.prepare('UPDATE projects SET dir = ?, warnings = ?, needs_build = 1 WHERE id = ?')
+  const update = db.prepare('UPDATE projects SET dir = ?, warnings = ?, source = COALESCE(?, source), needs_build = 1 WHERE id = ?')
   const built = db.prepare('UPDATE projects SET needs_build = 0 WHERE id = ?')
   const remove = db.prepare('DELETE FROM projects WHERE id = ?')
 
@@ -139,8 +140,8 @@ export function createProjectRepository(
       return row
     },
 
-    applyUpdate(id, { dir, warnings }) {
-      update.run(dir, JSON.stringify(warnings), id)
+    applyUpdate(id, { dir, warnings, source }) {
+      update.run(dir, JSON.stringify(warnings), source ?? null, id)
     },
 
     clearNeedsBuild(id) {
