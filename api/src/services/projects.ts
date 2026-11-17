@@ -130,6 +130,8 @@ export function createProjectService(
     return respond(row, await core.getProjectStatus(row.name))
   }
 
+  const STOPPED: ProjectStatus = { state: 'stopped', ports: [] }
+
   function requireProject(id: number): ProjectRow {
     const project = repository.findById(id)
     if (!project) throw new HttpError(404, 'El proyecto solicitado no existe.')
@@ -138,7 +140,11 @@ export function createProjectService(
 
   return {
     async list(query?: string): Promise<ProjectResponse[]> {
-      return Promise.all(repository.list(query).map(hydrate))
+      const rows = repository.list(query)
+      if (rows.length === 0) return []
+      // Una sola consulta a Docker para toda la lista, no un proceso por proyecto.
+      const statuses = await core.getProjectStatuses()
+      return Promise.all(rows.map((row) => respond(row, statuses[row.name] ?? STOPPED)))
     },
 
     async get(id: number): Promise<ProjectResponse> {

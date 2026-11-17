@@ -71,6 +71,7 @@ export interface CoreAdapter {
   startProject(dir: string, name: string, options?: StartOptions): Promise<ProjectStatus>
   stopProject(dir: string, name: string): Promise<ProjectStatus>
   getProjectStatus(name: string): Promise<ProjectStatus>
+  getProjectStatuses(): Promise<Record<string, ProjectStatus>>
   getProjectLogs(name: string): Promise<string>
   getResources(): Promise<ResourceUsage>
   removeProject(name: string): Promise<void>

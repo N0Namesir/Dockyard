@@ -55,6 +55,9 @@ function fakeCore() {
     async getProjectStatus(name) {
       return statuses.get(name) ?? { state: 'stopped', ports: [] }
     },
+    async getProjectStatuses() {
+      return Object.fromEntries(statuses)
+    },
     async getProjectLogs(name) {
       return `registro de ${name}`
     },
@@ -73,6 +76,39 @@ async function testApp(core = fakeCore().core, checkWeb: CheckWeb = async () => 
   const repository = createProjectRepository(':memory:')
   return buildApp({ repository, core, checkWeb })
 }
+
+test('la lista consulta el estado de todos con una sola llamada a Docker', async () => {
+  const { core } = fakeCore()
+  let all = 0
+  let single = 0
+  const app = await testApp({
+    ...core,
+    async getProjectStatus(name) {
+      single++
+      return core.getProjectStatus(name)
+    },
+    async getProjectStatuses() {
+      all++
+      return { b: { state: 'running', ports: [8101] }, 'otro-de-la-pc': { state: 'running', ports: [9000] } }
+    },
+  })
+  for (const name of ['A', 'B', 'C']) {
+    await app.inject({ method: 'POST', url: '/api/projects', payload: { team: 'E', name, repoUrl: `https://github.com/e/${name}` } })
+  }
+  single = 0
+  const list = (await app.inject({ method: 'GET', url: '/api/projects' })).json()
+  assert.equal(all, 1)
+  assert.equal(single, 0)
+  assert.deepEqual(
+    list.map((p: { name: string; state: string; ports: number[] }) => [p.name, p.state, p.ports]),
+    [['c', 'stopped', []], ['b', 'running', [8101]], ['a', 'stopped', []]],
+  )
+
+  // Sin proyectos registrados no hace falta preguntar a Docker.
+  await app.inject({ method: 'GET', url: '/api/projects?q=nada' })
+  assert.equal(all, 1)
+  await app.close()
+})
 
 test('el avance se ve mientras enciende y desaparece al terminar', async () => {
   let finish = () => {}
@@ -798,6 +834,9 @@ test('la web que contesta no se vuelve a pedir enseguida; la que no contesta, s√
     },
     async getProjectStatus(name) {
       return statuses.get(name) ?? { state: 'stopped', ports: [] }
+    },
+    async getProjectStatuses() {
+      return Object.fromEntries(statuses)
     },
   }
   let calls = 0

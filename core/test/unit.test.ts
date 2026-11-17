@@ -5,7 +5,7 @@ import { access, mkdir, mkdtemp, readFile, rm, symlink, unlink, writeFile } from
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { after, describe, test } from 'node:test'
-import { parsePs, portsInUse, requestedContainerNames, requestedPorts, statusFromContainers } from '../src/docker.ts'
+import { parsePs, portsInUse, requestedContainerNames, requestedPorts, statusFromContainers, statusesFromContainers } from '../src/docker.ts'
 import { assertNormalizedName, normalizeProjectName } from '../src/name.ts'
 import { findComposeFile, projectRepoDir, projectsDir } from '../src/paths.ts'
 import { cleanLine, createProgressTracker, stageOf } from '../src/progress.ts'
@@ -88,6 +88,49 @@ describe('servicios caídos', () => {
 
   test('un proyecto apagado no tiene servicios caídos', () => {
     assert.deepEqual(statusFromContainers([{ State: 'exited', ExitCode: 137, Service: 'web' }]), { state: 'stopped', ports: [] })
+  })
+})
+
+describe('statusesFromContainers', () => {
+  const row = (project: string, service: string, State: string, Status: string, Ports = '', oneoff = 'False') => ({
+    Labels: `com.docker.compose.oneoff=${oneoff},com.docker.compose.project=${project},com.docker.compose.service=${service}`,
+    Names: `${project}-${service}-1`,
+    State,
+    Status,
+    Ports,
+  })
+
+  test('agrupa por proyecto y lee puertos y códigos de salida de docker ps', () => {
+    assert.deepEqual(
+      statusesFromContainers([
+        row('tienda', 'web', 'running', 'Up 2 minutes', '0.0.0.0:8101->80/tcp, [::]:8101->80/tcp'),
+        row('tienda', 'db', 'running', 'Up 2 minutes', '5432/tcp'),
+        row('tienda', 'api', 'exited', 'Exited (1) 1 minute ago'),
+        row('blog', 'web', 'exited', 'Exited (0) 3 hours ago'),
+        row('panel', 'web', 'running', 'Up 5 seconds', '127.0.0.1:8201-8202->80-81/tcp'),
+      ]),
+      {
+        tienda: { state: 'running', ports: [8101], failedServices: ['api'] },
+        blog: { state: 'stopped', ports: [] },
+        panel: { state: 'running', ports: [8201, 8202] },
+      },
+    )
+  })
+
+  test('un contenedor que se reinicia cuenta como encendido y como falla', () => {
+    assert.deepEqual(statusesFromContainers([row('tienda', 'web', 'restarting', 'Restarting (1) 4 seconds ago')]), {
+      tienda: { state: 'running', ports: [], failedServices: ['web'] },
+    })
+  })
+
+  test('ignora los contenedores de compose run y los que no son de compose', () => {
+    assert.deepEqual(
+      statusesFromContainers([
+        row('tienda', 'web', 'running', 'Up 1 minute', '', 'True'),
+        { Labels: '', Names: 'suelto', State: 'running', Status: 'Up 1 minute', Ports: '' },
+      ]),
+      {},
+    )
   })
 })
 

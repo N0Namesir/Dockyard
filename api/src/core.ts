@@ -2,6 +2,7 @@ export {
   getLatestVersion,
   getProjectLogs,
   getProjectStatus,
+  getProjectStatuses,
   getResources,
   isNewerVersion,
   normalizeProjectName,

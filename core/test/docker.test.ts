@@ -13,7 +13,7 @@ import { basename, join } from 'node:path'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { after, before, describe, test } from 'node:test'
 import { buildZip, createTestZips, entriesFrom } from '../../ejemplos/crear-zips.ts'
-import { getProjectLogs, getProjectStatus, getResources, normalizeProjectName, prepareProject, removeProject, startProject, stopProject } from '../src/index.ts'
+import { getProjectLogs, getProjectStatus, getProjectStatuses, getResources, normalizeProjectName, prepareProject, removeProject, startProject, stopProject } from '../src/index.ts'
 import { run } from '../src/run.ts'
 import type { StartProgress } from '../src/types.ts'
 
@@ -127,6 +127,7 @@ describe('encender, consultar y apagar', () => {
     assert.ok(seen.at(-1)?.lines.some((line) => /Container .* Started/.test(line)), 'faltan las líneas de Docker')
     assert.match(await fetchText(8081), /prueba-estatico funciona/)
     assert.deepEqual(await getProjectStatus(name), { state: 'running', ports: [8081] })
+    assert.deepEqual((await getProjectStatuses())[name], { state: 'running', ports: [8081] })
 
     const usage = await getResources()
     assert.ok(usage.memoryLimit > 0)
@@ -257,6 +258,8 @@ describe('encender, consultar y apagar', () => {
       'services:\n  web:\n    image: busybox\n    command: ["sleep", "600"]\n  api:\n    image: busybox\n    command: ["sh", "-c", "echo falta la clave de la api; exit 1"]\n',
     )
     assert.deepEqual(await startProject(dir, name), { state: 'running', ports: [], failedServices: ['api'] })
+    // La consulta de toda la lista llega al mismo resultado que la de un solo proyecto.
+    assert.deepEqual((await getProjectStatuses())[name], await getProjectStatus(name))
     assert.match(await getProjectLogs(name), /falta la clave de la api/)
     await stopProject(dir, name)
     assert.match(await getProjectLogs(name), /falta la clave de la api/)

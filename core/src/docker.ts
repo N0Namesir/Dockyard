@@ -86,6 +86,50 @@ export async function getProjectStatus(name: string): Promise<ProjectStatus> {
   return statusFromContainers(await listContainers(name))
 }
 
+/**
+ * Lleva una fila de `docker ps --format json` a la forma de `docker compose ps`, que es la que
+ * entiende statusFromContainers: el servicio sale de su etiqueta, los puertos del texto Ports y el
+ * código de salida del texto Status ("Exited (1) 3 minutes ago").
+ */
+export function composeRowOf(container: any): any {
+  const exit = /^(?:Exited|Restarting) \((-?\d+)\)/.exec(String(container.Status ?? ''))
+  const publishers = portsInUse([container]).map((p) => ({ PublishedPort: p.port, Protocol: p.protocol }))
+  return {
+    Service: composeServiceOf(container) ?? containerName(container),
+    State: container.State,
+    ExitCode: exit ? Number(exit[1]) : 0,
+    Publishers: publishers,
+  }
+}
+
+/** Agrupa las filas de `docker ps -a` por proyecto de compose y calcula el estado de cada uno. */
+export function statusesFromContainers(containers: any[]): Record<string, ProjectStatus> {
+  const byProject = new Map<string, any[]>()
+  for (const container of containers) {
+    const project = composeProjectOf(container)
+    // `compose run` crea contenedores de un solo uso que `compose ps` tampoco muestra.
+    if (!project || /(?:^|,)com\.docker\.compose\.oneoff=True(?:,|$)/.test(container.Labels ?? '')) continue
+    const rows = byProject.get(project) ?? []
+    rows.push(composeRowOf(container))
+    byProject.set(project, rows)
+  }
+  const statuses: Record<string, ProjectStatus> = {}
+  for (const [project, rows] of byProject) statuses[project] = statusFromContainers(rows)
+  return statuses
+}
+
+/**
+ * Estado de todos los proyectos de compose de la PC con una sola consulta a Docker, para que la
+ * lista no lance un proceso por proyecto. Un proyecto sin contenedores no aparece: está apagado.
+ */
+export async function getProjectStatuses(): Promise<Record<string, ProjectStatus>> {
+  const out = await docker(
+    ['ps', '-a', '--filter', 'label=com.docker.compose.project', '--format', 'json'],
+    { timeoutMs: STATUS_TIMEOUT },
+  )
+  return statusesFromContainers(parsePs(out))
+}
+
 /** Lanza un error si ya hay contenedores, encendidos o no, con este nombre de proyecto de compose. */
 export async function assertProjectNameFree(name: string): Promise<void> {
   assertNormalizedName(name)

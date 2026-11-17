@@ -54,6 +54,7 @@ prepareProject(source: ProjectSource, name: string): Promise<PreparedProject>   
 startProject(dir: string, name: string, options?: StartOptions): Promise<ProjectStatus>   // { state, ports, failedServices? }
 stopProject(dir: string, name: string): Promise<ProjectStatus>
 getProjectStatus(name: string): Promise<ProjectStatus>
+getProjectStatuses(): Promise<Record<string, ProjectStatus>>                    // todos los proyectos de compose con un solo `docker ps -a`
 getProjectLogs(name: string): Promise<string>                                   // últimas 200 líneas
 getResources(): Promise<ResourceUsage>                                          // { memoryLimit, projects }: consumo por proyecto de compose
 removeProject(name: string): Promise<void>                                      // se puede repetir
@@ -68,7 +69,7 @@ updateProject(name: string): Promise<ProjectUpdate>                             
 
 - Toda falla se lanza como `Error` con un mensaje en español que dice la causa y qué hacer. La API se lo devuelve tal cual al docente.
 - Los comandos se ejecutan siempre con `execFile` y una lista de argumentos, mediante un ayudante `run` común (con `GIT_TERMINAL_PROMPT=0`). Nunca se arma una cadena para un shell.
-- Todos los comandos de compose usan el prefijo `docker compose -p <nombre> --project-directory <dir> -f <dir>/<archivo>`. `getProjectStatus` usa solo `-p`.
+- Todos los comandos de compose usan el prefijo `docker compose -p <nombre> --project-directory <dir> -f <dir>/<archivo>`. `getProjectStatus` usa solo `-p`. `getProjectStatuses` usa `docker ps -a` filtrado por la etiqueta de compose y llega al mismo estado; la lista de la API lo usa para no lanzar un proceso por proyecto.
 - El compose se busca en este orden: `compose.yaml`, `compose.yml`, `docker-compose.yaml`, `docker-compose.yml`, primero en la raíz y luego en una única subcarpeta.
 - Apagar es `stop`, no `down`.
 - Los choques de puertos y de `container_name` se detectan antes de `up -d` (con `config --format json` contra `docker ps`) y se avisan. Los puertos y el compose nunca se reescriben.

@@ -97,7 +97,7 @@ No crees etiquetas a mano: sin el cambio en `package.json`, una instalación al 
 - **Protección contra otras páginas:** el puerto local no basta, porque una página abierta en el navegador del docente también llega a `localhost`, incluidos los proyectos de estudiantes en otros puertos. Por eso `isAllowedRequest` (`api/src/app.ts`) exige un `Host` local y un `Origin` igual a `Host`, y responde 403 si no. Las peticiones sin `Origin`, como las de `curl`, se aceptan.
 - **Enlaces:** `urls` trae uno por puerto. `url`, el del botón **Abrir**, es el primero que no sea de un servicio conocido que no es una página (como 3306 o 5432); si todos lo son, usa el primero. Es una suposición: por eso la columna **Puertos** enlaza todos.
 - **Web:** `web` indica si contesta el puerto de **Abrir** (`api/src/services/web-check.ts`). Es `null` si el proyecto está apagado o solo publica puertos que no son páginas. Cualquier respuesta menor a 500 cuenta como `ok`, porque un 401 o un 404 también prueban que la aplicación está viva. La hace la API porque el núcleo no usa HTTP. Una web que contesta se vuelve a pedir cada minuto como mucho, para no gastar el límite de peticiones de los proyectos. Dentro del contenedor usa `PROJECTS_HOST` (`host.docker.internal`), porque ahí `localhost` es Dockyard.
-- **Datos:** SQLite guarda solo lo que Docker no sabe (nombre, equipo, origen, carpeta). El estado y los puertos se consultan siempre al núcleo, así que listar ejecuta un `docker compose ps` por proyecto.
+- **Datos:** SQLite guarda solo lo que Docker no sabe (nombre, equipo, origen, carpeta). El estado y los puertos se consultan siempre al núcleo. Listar hace una sola consulta (`getProjectStatuses`) para todos los proyectos, así que su costo no crece con la cantidad; consultar uno solo usa `getProjectStatus`.
 - **Búsqueda:** ignora mayúsculas y tildes con la función `normalizar`, registrada en SQLite, porque `LIKE` solo ignora mayúsculas en letras sin acento. `%` y `_` se buscan como texto.
 - **ZIP:** se guarda en una carpeta temporal, con un límite de 200 MB, y se borra al terminar el registro, salga bien o mal.
 - **Peticiones cortadas:** la ruta responde cuando el núcleo termina, hasta 10 minutos después. Firefox corta las peticiones pendientes cuando cambian las redes de la PC, y encender un proyecto crea una red de Docker (comprobado con Firefox 159; sin cambios de red, esperó 7 minutos sin problema). Por eso, si la petición se corta, la interfaz la repite, y la API la une a la operación en curso (`once` en `api/src/services/projects.ts`) en vez de lanzar otra. Así el docente recibe el resultado real, incluido el error.
@@ -119,6 +119,7 @@ startProject(dir: string, name: string, options?: StartOptions): Promise<Project
 updateProject(name: string): Promise<ProjectUpdate>   // { dir, changed, commit, summary }
 stopProject(dir: string, name: string): Promise<ProjectStatus>
 getProjectStatus(name: string): Promise<ProjectStatus>
+getProjectStatuses(): Promise<Record<string, ProjectStatus>>   // por nombre de proyecto de compose
 getResources(): Promise<ResourceUsage>
 getLatestVersion(repoUrl: string): Promise<string | null>
 isNewerVersion(candidate: string, current: string): boolean
@@ -134,6 +135,7 @@ type ProjectSource = { type: 'git'; url: string } | { type: 'zip'; filePath: str
 | `startProject` | Revisa choques de puertos y ejecuta `up -d` | Un puerto está en uso, Docker no responde, el compose falla o los contenedores se caen al arrancar |
 | `stopProject` | Ejecuta `stop` | Docker no responde |
 | `getProjectStatus` | Lee `ps --format json` | Docker no responde |
+| `getProjectStatuses` | Lee `docker ps -a` una sola vez y agrupa por proyecto de compose. Un proyecto sin contenedores no aparece: está apagado | Docker no responde |
 | `updateProject` | Trae la última versión del repositorio sin encender ni reconstruir | No hay conexión, el repositorio ya no es público, pisaría un archivo cambiado en la PC o la versión nueva no trae compose |
 | `getResources` | Une `docker ps` y `docker stats` por proyecto de compose | Docker no responde |
 | `getLatestVersion` | Devuelve la etiqueta `vX.Y.Z` más alta del repositorio con `git ls-remote`, sin descargarlo. Ignora otros formatos | No hay conexión o el repositorio no responde en 15 s |
