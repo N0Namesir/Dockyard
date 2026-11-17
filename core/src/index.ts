@@ -8,4 +8,5 @@ export { startProject, stopProject, getProjectStatus, getProjectStatuses, getPro
 export { getResources } from './resources.ts'
 export { getLatestVersion, isNewerVersion } from './version.ts'
 export { projectsDir } from './paths.ts'
+export { PortConflictError } from './types.ts'
 export type { ProjectState, ProjectStatus, ProjectSource, PreparedProject, ProjectResources, ProjectUpdate, ResourceUsage, ServiceResources, StartOptions, StartProgress } from './types.ts'

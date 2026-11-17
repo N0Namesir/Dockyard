@@ -70,7 +70,7 @@ export async function buildApp(options: AppOptions = {}): Promise<FastifyInstanc
   // Debe definirse antes de registrar las rutas: un plugin hereda el manejador que existe al registrarlo.
   app.setErrorHandler((error, request, reply) => {
     if (error instanceof HttpError) {
-      return reply.code(error.statusCode).send({ message: error.message })
+      return reply.code(error.statusCode).send({ ...error.details, message: error.message })
     }
 
     const fastifyError = error as { code?: string; statusCode?: number }

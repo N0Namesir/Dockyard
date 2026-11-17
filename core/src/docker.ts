@@ -5,7 +5,7 @@ import { assertNormalizedName } from './name.ts'
 import { findComposeFile, projectRepoDir, projectsDir } from './paths.ts'
 import { createProgressTracker } from './progress.ts'
 import { CommandError, run, type RunOptions } from './run.ts'
-import type { ProjectStatus, StartOptions } from './types.ts'
+import { PortConflictError, type ProjectStatus, type StartOptions } from './types.ts'
 
 const START_TIMEOUT = 10 * 60_000
 const STOP_TIMEOUT = 2 * 60_000
@@ -250,7 +250,7 @@ async function checkConflicts(prefix: string[], name: string): Promise<void> {
   for (const r of requested) {
     const taken = used.find((u) => u.port === r.port && u.protocol === r.protocol)
     if (taken) {
-      throw new Error(`El puerto ${r.port} ya está en uso por el contenedor ${taken.container}. Apaga ese proyecto o cambia el puerto en el compose.`)
+      throw new PortConflictError(r.port, taken.container, taken.project)
     }
   }
 }

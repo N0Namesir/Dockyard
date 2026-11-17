@@ -132,6 +132,22 @@ export function createProjectService(
 
   const STOPPED: ProjectStatus = { state: 'stopped', ports: [] }
 
+  /**
+   * Un choque de puertos con otro proyecto registrado se responde con ese proyecto, para que la
+   * interfaz ofrezca apagarlo y encender este. Lo demás que corra en la PC no se ofrece apagar.
+   */
+  function portConflictOf(error: unknown, id: number): HttpError | null {
+    if (!(error instanceof Error) || error.name !== 'PortConflictError') return null
+    const { port, project } = error as Error & { port: number; project: string | null }
+    const other = project ? repository.findByName(project) : undefined
+    if (!other || other.id === id) return null
+    return new HttpError(
+      409,
+      `El puerto ${port} ya lo usa el proyecto ${other.name}, que está encendido. Apágalo o pide al equipo que cambie el puerto en el compose.`,
+      { conflict: { id: other.id, name: other.name, port } },
+    )
+  }
+
   function requireProject(id: number): ProjectRow {
     const project = repository.findById(id)
     if (!project) throw new HttpError(404, 'El proyecto solicitado no existe.')
@@ -227,6 +243,8 @@ export function createProjectService(
             },
           })
           repository.clearNeedsBuild(id)
+        } catch (error) {
+          throw portConflictOf(error, id) ?? error
         } finally {
           starts.delete(id)
         }

@@ -49,11 +49,20 @@ export interface UpdateResult {
 
 export type ProjectAction = 'start' | 'stop' | 'remove' | 'update'
 
+/** Otro proyecto registrado que ocupa un puerto de este; la API lo manda al fallar el encendido. */
+export interface PortConflict {
+  id: number
+  name: string
+  port: number
+}
+
 /** Lo que pueden hacer los botones de una fila. Lo conecta main.ts, para que las filas no dependan de las acciones. */
 export interface RowHandlers {
   changeState(project: Project): void
   updateProject(project: Project): void
   removeProject(project: Project): void
+  /** Apaga el proyecto que ocupa su puerto y lo enciende. */
+  replaceConflicting(project: Project): void
   toggleLogs(project: Project): void
   loadLogs(project: Project): void
 }

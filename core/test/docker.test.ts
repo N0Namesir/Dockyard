@@ -13,7 +13,7 @@ import { basename, join } from 'node:path'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { after, before, describe, test } from 'node:test'
 import { buildZip, createTestZips, entriesFrom } from '../../ejemplos/crear-zips.ts'
-import { getProjectLogs, getProjectStatus, getProjectStatuses, getResources, normalizeProjectName, prepareProject, removeProject, startProject, stopProject } from '../src/index.ts'
+import { getProjectLogs, getProjectStatus, getProjectStatuses, getResources, normalizeProjectName, PortConflictError, prepareProject, removeProject, startProject, stopProject } from '../src/index.ts'
 import { run } from '../src/run.ts'
 import type { StartProgress } from '../src/types.ts'
 
@@ -138,15 +138,17 @@ describe('encender, consultar y apagar', () => {
     assert.equal((await getResources()).projects[name], undefined)
   })
 
-  test('choque de puertos: el mensaje nombra al contenedor que ocupa el puerto', async () => {
+  test('choque de puertos: el error nombra al contenedor y al proyecto que ocupan el puerto', async () => {
     const estatico = uniqueName('choque-a')
     const conflicto = uniqueName('choque-b')
     await startProject(join(EJEMPLOS, 'prueba-estatico'), estatico)
     try {
-      await assert.rejects(
-        startProject(join(EJEMPLOS, 'prueba-conflicto'), conflicto),
-        new RegExp(`El puerto 8081 ya está en uso por el contenedor ${estatico}-web-1`),
-      )
+      await assert.rejects(startProject(join(EJEMPLOS, 'prueba-conflicto'), conflicto), (error) => {
+        assert.ok(error instanceof PortConflictError)
+        assert.match(error.message, new RegExp(`El puerto 8081 ya está en uso por el contenedor ${estatico}-web-1`))
+        assert.deepEqual([error.port, error.container, error.project], [8081, `${estatico}-web-1`, estatico])
+        return true
+      })
       assert.equal((await getProjectStatus(conflicto)).state, 'stopped')
       // Encender de nuevo un proyecto que ya corre no choca consigo mismo.
       assert.equal((await startProject(join(EJEMPLOS, 'prueba-estatico'), estatico)).state, 'running')

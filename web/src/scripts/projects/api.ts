@@ -1,4 +1,5 @@
 // Única puerta hacia la API. Convierte las fallas en errores con un mensaje para el docente.
+import type { PortConflict } from './types.ts'
 
 export const CONNECTION_MESSAGE = 'No se puede conectar con Dockyard. Verifica que esté encendido y recarga la página.'
 const RETRY_DELAY_MS = 5_000
@@ -7,13 +8,21 @@ const MAX_CONNECTION_FAILURES = 5
 /** La petición no llegó a responder: la API está caída o el navegador cortó la espera. */
 export class ConnectionError extends Error {}
 
+/** Cuerpo de una respuesta de error de la API: el mensaje y, a veces, datos para ofrecer una salida. */
+export interface ApiErrorBody {
+  message?: string
+  conflict?: PortConflict
+}
+
 /** La API respondió con un error. */
 export class ApiResponseError extends Error {
   readonly status: number
+  readonly body: ApiErrorBody
 
-  constructor(status: number, message: string) {
+  constructor(status: number, message: string, body: ApiErrorBody = {}) {
     super(message)
     this.status = status
+    this.body = body
   }
 }
 
@@ -25,13 +34,13 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
     throw new ConnectionError(CONNECTION_MESSAGE)
   }
   if (!response.ok) {
-    let body: { message?: string } = {}
+    let body: ApiErrorBody = {}
     try {
-      body = (await response.json()) as { message?: string }
+      body = (await response.json()) as ApiErrorBody
     } catch {
       // La respuesta sin JSON se convierte en un mensaje estable para el docente.
     }
-    throw new ApiResponseError(response.status, body.message ?? 'La operación no pudo completarse.')
+    throw new ApiResponseError(response.status, body.message ?? 'La operación no pudo completarse.', body)
   }
   if (response.status === 204) return undefined as T
   return response.json() as Promise<T>

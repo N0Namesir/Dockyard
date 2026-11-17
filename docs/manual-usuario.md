@@ -69,7 +69,8 @@ Sin internet simplemente no aparece el aviso. Para que Dockyard no consulte vers
 
 | Mensaje | Qué pasa | Qué hacer |
 |---|---|---|
-| El puerto 8081 ya está en uso por el contenedor … | Otro proyecto encendido usa el mismo puerto | Apaga el otro proyecto y vuelve a intentar, o pide al equipo que cambie el puerto en su compose |
+| El puerto 8081 ya lo usa el proyecto … | Otro proyecto registrado y encendido usa el mismo puerto | Pulsa **Apagar … y encender este**: Dockyard pide confirmar, apaga el otro sin borrar nada y enciende este. O pide al equipo que cambie el puerto en su compose |
+| El puerto 8081 ya está en uso por el contenedor … | Algo que no está en Dockyard usa ese puerto | Apágalo fuera de Dockyard, o pide al equipo que cambie el puerto en su compose |
 | El nombre de contenedor … ya lo usa … | Dos proyectos fijan el mismo `container_name` en su compose | Pide al equipo que lo quite de su compose |
 | El nombre … ya lo usa otro proyecto de Docker | Hay contenedores con ese nombre fuera de Dockyard | Usa otro nombre al registrar |
 | Dockyard solo acepta peticiones desde su propia página | Se intentó usar desde otra página o dirección | Abre http://localhost:4300 en esta PC |

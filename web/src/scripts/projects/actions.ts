@@ -1,6 +1,7 @@
-// Acciones sobre un proyecto: encender o apagar, actualizar y eliminar. La API decide el
+// Acciones sobre un proyecto: encender o apagar, apagar el que choca, actualizar y eliminar. La API decide el
 // resultado; aquí solo se marca qué está en curso y se muestra la respuesta.
 import { ApiResponseError, messageOf, requestWithRetries } from './api.ts'
+import { confirmAction } from './confirm-dialog.ts'
 import { showGlobalMessage } from './dom.ts'
 import { confirmRemoval } from './remove-dialog.ts'
 import { replaceProject, state } from './state.ts'
@@ -12,11 +13,15 @@ async function runAction(project: Project, action: ProjectAction, work: () => Pr
   if (state.pendingActions.has(project.id)) return
   state.pendingActions.set(project.id, action)
   state.actionErrors.delete(project.id)
+  state.actionConflicts.delete(project.id)
   render()
   try {
     await work()
   } catch (error) {
     state.actionErrors.set(project.id, messageOf(error, fallback))
+    if (action === 'start' && error instanceof ApiResponseError && error.body.conflict) {
+      state.actionConflicts.set(project.id, error.body.conflict)
+    }
     if (action === 'start' || action === 'stop') {
       // Una respuesta de error no trae el proyecto: sin esto seguiría figurando como encendiéndose.
       state.projects = state.projects.map((item) => item.id === project.id ? { ...item, progress: null } : item)
@@ -31,6 +36,35 @@ export async function changeState(project: Project): Promise<void> {
   const action = project.state === 'running' ? 'stop' : 'start'
   await runAction(project, action, async () => {
     replaceProject(await requestWithRetries<Project>(`/api/projects/${project.id}/${action}`, 'POST'))
+  }, 'No se pudo cambiar el estado.')
+}
+
+/**
+ * Otro proyecto registrado ocupa un puerto de este: lo apaga, sin borrar nada, y enciende este.
+ * Si aún choca con un tercero, la fila vuelve a ofrecer lo mismo con ese.
+ */
+export async function replaceConflicting(project: Project): Promise<void> {
+  const conflict = state.actionConflicts.get(project.id)
+  if (!conflict || state.pendingActions.has(project.id) || state.pendingActions.has(conflict.id)) return
+  const confirmed = await confirmAction({
+    title: `¿Apagar ${conflict.name} y encender ${project.name}?`,
+    text: `${conflict.name} usa el puerto ${conflict.port}, que ${project.name} también necesita. Apagarlo no borra nada: se puede volver a encender cuando ${project.name} esté apagado.`,
+    confirmLabel: 'Apagar y encender',
+  })
+  if (!confirmed) return
+  await runAction(project, 'start', async () => {
+    state.pendingActions.set(conflict.id, 'stop')
+    state.actionErrors.delete(conflict.id)
+    render()
+    try {
+      replaceProject(await requestWithRetries<Project>(`/api/projects/${conflict.id}/stop`, 'POST'))
+    } catch (error) {
+      throw new Error(`No se pudo apagar ${conflict.name}: ${messageOf(error, 'error desconocido.')}`)
+    } finally {
+      state.pendingActions.delete(conflict.id)
+    }
+    render()
+    replaceProject(await requestWithRetries<Project>(`/api/projects/${project.id}/start`, 'POST'))
   }, 'No se pudo cambiar el estado.')
 }
 

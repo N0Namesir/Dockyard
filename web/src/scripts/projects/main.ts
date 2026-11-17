@@ -1,7 +1,8 @@
 // Punto de entrada de la página de proyectos: conecta los módulos y programa los refrescos.
 // Para agregar un botón a la fila: la acción va en actions.ts, el botón en rows/project-row.ts y
 // la conexión en RowHandlers (types.ts) y aquí.
-import { changeState, removeProject, updateProject } from './actions.ts'
+import { changeState, removeProject, replaceConflicting, updateProject } from './actions.ts'
+import { setupConfirmDialog } from './confirm-dialog.ts'
 import { page } from './dom.ts'
 import { loadProjects } from './list.ts'
 import { loadLogs, pollLogs, toggleLogs } from './logs.ts'
@@ -24,10 +25,12 @@ setRowHandlers({
   changeState: (project) => void changeState(project),
   updateProject: (project) => void updateProject(project),
   removeProject: (project) => void removeProject(project),
+  replaceConflicting: (project) => void replaceConflicting(project),
   toggleLogs: (project) => void toggleLogs(project),
   loadLogs: (project) => void loadLogs(project),
 })
 setupRemoveDialog()
+setupConfirmDialog()
 setupRegisterForm()
 
 let searchTimer: ReturnType<typeof setTimeout> | undefined

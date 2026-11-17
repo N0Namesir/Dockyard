@@ -72,7 +72,7 @@ updateProject(name: string): Promise<ProjectUpdate>                             
 - Todos los comandos de compose usan el prefijo `docker compose -p <nombre> --project-directory <dir> -f <dir>/<archivo>`. `getProjectStatus` usa solo `-p`. `getProjectStatuses` usa `docker ps -a` filtrado por la etiqueta de compose y llega al mismo estado; la lista de la API lo usa para no lanzar un proceso por proyecto.
 - El compose se busca en este orden: `compose.yaml`, `compose.yml`, `docker-compose.yaml`, `docker-compose.yml`, primero en la raíz y luego en una única subcarpeta.
 - Apagar es `stop`, no `down`.
-- Los choques de puertos y de `container_name` se detectan antes de `up -d` (con `config --format json` contra `docker ps`) y se avisan. Los puertos y el compose nunca se reescriben.
+- Los choques de puertos y de `container_name` se detectan antes de `up -d` (con `config --format json` contra `docker ps`) y se avisan. Los puertos y el compose nunca se reescriben. Un choque de puertos se lanza como `PortConflictError` (`port`, `container`, `project`); si `project` es otro proyecto registrado, la API responde 409 con `conflict: { id, name, port }` y la interfaz ofrece apagarlo y encender este, con confirmación de un clic. Nunca se ofrece apagar algo que Dockyard no registró.
 - `prepareProject` rechaza un nombre que ya usan contenedores de otro proyecto de compose de la PC.
 - `prepareProject` rechaza, antes de extraerlo, un ZIP con rutas que salen de su carpeta, con más de 100 000 archivos o que ocuparía más de 3 GB.
 - `reviewProject` solo lee: nada del proyecto se ejecuta. Sus avisos dicen dónde está el problema y nunca incluyen el valor de una clave. No impiden encender. La API los guarda al registrar y la interfaz solo los muestra.
@@ -110,7 +110,7 @@ Se usa `node:test`, sin dependencias. `api/test/projects.test.ts` cubre las ruta
 ## Convenciones
 
 - Código, mensajes de error y documentación en español.
-- Las acciones destructivas llevan doble verificación en la interfaz: el docente escribe el nombre exacto del proyecto para habilitar el botón.
+- Las acciones destructivas llevan doble verificación en la interfaz: el docente escribe el nombre exacto del proyecto para habilitar el botón. Las que se pueden deshacer, como apagar otro proyecto, piden una confirmación de un clic (`confirm-dialog.ts`).
 - Colores de la interfaz: usa los tokens `marca-*` de `web/src/styles/global.css`, no valores sueltos. El ámbar no se usa como texto sobre fondo claro; para eso está `marca-texto`.
 - `docs/privacidad.md` promete que Dockyard no recolecta datos. No agregues analítica, telemetría, cookies ni recursos de otros sitios (las fuentes van empaquetadas), y si cambia lo que se guarda, actualiza ese documento.
 - Flujo de git: una rama por persona y cambios pequeños. La rama principal es `main`.

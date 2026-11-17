@@ -472,6 +472,55 @@ test('devuelve 404 y conserva el mensaje de una falla del núcleo', async () => 
   await app.close()
 })
 
+function portConflict(port: number, project: string | null): Error {
+  return Object.assign(new Error(`El puerto ${port} ya está en uso por el contenedor ${project ?? 'suelto'}-web-1. Apaga ese proyecto o cambia el puerto en el compose.`), {
+    name: 'PortConflictError',
+    port,
+    container: `${project ?? 'suelto'}-web-1`,
+    project,
+  })
+}
+
+test('un choque de puertos con otro proyecto registrado responde 409 con ese proyecto', async () => {
+  const fake = fakeCore()
+  const app = await testApp({
+    ...fake.core,
+    async startProject(_dir, name) {
+      if (name === 'nuevo') throw portConflict(8081, 'viejo')
+      return { state: 'running', ports: [8081] }
+    },
+  })
+  for (const name of ['Viejo', 'Nuevo']) {
+    await app.inject({ method: 'POST', url: '/api/projects', payload: { team: 'E', name, repoUrl: `https://github.com/e/${name}` } })
+  }
+
+  const failed = await app.inject({ method: 'POST', url: '/api/projects/2/start' })
+  assert.equal(failed.statusCode, 409)
+  assert.deepEqual(failed.json(), {
+    message: 'El puerto 8081 ya lo usa el proyecto viejo, que está encendido. Apágalo o pide al equipo que cambie el puerto en el compose.',
+    conflict: { id: 1, name: 'viejo', port: 8081 },
+  })
+  await app.close()
+})
+
+test('un choque con algo que Dockyard no registró conserva el mensaje del núcleo', async () => {
+  const fake = fakeCore()
+  for (const project of [null, 'ajeno']) {
+    const app = await testApp({
+      ...fake.core,
+      async startProject() {
+        throw portConflict(8081, project)
+      },
+    })
+    await app.inject({ method: 'POST', url: '/api/projects', payload: { team: 'E', name: 'Nuevo', repoUrl: 'https://github.com/e/nuevo' } })
+    const failed = await app.inject({ method: 'POST', url: '/api/projects/1/start' })
+    assert.equal(failed.statusCode, 500)
+    assert.deepEqual(Object.keys(failed.json()), ['message'])
+    assert.match(failed.json().message, /^El puerto 8081 ya está en uso por el contenedor/)
+    await app.close()
+  }
+})
+
 test('una petición repetida se une a la operación en curso', async () => {
   const fake = fakeCore()
   let calls = 0

@@ -55,7 +55,7 @@ navegador ──► web (Astro) ──► api (Fastify + SQLite) ──► core 
 | `table.ts` | Dibuja la tabla a partir del estado |
 | `rows/` | Una fila por archivo: proyecto, avance del encendido, avisos y registro |
 | `list.ts`, `progress.ts`, `logs.ts`, `resources.ts`, `version.ts` | Cargar la lista y consultar cada cierto tiempo el avance, el registro, el consumo y la versión |
-| `actions.ts`, `remove-dialog.ts`, `register-form.ts` | Encender, apagar, actualizar y eliminar; confirmación con el nombre; formulario de registro |
+| `actions.ts`, `remove-dialog.ts`, `confirm-dialog.ts`, `register-form.ts` | Encender, apagar, apagar el que choca, actualizar y eliminar; confirmación con el nombre para eliminar y de un clic para lo que se puede deshacer; formulario de registro |
 | `main.ts` | Conecta las acciones con la tabla, el buscador y los intervalos de refresco |
 
 Para agregar un botón a la fila: la acción va en `actions.ts`, el botón en `rows/project-row.ts`, y se conectan en `RowHandlers` y en `main.ts`. Como es TypeScript normal, `npm run typecheck` revisa también este código, cosa que no hacía mientras estaba dentro del `.astro`. Las clases de Tailwind escritas aquí se generan igual que las del `.astro`.
@@ -111,7 +111,8 @@ No crees etiquetas a mano: sin el cambio en `package.json`, una instalación al 
 
 ## Cómo funcionan la API y la interfaz
 
-- **Rutas:** las cinco de `/api/projects` responden JSON. Toda falla responde solo `{ "message": "…" }`: 400 por datos inválidos, 404 si no existe, 409 si el nombre se repite y 500 con el mensaje del núcleo.
+- **Rutas:** las de `/api/projects` responden JSON. Toda falla responde `{ "message": "…" }`: 400 por datos inválidos, 404 si no existe, 409 si el nombre se repite o choca un puerto con otro proyecto registrado, y 500 con el mensaje del núcleo.
+- **Choque de puertos al encender:** `startProject` lanza `PortConflictError` con el puerto, el contenedor y su proyecto de compose. Si ese proyecto está registrado en Dockyard, la API responde 409 con `conflict: { id, name, port }` y la interfaz ofrece **Apagar … y encender este**, con confirmación: llama a la ruta de apagar del otro y luego a la de encender. Si lo que ocupa el puerto no está registrado, como Dockyard mismo u otro contenedor de la PC, se responde el mensaje del núcleo sin `conflict`: nunca se ofrece apagar algo ajeno.
 - **El manejador de errores va antes de registrar las rutas** (`api/src/app.ts`). Un plugin hereda el manejador que existe al registrarse; si se define después, Fastify usa el suyo sin avisar.
 - **Protección contra otras páginas:** el puerto local no basta, porque una página abierta en el navegador del docente también llega a `localhost`, incluidos los proyectos de estudiantes en otros puertos. Por eso `isAllowedRequest` (`api/src/app.ts`) exige un `Host` local y un `Origin` igual a `Host`, y responde 403 si no. Las peticiones sin `Origin`, como las de `curl`, se aceptan.
 - **Enlaces:** `urls` trae uno por puerto. `url`, el del botón **Abrir**, es el primero que no sea de un servicio conocido que no es una página (como 3306 o 5432); si todos lo son, usa el primero. Es una suposición: por eso la columna **Puertos** enlaza todos.
@@ -151,7 +152,7 @@ type ProjectSource = { type: 'git'; url: string } | { type: 'zip'; filePath: str
 |---|---|---|
 | `normalizeProjectName` | Convierte un nombre libre en uno válido para compose (`Álvarez & Co.` → `alvarez-co`) | Nunca; si no queda nada devuelve `proyecto` |
 | `prepareProject` | Crea `projects/<nombre>`, obtiene el código, copia `.env.example` a `.env` y devuelve la carpeta del compose | La carpeta ya existe, la URL no es `https://`, el clonado o la descompresión fallan, o no hay compose |
-| `startProject` | Revisa choques de puertos y ejecuta `up -d` | Un puerto está en uso, Docker no responde, el compose falla o los contenedores se caen al arrancar |
+| `startProject` | Revisa choques de puertos y ejecuta `up -d` | Un puerto está en uso (`PortConflictError`, con `port`, `container` y `project`), Docker no responde, el compose falla o los contenedores se caen al arrancar |
 | `stopProject` | Ejecuta `stop` | Docker no responde |
 | `getProjectStatus` | Lee `ps --format json` | Docker no responde |
 | `getProjectStatuses` | Lee `docker ps -a` una sola vez y agrupa por proyecto de compose. Un proyecto sin contenedores no aparece: está apagado | Docker no responde |

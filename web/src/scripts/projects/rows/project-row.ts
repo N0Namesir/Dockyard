@@ -138,6 +138,17 @@ function actionsCell(project: Project, handlers: RowHandlers): HTMLTableCellElem
   if (error) {
     stack.append(element('p', 'max-w-md whitespace-pre-wrap break-words text-left text-xs text-red-700', error))
   }
+  const conflict = state.actionConflicts.get(project.id)
+  if (conflict && !isPending && project.state !== 'running') {
+    const replace = element(
+      'button',
+      'rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 hover:border-marca-tinta hover:text-marca-texto',
+      `Apagar ${conflict.name} y encender este`,
+    )
+    replace.type = 'button'
+    replace.addEventListener('click', () => handlers.replaceConflicting(project))
+    stack.append(replace)
+  }
   const cell = element('td', 'px-5 py-4')
   cell.append(stack)
   return cell

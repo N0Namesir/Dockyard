@@ -1,6 +1,6 @@
 // Estado de la página. Es una copia de lo que respondió la API más lo que el docente tiene
 // abierto; la fuente de verdad sigue siendo la API.
-import type { Project, ProjectAction, Resources } from './types.ts'
+import type { PortConflict, Project, ProjectAction, Resources } from './types.ts'
 
 export const state = {
   projects: [] as Project[],
@@ -11,6 +11,8 @@ export const state = {
   pendingActions: new Map<number, ProjectAction>(),
   /** Error de la última acción, por proyecto. */
   actionErrors: new Map<number, string>(),
+  /** Proyecto que no dejó encender a otro por un puerto: la fila ofrece apagarlo. */
+  actionConflicts: new Map<number, PortConflict>(),
   /** Registros abiertos por proyecto; null mientras se cargan. */
   openLogs: new Map<number, string | null>(),
   /** Registros que el docente subió a leer, con su posición: el texto nuevo no debe moverlos. */

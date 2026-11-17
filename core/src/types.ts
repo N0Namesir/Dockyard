@@ -65,3 +65,21 @@ export interface PreparedProject {
   /** Nombre normalizado, válido para docker compose. */
   name: string
 }
+
+/**
+ * Un puerto fijo del proyecto ya lo publica otro contenedor. `project` es su proyecto de compose,
+ * o null si no es de compose: con él, la API puede ofrecer apagar ese proyecto y encender este.
+ */
+export class PortConflictError extends Error {
+  override readonly name = 'PortConflictError'
+  readonly port: number
+  readonly container: string
+  readonly project: string | null
+
+  constructor(port: number, container: string, project: string | null) {
+    super(`El puerto ${port} ya está en uso por el contenedor ${container}. Apaga ese proyecto o cambia el puerto en el compose.`)
+    this.port = port
+    this.container = container
+    this.project = project
+  }
+}
