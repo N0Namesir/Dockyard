@@ -6,9 +6,9 @@ dist/
 .astro/
 *.tsbuildinfo
 
-# Datos de ejecución (proyectos registrados y base SQLite)
-projects/
-data/
+# Datos de ejecución (proyectos registrados y base SQLite). Solo en la raíz: hay carpetas de código con esos nombres
+/projects/
+/data/
 
 # Variables de entorno
 .env

@@ -33,13 +33,32 @@ navegador ──► web (Astro) ──► api (Fastify + SQLite) ──► core 
 | `api/src/db/projects.ts` | Esquema de SQLite, consultas y búsqueda |
 | `api/src/app.ts`, `api/src/server.ts` | Arma Fastify y sirve `web/dist` en el mismo puerto; arranca el servidor |
 | `api/test/` | Pruebas de las rutas con un núcleo simulado |
-| `web/src/pages/index.astro` | Página principal: lista, búsqueda, registro y botones, sin otro framework |
+| `web/src/pages/index.astro` | Página principal: solo el HTML fijo (tabla, formulario y diálogo). Carga `src/scripts/projects/main.ts` |
+| `web/src/scripts/projects/` | Lógica de la página en TypeScript, sin otro framework. Un módulo por tarea (ver abajo) |
 | `web/src/pages/docs/`, `web/src/lib/docs.ts` | Sección de documentación: publica `docs/*.md` en `/docs` al compilar |
 | `web/public/` | Logo (`favicon.svg`), iconos generados a partir de él y emblema de la especialidad (`marca/`, fuera de la licencia MIT) |
 | `web/src/styles/global.css` | Colores y fuentes de la identidad de DS3, en el bloque `@theme` |
 | `ejemplos/` | Cuatro proyectos de prueba y el generador de ZIP de prueba |
 | `projects/` | Código de los proyectos registrados (no se sube a git) |
 | `data/` | Base de datos SQLite (no se sube a git) |
+
+### Módulos de la interfaz
+
+`web/src/scripts/projects/` separa la página en módulos pequeños. Las dependencias van en una sola dirección, sin ciclos: los de la base no importan nada propio, las filas no conocen las acciones y solo `main.ts` conecta todo.
+
+| Módulo | Qué hace |
+|---|---|
+| `types.ts` | Forma de las respuestas de la API y `RowHandlers`, las acciones que reciben las filas |
+| `api.ts` | Única puerta hacia la API: errores con mensaje para el docente y reintentos cuando Firefox corta la petición |
+| `dom.ts`, `format.ts` | Crear elementos, elementos fijos de la página, mensaje general y textos de CPU, memoria y tiempo |
+| `state.ts` | Copia de la lista y lo que el docente tiene abierto (registros, avisos, acciones en curso). La API sigue siendo la fuente de verdad |
+| `table.ts` | Dibuja la tabla a partir del estado |
+| `rows/` | Una fila por archivo: proyecto, avance del encendido, avisos y registro |
+| `list.ts`, `progress.ts`, `logs.ts`, `resources.ts`, `version.ts` | Cargar la lista y consultar cada cierto tiempo el avance, el registro, el consumo y la versión |
+| `actions.ts`, `remove-dialog.ts`, `register-form.ts` | Encender, apagar, actualizar y eliminar; confirmación con el nombre; formulario de registro |
+| `main.ts` | Conecta las acciones con la tabla, el buscador y los intervalos de refresco |
+
+Para agregar un botón a la fila: la acción va en `actions.ts`, el botón en `rows/project-row.ts`, y se conectan en `RowHandlers` y en `main.ts`. Como es TypeScript normal, `npm run typecheck` revisa también este código, cosa que no hacía mientras estaba dentro del `.astro`. Las clases de Tailwind escritas aquí se generan igual que las del `.astro`.
 
 ## Arrancar en desarrollo
 

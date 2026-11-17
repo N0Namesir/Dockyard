@@ -1,0 +1,52 @@
+// Punto de entrada de la página de proyectos: conecta los módulos y programa los refrescos.
+// Para agregar un botón a la fila: la acción va en actions.ts, el botón en rows/project-row.ts y
+// la conexión en RowHandlers (types.ts) y aquí.
+import { changeState, removeProject, updateProject } from './actions.ts'
+import { page } from './dom.ts'
+import { loadProjects } from './list.ts'
+import { loadLogs, pollLogs, toggleLogs } from './logs.ts'
+import { pollProgress } from './progress.ts'
+import { setupRegisterForm } from './register-form.ts'
+import { setupRemoveDialog } from './remove-dialog.ts'
+import { pollResources } from './resources.ts'
+import { state } from './state.ts'
+import { render, setRowHandlers } from './table.ts'
+import { pollVersion } from './version.ts'
+
+const REFRESH_INTERVAL_MS = 15_000
+const PROGRESS_INTERVAL_MS = 2_000
+const LOGS_INTERVAL_MS = 3_000
+const RESOURCES_INTERVAL_MS = 10_000
+const VERSION_INTERVAL_MS = 60 * 60 * 1000
+const SEARCH_DELAY_MS = 300
+
+setRowHandlers({
+  changeState: (project) => void changeState(project),
+  updateProject: (project) => void updateProject(project),
+  removeProject: (project) => void removeProject(project),
+  toggleLogs: (project) => void toggleLogs(project),
+  loadLogs: (project) => void loadLogs(project),
+})
+setupRemoveDialog()
+setupRegisterForm()
+
+let searchTimer: ReturnType<typeof setTimeout> | undefined
+page.searchInput.addEventListener('input', () => {
+  if (searchTimer) clearTimeout(searchTimer)
+  searchTimer = setTimeout(() => void loadProjects(), SEARCH_DELAY_MS)
+})
+
+// Mantiene al día el estado de los proyectos, por ejemplo si uno se cae solo.
+function refresh(): void {
+  if (!document.hidden && !state.loading) void loadProjects(true)
+}
+setInterval(refresh, REFRESH_INTERVAL_MS)
+setInterval(() => void pollProgress(), PROGRESS_INTERVAL_MS)
+setInterval(() => void pollLogs(), LOGS_INTERVAL_MS)
+setInterval(() => void pollResources(), RESOURCES_INTERVAL_MS)
+setInterval(() => void pollVersion(), VERSION_INTERVAL_MS)
+document.addEventListener('visibilitychange', refresh)
+
+render()
+void loadProjects().then(() => pollResources())
+void pollVersion()
