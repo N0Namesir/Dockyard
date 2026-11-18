@@ -14,6 +14,7 @@ Esta política cubre a Dockyard, no a los proyectos alojados en ella.
 | Avisos de la revisión al registrar, con nombres de archivos y de variables, nunca sus valores | Base de datos en `data/` | Hasta eliminar el proyecto |
 | Notas que escribas sobre el proyecto | Base de datos en `data/` | Hasta borrarlas o eliminar el proyecto |
 | Si dejaste el proyecto encendido, para volver a encenderlo al reiniciar la PC | Base de datos en `data/` | Hasta eliminar el proyecto |
+| Página de ayuda cuando Dockyard no responde y sus dos imágenes | Caché del navegador, solo en esta PC | Hasta borrar los datos del sitio o sustituir esa versión de la caché |
 | Código del proyecto | Carpeta `projects/` | Hasta eliminar el proyecto |
 | ZIP subido | Carpeta temporal | Se borra al terminar de prepararlo |
 | Peticiones a la herramienta, con la ruta pedida y la dirección IP de origen | Registro del contenedor de Dockyard | Hasta que se recrea el contenedor |
@@ -41,6 +42,7 @@ Cada proyecto es un programa independiente. Puede pedir datos, guardarlos o cone
 ## Cómo borrar los datos
 
 - **Un proyecto:** usa Eliminar en la interfaz. Borra su registro, su código, sus contenedores y sus volúmenes.
+- **Acceso instalado y caché de ayuda:** desinstala Dockyard desde el navegador y borra los datos del sitio de su dirección local. Esto no borra los proyectos de Docker ni la base de datos.
 - **Todo Dockyard:** elimina primero los proyectos, ejecuta `docker compose down` en la carpeta de Dockyard y borra esa carpeta, con `data/` y `projects/`.
 
 ## Contacto

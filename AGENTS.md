@@ -115,6 +115,13 @@ Al arrancar, `server.ts` llama a `service.resume()`: vuelve a encender los proye
 - En desarrollo no se usa el contenedor: `npm run dev` contra el Docker local. Requiere `docker`, `docker compose`, `git` y `unzip`.
 - Plan B: correr con Node y PM2 directamente en la PC.
 
+## PWA
+
+- `web/public/manifest.webmanifest` permite instalar desde el origen local, sin fijar puerto. El acceso no inicia Docker.
+- `web/public/sw.js` solo guarda la página de ayuda y sus imágenes; nunca cachea `/api`, la interfaz ni mutaciones. Incrementa su versión de caché al cambiar esos recursos.
+- `web/src/scripts/pwa.ts` registra el worker solo en producción. La instalación siempre requiere un clic, con ayuda si el navegador no ofrece la solicitud.
+- `npm run test:ui -w web` cubre interfaz y PWA con Chromium; nunca toca proyectos reales.
+
 ## Pruebas
 
 Se usa `node:test`, sin dependencias. `api/test/projects.test.ts` cubre las rutas con un núcleo simulado. `core/test/unit.test.ts` cubre las funciones puras; `core/test/docker.test.ts` cubre los criterios de terminado de la ficha con Docker real, usando un `PROJECTS_DIR` temporal y nombres `dockyard-test-*` que elimina al terminar (`down -v`). Los proyectos de prueba están en `ejemplos/`: `prueba-estatico` (8081, monta `./html` con ruta relativa), `prueba-bd` (8082, con `.env.example`), `prueba-build` (8083) y `prueba-conflicto` (8081, para el choque de puertos).

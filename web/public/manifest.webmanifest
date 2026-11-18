@@ -1,0 +1,32 @@
+{
+  "id": "/",
+  "name": "Dockyard · Proyectos del aula",
+  "short_name": "Dockyard",
+  "description": "Administra los proyectos del aula desde esta PC.",
+  "lang": "es",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f5f6f7",
+  "theme_color": "#171717",
+  "icons": [
+    {
+      "src": "/icons/dockyard-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/dockyard-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/dockyard-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

@@ -233,7 +233,7 @@ Esta entrega no las incluye. Mientras tanto, el docente registra solo proyectos 
 
 ## Pruebas de interfaz
 
-`web/test/ui.test.mjs` usa Chromium con Playwright, sirve solo el frontend compilado e intercepta todas las rutas de la API. No usa Docker ni modifica proyectos reales. CI también ejecuta estas pruebas después de compilar.
+`web/test/*.test.mjs` usa Chromium con Playwright, sirve solo el frontend compilado e intercepta todas las rutas de la API. No usa Docker ni modifica proyectos reales. CI también ejecuta estas pruebas después de compilar.
 
 ```bash
 npx playwright install chromium  # una vez, después de npm install
@@ -243,3 +243,15 @@ npm run test:ui -w web
 Cubre registro por ZIP y GitHub, registro continuo, recuperación de errores, búsqueda, teclado, foco tras refrescos, cierre de diálogos, confirmación de eliminación y anchos de 320 a 1440 px. Para guardar capturas, define `UI_SCREENSHOTS` con una carpeta existente.
 
 El registro se abre con `register-panel.ts`. `dialog-focus.ts` recupera el botón lógico al cerrar un diálogo aunque el refresco haya reemplazado la fila. `table.ts` conserva foco y desplegables por identidad, y las acciones secundarias usan un `details` nativo.
+
+## Aplicación instalable (PWA)
+
+`web/public/manifest.webmanifest` usa identidad, inicio y alcance relativos a la raíz del origen, sin fijar el puerto; abre en modo `standalone`. Los iconos PNG de 192 y 512 px y el icono maskable se derivan del favicon existente. El logo de Software se conserva en la interfaz y en la ayuda de conexión.
+
+`InstallApp.astro` y `scripts/pwa.ts` ofrecen la instalación únicamente al pulsar el botón. Si no hay `beforeinstallprompt`, muestran instrucciones; en modo standalone se oculta el botón. El service worker se registra solo en producción y no fuerza recargas.
+
+`public/sw.js` busca siempre la navegación en la red; si el servicio no responde o devuelve un error 5xx, muestra `offline.html`. Solo precarga esa página y sus imágenes. No cachea HTML del aula, paquetes JS/CSS ni respuestas de `/api`; no intercepta mutaciones ni otros orígenes o puertos. No hay sincronización de acciones en segundo plano. Cambia `dockyard-offline-v1` cuando modifiques la página de ayuda o sus imágenes. La activación limpia únicamente versiones anteriores de esa caché.
+
+El worker usa `skipWaiting` y `clients.claim` porque no mantiene una versión de la interfaz: no hay paquetes antiguos que mezclar. `updateViaCache: none` permite consultar actualizaciones del worker sin reutilizar la caché HTTP. La PWA funciona en el origen local confiable (`localhost` o `127.0.0.1`), sin abrir la herramienta a la red. El navegador administra la instalación en el sistema; no levanta Docker.
+
+Las pruebas PWA comprueban el manifiesto con el protocolo de Chromium, las dimensiones de los iconos, caída y recuperación del servicio, uso sin conexión, cancelación/aceptación de la solicitud y limpieza de cachés antiguas. La instalación real en el menú del sistema la confirma el docente desde su navegador; las pruebas no instalan aplicaciones en el equipo.

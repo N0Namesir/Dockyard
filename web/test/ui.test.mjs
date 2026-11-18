@@ -15,7 +15,7 @@ before(async () => {
       const path = resolve(root, '.' + new URL(req.url, 'http://localhost').pathname.replace(/\/$/, '/index.html'))
       if (!path.startsWith(root + '/')) { res.writeHead(403).end(); return }
       const data = await readFile(path)
-      res.setHeader('Content-Type', ({'.html':'text/html','.js':'text/javascript','.css':'text/css','.svg':'image/svg+xml','.png':'image/png','.woff2':'font/woff2','.webp':'image/webp'})[extname(path)] ?? 'application/octet-stream')
+      res.setHeader('Content-Type', ({'.webmanifest':'application/manifest+json','.html':'text/html','.js':'text/javascript','.css':'text/css','.svg':'image/svg+xml','.png':'image/png','.woff2':'font/woff2','.webp':'image/webp'})[extname(path)] ?? 'application/octet-stream')
       res.end(data)
     } catch { res.writeHead(404).end() }
   })

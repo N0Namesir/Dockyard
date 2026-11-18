@@ -22,7 +22,7 @@ jobs:
       - name: Preparar Chromium
         run: npx playwright install --with-deps chromium
       - name: Pruebas de interfaz
-        run: node --test web/test/ui.test.mjs
+        run: node --test web/test/*.test.mjs
       - name: Pruebas con Docker real
         run: npm run test:docker -w core
       - name: Construir la imagen de la herramienta

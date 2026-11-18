@@ -407,3 +407,25 @@ body:has(dialog[open]) {
   background: white;
   color: var(--color-marca-acento);
 }
+
+.install-app-button {
+  display: inline-flex;
+  align-items: center;
+  gap: .5rem;
+  min-height: 44px;
+  padding: .5rem .75rem;
+  border: 1px solid var(--color-marca);
+  border-radius: .5rem;
+  color: var(--color-marca);
+  font-size: .875rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.install-app-button[hidden] { display: none; }
+.install-app-button:hover { background: rgb(255 255 255 / .1); }
+.install-app-button:disabled { opacity: .6; cursor: wait; }
+@media (display-mode: standalone) { .install-app-button { display: none; } }
+
+.sitio-cabecera dialog :focus-visible {
+  outline-color: var(--color-marca-acento);
+}

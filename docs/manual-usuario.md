@@ -12,6 +12,20 @@ Si la página no carga, abre una terminal en la carpeta de Dockyard y ejecuta `.
 
 Al reiniciar la PC, Dockyard vuelve solo y enciende de nuevo los proyectos que dejaste encendidos. Los que apagaste desde Dockyard siguen apagados. Mientras se encienden, la lista muestra su avance. Si alguno no logra encender, queda apagado: al presionar **Encender** verás la causa.
 
+## Instalar el acceso en el escritorio
+
+1. Abre la dirección local de Dockyard en **Chrome o Edge**, en la PC del docente (por defecto `http://localhost:4300`).
+2. Pulsa **Instalar app**, en la cabecera, y confirma en el navegador. Si el navegador todavía no ofrece la solicitud, el botón muestra cómo instalarlo desde su menú.
+3. Busca **Dockyard** en el menú de aplicaciones de Ubuntu y fíjalo a favoritos. Se abrirá en una ventana propia, sin tener que recordar la dirección.
+
+El navegador decide dónde crear los accesos; no siempre deja un icono directamente sobre el escritorio. Si ya lo instalaste, ábrelo desde el menú de aplicaciones. En navegadores sin instalación de PWA, puedes seguir usando Dockyard en una pestaña y guardar un marcador.
+
+**El icono no enciende Docker ni el servicio de Dockyard.** Ambos deben arrancar con la PC. Si el servicio no responde, el acceso muestra una pantalla de ayuda y **Volver a intentar**. Si continúa detenido, desde la carpeta donde se instaló Dockyard ejecuta `docker compose up -d`. Esto requiere que Docker ya esté disponible.
+
+Instala desde la dirección habitual, siempre en esta PC: `localhost` y `127.0.0.1` se consideran direcciones distintas. Si se cambia el puerto de Dockyard, desinstala el acceso anterior e instálalo desde la nueva dirección.
+
+La aplicación sigue necesitando el servicio local para consultar o cambiar proyectos. No guarda estados antiguos ni deja acciones pendientes para ejecutarlas después. Al actualizar Dockyard, cierra y vuelve a abrir su ventana para cargar la interfaz nueva.
+
 ## Registrar un proyecto
 
 Pulsa **+ Registrar proyecto** para abrir el panel lateral. Llena **Equipo** y **Nombre del proyecto**, elige el **Origen** y presiona **Registrar proyecto**. Cada proyecto se registra una vez. Dockyard ajusta el nombre a un formato válido: por ejemplo, `Tienda Equipo 3` queda como `tienda-equipo-3`.
