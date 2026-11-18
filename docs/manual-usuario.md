@@ -8,7 +8,7 @@ Dockyard te permite registrar los proyectos de tus estudiantes, encenderlos, ver
 
 Abre en el navegador http://localhost:4300. Dockyard arranca sola al encender la PC; no hace falta ejecutar nada. Por seguridad, solo funciona desde esa PC.
 
-Si la página no carga, abre una terminal en la carpeta de Dockyard y ejecuta `./install.sh`.
+Si la página no carga, abre una terminal en la carpeta de Dockyard y ejecuta `./update.sh`. Vuelve a levantar Dockyard, y si hay una versión nueva, la instala.
 
 Al reiniciar la PC, Dockyard vuelve solo, pero los proyectos quedan apagados y hay que encenderlos de nuevo. La excepción son los que declaran una política `restart` en su compose.
 
@@ -59,13 +59,14 @@ Se comprueba solo el puerto que usa **Abrir**.
 Cuando hay una versión nueva, aparece un aviso sobre la lista de proyectos. Solo avisa: Dockyard no cambia nada por su cuenta. Para instalarla, abre una terminal en la carpeta de Dockyard y ejecuta:
 
 ```bash
-git pull
-./install.sh
+./update.sh
 ```
 
-La página deja de responder mientras se reconstruye, unos minutos a lo sumo. Tus proyectos registrados y sus datos se conservan, y los que estén encendidos siguen encendidos.
+El script dice de qué versión a cuál pasaste. La página deja de responder mientras se reconstruye, unos minutos a lo sumo. Tus proyectos registrados y sus datos se conservan, y los que estén encendidos siguen encendidos. Si no hay internet, no cambia nada y Dockyard sigue con la versión que tenía.
 
-Sin internet simplemente no aparece el aviso. Para que Dockyard no consulte versiones nuevas, instala con `UPDATE_CHECK=off ./install.sh`.
+Usa siempre `./update.sh` para actualizar. `./install.sh` es solo para la primera instalación: si lo ejecutas en una PC donde Dockyard ya está, te indica que uses `./update.sh`. Ninguno de los dos se ejecuta con `sudo`.
+
+Sin internet simplemente no aparece el aviso. Para que Dockyard no consulte versiones nuevas, ejecuta `UPDATE_CHECK=off ./update.sh`; se recuerda en las siguientes actualizaciones.
 
 ## Problemas frecuentes
 
@@ -82,7 +83,8 @@ Sin internet simplemente no aparece el aviso. Para que Dockyard no consulte vers
 | No se encontró un archivo compose en la raíz del proyecto | El proyecto no cumple los requisitos | Pide al equipo que agregue su `compose.yaml` en la raíz |
 | No se pudo clonar el repositorio … | La URL está mal o el repositorio es privado | Revisa la URL o pide al equipo que haga público el repositorio |
 | Los contenedores se borraron, pero el proyecto dejó archivos sin permiso de borrado | El proyecto creó archivos como administrador | Ejecuta en una terminal el comando `sudo rm -rf …` que indica el mensaje y presiona **Eliminar** otra vez |
-| No se puede conectar con Dockyard | La herramienta no responde | Recarga la página; si sigue igual, ejecuta `./install.sh` en la carpeta de Dockyard |
+| No se puede conectar con Dockyard | La herramienta no responde | Recarga la página; si sigue igual, ejecuta `./update.sh` en la carpeta de Dockyard |
+| Hay archivos de Dockyard modificados en esta PC | Alguien cambió archivos de Dockyard, así que `update.sh` no actualiza para no perderlos | Guárdalos aparte con `git stash` y vuelve a ejecutar `./update.sh` |
 | No se pudo descomprimir el archivo | El ZIP está dañado o no es un ZIP | Pide al equipo que lo vuelva a generar |
 | La actualización pisaría un archivo que cambió en esta PC | El proyecto escribe en su propia carpeta y la versión nueva cambia ese archivo | Elimina el proyecto y regístralo de nuevo. Se borran sus datos |
 | Ya existe un proyecto con ese nombre | Ya registraste un proyecto con ese nombre, o quedó su carpeta | Usa otro nombre, por ejemplo agregando el número de equipo |

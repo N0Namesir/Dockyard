@@ -23,7 +23,8 @@ node --test --test-name-pattern="choque" core/test/docker.test.ts   # una sola p
 npm run try -w core -- ejemplos/prueba-estatico   # recorrido manual (url https, .zip o carpeta)
 npm version 1.1.0                             # publica una versión: prueba, crea commit y etiqueta, y los sube
 node ejemplos/crear-zips.ts                   # genera las variantes de ZIP en ejemplos/zips/
-./install.sh                                  # despliegue en contenedor
+./install.sh                                  # despliegue en contenedor, solo la primera vez
+./update.sh                                   # actualiza una instalación (git pull + reconstruir); también la vuelve a levantar
 ```
 
 Los `.ts` corren directamente con Node 24 (type stripping) y `tsc` (TypeScript 7) solo compila a `dist/`. Por eso los imports relativos llevan extensión `.ts` y no se usa sintaxis no borrable (`enum`, `namespace`, parámetros de propiedad); lo hacen cumplir `erasableSyntaxOnly` y `rewriteRelativeImportExtensions` en `tsconfig.base.json`. `@dockyard/core` exporta desde `core/dist/`, así que la API necesita `npm run build -w core` (o `npm run dev -w core`) antes de importarlo.
@@ -41,7 +42,7 @@ Monorepo con workspaces de npm (`core`, `api`, `web`) y un `tsconfig.base.json` 
 | `core/` | 1: núcleo Docker y fuentes | 0V3R | Solo ejecuta `git`, `unzip` y `docker compose`. Nunca HTTP, SQLite ni UI |
 | `api/` | 2: API y datos | 0V3R (de Isaac) | Fastify 5 + TypeBox + SQLite (`node:sqlite`, con `better-sqlite3` como respaldo). Orquesta llamando a `core/`, nunca ejecuta Docker ni git |
 | `web/` | 3: interfaz | 0V3R (de Isaac) | Astro + Tailwind. Solo habla con la API, sin lógica de estados ni puertos. Publica `docs/*.md` en `/docs` al compilar. La lógica de la página va en `web/src/scripts/projects/`, un módulo por tarea; los `.astro` solo llevan HTML |
-| `docs/`, `Dockerfile`, `docker-compose.yml`, `install.sh` | 4: infraestructura y documentación | 0V3R | No escribe lógica de otras áreas |
+| `docs/`, `Dockerfile`, `docker-compose.yml`, `install.sh`, `update.sh`, `scripts/` | 4: infraestructura y documentación | 0V3R | No escribe lógica de otras áreas |
 | `projects/`, `data/` | — | — | Datos de ejecución, en `.gitignore` |
 
 Respeta esas fronteras aunque el responsable sea el mismo: la API no ejecuta Docker y la interfaz no decide estados. Si cambias una firma del contrato, actualiza las dos partes y esta guía.
@@ -85,7 +86,7 @@ replaceProjectZip(name: string, filePath: string): Promise<ZipReplacement>     /
 - El núcleo traduce la salida de Docker a etapas (`core/src/progress.ts`). La API guarda el avance solo en memoria y la interfaz solo lo muestra. Si Docker cambia su formato, deja de cambiar la etapa, pero encender sigue funcionando.
 - El repositorio de un proyecto de GitHub vive en `projects/.repos/<nombre>`, nunca dentro de su carpeta: los contenedores suelen montarla y un hook o una configuración plantados en `.git` se ejecutarían al actualizar. Git se llama siempre con `--git-dir` y `--work-tree`.
 - `getResources` expresa la CPU sobre toda la PC, no por núcleo, y tarda unos 2 s porque Docker toma una muestra. Devuelve todos los proyectos de compose; la API deja solo los registrados y comparte la muestra 5 s.
-- `getLatestVersion` usa `git ls-remote --tags` e ignora las etiquetas que no sean `vX.Y.Z`. La API decide cuándo consultar (`api/src/services/version.ts`): como máximo cada 6 horas y solo si la piden, nunca al arrancar. `UPDATE_CHECK=off` la apaga e `install.sh` conserva ese valor.
+- `getLatestVersion` usa `git ls-remote --tags` e ignora las etiquetas que no sean `vX.Y.Z`. La API decide cuándo consultar (`api/src/services/version.ts`): como máximo cada 6 horas y solo si la piden, nunca al arrancar. `UPDATE_CHECK=off` la apaga y `update.sh` conserva ese valor.
 - `updateProject` no enciende nada y no pisa archivos cambiados en la PC. La API solo actualiza proyectos apagados, repite la revisión y hace que el siguiente encendido use `--build`.
 - `replaceProjectZip` abre y revisa el ZIP nuevo en `projects/.reemplazos/<nombre>/nuevo` y solo entonces cambia la carpeta con `rename`: si el ZIP no sirve, el proyecto queda como estaba. Borra la versión anterior con lo que el proyecto guardó en su carpeta; los volúmenes de Docker no se tocan. Si la anterior tiene archivos de root, la deja en `.reemplazos/<nombre>/anterior` y la devuelve en `leftover`. La API solo reemplaza proyectos de ZIP apagados, repite la revisión y hace que el siguiente encendido use `--build`. En la interfaz pide escribir el nombre, como eliminar.
 - `startProject`, `stopProject` y `getProjectStatus` rechazan nombres sin normalizar (`assertNormalizedName`).
@@ -101,7 +102,8 @@ replaceProjectZip(name: string, filePath: string): Promise<ZipReplacement>     /
 - **Regla crítica:** `projects/` se monta con la misma ruta dentro y fuera del contenedor (`${PROJECTS_DIR}:${PROJECTS_DIR}`). Si no, los bind mounts relativos de los proyectos se rompen.
 - **Seguridad:** la herramienta no tiene login y controla el Docker del anfitrión. Por eso se publica solo en `127.0.0.1` y la API rechaza con 403 los `Host` no locales y los `Origin` distintos de `Host` (`isAllowedRequest` en `api/src/app.ts`). Fuera del contenedor escucha en `127.0.0.1`; `HOST` lo cambia.
 - El puerto de la herramienta es poco común (por defecto `4300`, variable `TOOL_PORT`) para no chocar con 3000, 5173 u 8080.
-- `install.sh` genera `.env` (`PROJECTS_DIR`, `TOOL_PORT`, `UPDATE_CHECK`, `HOST_UID`, `HOST_GID`, `DOCKER_GID`) y ejecuta `docker compose up -d --build`. El contenedor corre con ese usuario y no como root.
+- `install.sh` (solo la primera vez: se niega si ya existe `.env`) y `update.sh` (todo lo demás) comparten `scripts/despliegue.sh`: generan `.env` (`PROJECTS_DIR`, `TOOL_PORT`, `UPDATE_CHECK`, `HOST_UID`, `HOST_GID`, `DOCKER_GID`) y ejecutan `docker compose up -d --build`. El contenedor corre con ese usuario y no como root; por eso los dos rechazan `sudo`.
+- `update.sh` exige una copia de git limpia en una rama que siga a GitHub, hace `git fetch` y `git merge --ff-only` (nunca mezcla) y luego se vuelve a ejecutar con `exec`, para que la reconstrucción la haga el `update.sh` de la versión descargada. Conserva `TOOL_PORT` y `UPDATE_CHECK` de `.env`.
 - En desarrollo no se usa el contenedor: `npm run dev` contra el Docker local. Requiere `docker`, `docker compose`, `git` y `unzip`.
 - Plan B: correr con Node y PM2 directamente en la PC.
 

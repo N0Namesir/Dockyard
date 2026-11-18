@@ -77,22 +77,27 @@ La API importa `@dockyard/core`, que apunta a `core/dist/`. Hay que compilar el 
 ## Desplegar en la PC del docente
 
 ```bash
-./install.sh
+./install.sh    # solo la primera vez
+./update.sh     # para actualizar, o si la página dejó de cargar
 ```
 
-El script comprueba Docker, crea `projects/` y `data/`, escribe `.env` y ejecuta `docker compose up -d --build`.
+Los dos comprueban Docker, crean `projects/` y `data/`, escriben `.env` y ejecutan `docker compose up -d --build`, con los pasos comunes en `scripts/despliegue.sh`. Se separaron para que el docente no dude cuál usar:
+
+- `install.sh` se niega a correr si ya existe `.env`, y remite a `update.sh`.
+- `update.sh` se niega si no existe `.env`, y remite a `install.sh`. Antes de tocar nada exige una copia de git sin archivos modificados, en una rama que siga a la de GitHub. Hace `git fetch` y `git merge --ff-only`: nunca mezcla, así que una copia con commits propios no se actualiza y lo dice. Después se vuelve a ejecutar con `exec`, porque la descarga pudo cambiar el propio `update.sh` y bash lee los scripts mientras los ejecuta; así la reconstrucción la hace el script de la versión descargada. Aunque no haya versión nueva, reconstruye y levanta: sirve también cuando la página no carga.
+- Los dos rechazan `sudo`, porque el contenedor corre con el usuario que ejecuta el script y quedaría como root.
 
 | Variable de `.env` | Uso |
 |---|---|
 | `PROJECTS_DIR` | Ruta absoluta de `projects/` en el anfitrión |
 | `TOOL_PORT` | Puerto de la herramienta, 4300 por defecto |
-| `UPDATE_CHECK` | `off` apaga la consulta de versiones nuevas; `on` por defecto. `install.sh` conserva el valor |
+| `UPDATE_CHECK` | `off` apaga la consulta de versiones nuevas; `on` por defecto. `update.sh` conserva el valor, igual que `TOOL_PORT` |
 
 Cómo funciona el contenedor:
 
 - La herramienta usa el Docker del anfitrión a través de `/var/run/docker.sock`. Los proyectos de estudiantes no corren dentro de ella: son contenedores hermanos, así que sus puertos se publican en la PC y `http://localhost:<puerto>` funciona desde el navegador.
 - **`projects/` se monta con la misma ruta dentro y fuera** (`${PROJECTS_DIR}:${PROJECTS_DIR}`). Cuando un proyecto monta una carpeta relativa (`./src:/app`), el Docker del anfitrión la resuelve con la ruta que ve la herramienta. Si las rutas difirieran, esos montajes apuntarían a un lugar que no existe.
-- El contenedor corre con el usuario que ejecutó `install.sh` (`HOST_UID`, `HOST_GID`) y con el grupo del socket (`DOCKER_GID`), así que `projects/` y `data/` quedan a su nombre. Los contenedores de un proyecto pueden crear archivos de root en sus propias carpetas montadas; esos se borran con `sudo`.
+- El contenedor corre con el usuario que ejecutó `install.sh` o `update.sh` (`HOST_UID`, `HOST_GID`) y con el grupo del socket (`DOCKER_GID`), así que `projects/` y `data/` quedan a su nombre. Los contenedores de un proyecto pueden crear archivos de root en sus propias carpetas montadas; esos se borran con `sudo`.
 - **Solo esta PC:** el puerto se publica en `127.0.0.1`, porque quien alcance la herramienta puede ejecutar cualquier compose con el Docker del anfitrión. Dentro del contenedor la API escucha en `0.0.0.0` (variable `HOST`); fuera, en `127.0.0.1`. Abrirla a la red exige agregar login antes.
 - `restart: unless-stopped` hace que la herramienta vuelva sola al reiniciar, siempre que el servicio de Docker arranque con el sistema (`sudo systemctl enable docker`).
 
@@ -127,7 +132,7 @@ No crees etiquetas a mano: sin el cambio en `package.json`, una instalación al 
 - **Avance del encendido:** `GET /api/projects/:id/progress` devuelve `{ progress }`, con la etapa, las últimas 8 líneas de Docker y los segundos transcurridos, o `null` si no se está encendiendo. También llega en el campo `progress` de cada proyecto, para que recargar la página no lo pierda. Se guarda solo en memoria. La interfaz lo consulta cada 2 s.
 - **Registro:** `GET /api/projects/:id/logs` devuelve las últimas 200 líneas. Mientras un proyecto está encendido y su registro abierto, la interfaz lo pide cada 3 s. No es una conexión abierta: así, cerrar la pestaña no deja procesos de `docker compose logs` colgados. El texto no se mueve mientras el docente lee más arriba o selecciona algo.
 - **Consumo:** `GET /api/projects/resources` devuelve `{ memoryLimit, total, projects }`, solo de los proyectos registrados y encendidos. La CPU se expresa sobre toda la PC: 100 son todos sus núcleos. La interfaz lo pide cada 10 s con la pestaña visible y algún proyecto encendido, y la API comparte cada muestra 5 s porque `docker stats` tarda unos 2 s. No se guarda.
-- **Versión nueva:** `GET /api/version` devuelve `{ current, latest, updateAvailable }`. `current` sale del `package.json` de la raíz; los de `core`, `api` y `web` no cuentan. `api/src/services/version.ts` consulta GitHub solo cuando la interfaz lo pide, como máximo cada 6 horas, también tras una falla. Sin internet no hay error ni aviso: se conserva el último dato y la falla queda en el registro del contenedor. El resultado vive en memoria. La interfaz pregunta al cargar y cada hora con la pestaña visible, y solo avisa: nada se actualiza desde el navegador. Para desactivarla: `UPDATE_CHECK=off ./install.sh`.
+- **Versión nueva:** `GET /api/version` devuelve `{ current, latest, updateAvailable }`. `current` sale del `package.json` de la raíz; los de `core`, `api` y `web` no cuentan. `api/src/services/version.ts` consulta GitHub solo cuando la interfaz lo pide, como máximo cada 6 horas, también tras una falla. Sin internet no hay error ni aviso: se conserva el último dato y la falla queda en el registro del contenedor. El resultado vive en memoria. La interfaz pregunta al cargar y cada hora con la pestaña visible, y solo avisa: nada se actualiza desde el navegador. Para desactivarla: `UPDATE_CHECK=off ./install.sh` al instalar, o `UPDATE_CHECK=off ./update.sh` después.
 - **Documentación:** `docs/*.md` es la única fuente: Astro la convierte en páginas al compilar, así que un cambio se ve al reconstruir. Un documento nuevo se agrega a la lista de `web/src/lib/docs.ts`.
 - **Refresco:** la interfaz consulta la lista cada 15 segundos y al volver a la pestaña, sin redibujar si nada cambió.
 - **Búsqueda en la interfaz:** espera 300 ms desde la última tecla y descarta cualquier respuesta que no sea la de la última petición.

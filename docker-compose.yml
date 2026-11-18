@@ -1,4 +1,5 @@
-# Despliegue de Dockyard en la PC del docente. Se levanta con ./install.sh, que genera .env.
+# Despliegue de Dockyard en la PC del docente. Se levanta con ./install.sh la primera vez y con
+# ./update.sh después; los dos generan .env.
 name: dockyard
 
 services:
@@ -6,7 +7,7 @@ services:
     build: .
     restart: unless-stopped
     # Corre con el usuario que instaló, para que projects/ y data/ queden a su nombre.
-    # El grupo del socket le da permiso de usar Docker. Los tres valores los escribe install.sh.
+    # El grupo del socket le da permiso de usar Docker. Los tres valores los escriben install.sh y update.sh.
     user: "${HOST_UID:-0}:${HOST_GID:-0}"
     group_add:
       - "${DOCKER_GID:-0}"

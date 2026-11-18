@@ -11,10 +11,18 @@ Requisitos: Linux con Docker y el complemento `docker compose`.
 ```bash
 git clone https://github.com/N0Namesir/Dockyard.git
 cd Dockyard
-./install.sh                 # o TOOL_PORT=4400 ./install.sh
+./install.sh                 # solo la primera vez; o TOOL_PORT=4400 ./install.sh
 ```
 
 Queda disponible en http://localhost:4300 y vuelve sola después de reiniciar la PC.
+
+Para actualizar a una versión nueva, o si la página dejó de cargar:
+
+```bash
+./update.sh
+```
+
+`install.sh` se usa una sola vez y se niega a correr si Dockyard ya está instalado. `update.sh` descarga la versión nueva, si la hay, y reconstruye. Los proyectos y sus datos se conservan.
 
 ## Desarrollar en una laptop
 
