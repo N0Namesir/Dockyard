@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { after, describe, test } from 'node:test'
 import { diskUsageFrom, isOldVersion, projectImagesFrom } from '../src/disk.ts'
-import { parsePs, portInUseMessage, portsInUse, requestedContainerNames, requestedPorts, statusFromContainers, statusesFromContainers } from '../src/docker.ts'
+import { failedEndpointOf, parsePs, portInUseMessage, portsInUse, requestedContainerNames, requestedPorts, statusFromContainers, statusesFromContainers } from '../src/docker.ts'
 import { assertNormalizedName, normalizeProjectName } from '../src/name.ts'
 import { findComposeFile, projectRepoDir, projectsDir } from '../src/paths.ts'
 import { cleanLine, createProgressTracker, stageOf } from '../src/progress.ts'
@@ -750,6 +750,11 @@ describe('puertos ocupados y publicados solo en esta PC', () => {
     assert.match(portInUseMessage('Bind for 0.0.0.0:8081 failed: port is already allocated')!, /^El puerto 8081 ya lo usa otro contenedor de Docker/)
     assert.match(portInUseMessage('bind: address already in use')!, /^Un puerto del proyecto ya lo usa otro programa/)
     assert.equal(portInUseMessage('pull access denied for nada'), null)
+  })
+
+  test('nombra el contenedor que no pudo publicar su puerto, para borrarlo y crearlo de nuevo', () => {
+    assert.equal(failedEndpointOf('driver failed programming external connectivity on endpoint exp-web-1 (3fc6…): failed to bind host port 0.0.0.0:8094/tcp: address already in use'), 'exp-web-1')
+    assert.equal(failedEndpointOf('Bind for 0.0.0.0:8081 failed: port is already allocated'), null)
   })
 
   test('un puerto es solo de esta PC si todas sus publicaciones son en 127.0.0.1 o ::1', () => {

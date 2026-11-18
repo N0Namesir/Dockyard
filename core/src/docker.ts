@@ -261,6 +261,26 @@ export function portInUseMessage(stderr: string): string | null {
   return `${which} ya lo usa otro programa de esta PC que no es un proyecto de Docker. Ciérralo o cambia el puerto en el compose del proyecto.`
 }
 
+/**
+ * Contenedor que Docker no pudo conectar a su puerto, según el error de `up -d`:
+ *   driver failed programming external connectivity on endpoint tienda-web-1 (…): …
+ */
+export function failedEndpointOf(stderr: string): string | null {
+  return /on endpoint ([\w.-]+)/.exec(stderr)?.[1] ?? null
+}
+
+/**
+ * Tras un puerto ocupado, Docker deja creado el contenedor que falló, pero sin su puerto: el
+ * siguiente `up -d` lo arrancaría sin publicarlo y el proyecto se vería encendido sin puerto.
+ * Se borra solo ese contenedor (sin -v: los volúmenes no se tocan) para que se cree de nuevo.
+ */
+async function removeFailedEndpoint(prefix: string[], name: string, stderr: string): Promise<void> {
+  const endpoint = failedEndpointOf(stderr)
+  if (!endpoint) return
+  const service = (await listContainers(name)).find((c) => c.Name === endpoint)?.Service
+  if (service) await docker([...prefix, 'rm', '-f', String(service)], { timeoutMs: STOP_TIMEOUT })
+}
+
 /** Lanza un error si un puerto fijo o un container_name del proyecto ya lo tiene otro proyecto. */
 async function checkConflicts(prefix: string[], name: string): Promise<void> {
   let config: any
@@ -323,6 +343,7 @@ export async function startProject(
       if (inUse) {
         // Los servicios que sí alcanzaron a arrancar se detienen: el proyecto no queda a medias.
         await docker([...prefix, 'stop'], { timeoutMs: STOP_TIMEOUT }).catch(() => {})
+        await removeFailedEndpoint(prefix, name, err.stderr).catch(() => {})
         throw new Error(inUse)
       }
       throw new Error(`No se pudo encender el proyecto. Docker respondió:\n${lastLines(err.stderr, 10)}`)
