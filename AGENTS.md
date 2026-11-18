@@ -96,7 +96,7 @@ renameProject(name: string, newName: string): Promise<PreparedProject>         /
 
 ### Rutas de la API (contrato con `web/`)
 
-`GET /api/projects?q=`, `GET /api/projects/resources`, `POST /api/projects`, `GET /api/projects/:id`, `PATCH /api/projects/:id` (`team`, `name`), `POST /api/projects/:id/start`, `POST /api/projects/:id/stop`, `POST /api/projects/stop-all`, `POST /api/projects/:id/update`, `POST /api/projects/:id/replace` (multipart, campo `file`), `GET /api/projects/:id/logs`, `GET /api/projects/:id/progress`, `DELETE /api/projects/:id`, `GET /api/version`.
+`GET /api/projects?q=`, `GET /api/projects/resources`, `POST /api/projects`, `GET /api/projects/:id`, `PATCH /api/projects/:id` (`team`, `name`, `notes`), `POST /api/projects/:id/start`, `POST /api/projects/:id/stop`, `POST /api/projects/stop-all`, `POST /api/projects/:id/update`, `POST /api/projects/:id/replace` (multipart, campo `file`), `GET /api/projects/:id/logs`, `GET /api/projects/:id/progress`, `DELETE /api/projects/:id`, `GET /api/version`.
 
 Al arrancar, `server.ts` llama a `service.resume()`: vuelve a encender los proyectos con `keep_running = 1` que estén apagados (el docente los dejó encendidos y la PC o Docker se reiniciaron). Encender marca la columna y apagar la desmarca; ninguna ruta la cambia directamente.
 

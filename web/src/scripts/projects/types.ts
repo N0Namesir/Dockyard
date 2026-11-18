@@ -20,6 +20,8 @@ export interface Project {
   progress: Progress | null
   sourceType: 'git' | 'zip'
   pendingBuild: boolean
+  /** Notas del docente; cadena vacía si no hay. */
+  notes: string
 }
 
 export interface ProjectResources {

@@ -14,11 +14,12 @@ const schema = `
     created_at TEXT NOT NULL,
     warnings TEXT NOT NULL DEFAULT '[]',
     needs_build INTEGER NOT NULL DEFAULT 0,
-    keep_running INTEGER NOT NULL DEFAULT 0
+    keep_running INTEGER NOT NULL DEFAULT 0,
+    notes TEXT NOT NULL DEFAULT ''
   ) STRICT;
 `
 
-const COLUMNS = 'id, name, team, source_type, source, dir, created_at, warnings, needs_build, keep_running'
+const COLUMNS = 'id, name, team, source_type, source, dir, created_at, warnings, needs_build, keep_running, notes'
 
 /** Minúsculas y sin tildes: LIKE de SQLite solo ignora mayúsculas en letras sin acento. */
 function normalizeForSearch(text: string): string {
@@ -42,6 +43,7 @@ export interface ProjectRepository {
   applyUpdate(id: number, update: { dir: string; warnings: string[]; source?: string }): void
   clearNeedsBuild(id: number): void
   setTeam(id: number, team: string): void
+  setNotes(id: number, notes: string): void
   /** Nombre y carpeta nuevos tras renombrarlo en el núcleo. El próximo encendido reconstruye. */
   rename(id: number, project: { name: string; dir: string }): void
   /** Si el docente lo dejó encendido: Dockyard lo vuelve a encender al arrancar. */
@@ -75,6 +77,9 @@ export function createProjectRepository(
   }
   if (!columns.some((column) => column.name === 'needs_build')) {
     db.exec('ALTER TABLE projects ADD COLUMN needs_build INTEGER NOT NULL DEFAULT 0')
+  }
+  if (!columns.some((column) => column.name === 'notes')) {
+    db.exec("ALTER TABLE projects ADD COLUMN notes TEXT NOT NULL DEFAULT ''")
   }
   if (!columns.some((column) => column.name === 'keep_running')) {
     db.exec('ALTER TABLE projects ADD COLUMN keep_running INTEGER NOT NULL DEFAULT 0')
@@ -112,6 +117,7 @@ export function createProjectRepository(
   const update = db.prepare('UPDATE projects SET dir = ?, warnings = ?, source = COALESCE(?, source), needs_build = 1 WHERE id = ?')
   const built = db.prepare('UPDATE projects SET needs_build = 0 WHERE id = ?')
   const team = db.prepare('UPDATE projects SET team = ? WHERE id = ?')
+  const notes = db.prepare('UPDATE projects SET notes = ? WHERE id = ?')
   const rename = db.prepare('UPDATE projects SET name = ?, dir = ?, needs_build = 1 WHERE id = ?')
   const keepRunning = db.prepare('UPDATE projects SET keep_running = ? WHERE id = ?')
   const remove = db.prepare('DELETE FROM projects WHERE id = ?')
@@ -162,6 +168,10 @@ export function createProjectRepository(
 
     setTeam(id, value) {
       team.run(value, id)
+    },
+
+    setNotes(id, value) {
+      notes.run(value, id)
     },
 
     rename(id, { name, dir }) {

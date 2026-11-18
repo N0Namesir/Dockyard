@@ -6,7 +6,15 @@ import type { Project, RowHandlers } from '../types.ts'
 /** Fila principal de un proyecto: nombre, equipo, estado, puertos y acciones. */
 export function projectRow(project: Project, handlers: RowHandlers): HTMLTableRowElement {
   const row = element('tr', 'text-slate-700 hover:bg-slate-50/70')
-  row.append(element('td', 'px-5 py-4 font-bold text-slate-900', project.name))
+  const nameCell = element('td', 'px-5 py-4')
+  nameCell.append(element('p', 'font-bold text-slate-900', project.name))
+  if (project.notes) {
+    // Las notas largas se cortan a tres líneas; completas, al dejar el cursor encima o en Editar.
+    const notes = element('p', 'mt-1 line-clamp-3 max-w-48 whitespace-pre-wrap break-words text-xs text-slate-600', project.notes)
+    notes.title = project.notes
+    nameCell.append(notes)
+  }
+  row.append(nameCell)
   row.append(element('td', 'px-5 py-4', project.team))
   row.append(stateCell(project), portsCell(project), actionsCell(project, handlers))
   return row
@@ -102,7 +110,7 @@ function actionsCell(project: Project, handlers: RowHandlers): HTMLTableCellElem
     actions.append(open)
   }
 
-  const secondary = element('div', 'flex items-center justify-end gap-3 text-xs font-semibold')
+  const secondary = element('div', 'flex items-center justify-end gap-3 whitespace-nowrap text-xs font-semibold')
   if (project.sourceType === 'git') {
     const update = element(
       'button',

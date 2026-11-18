@@ -25,6 +25,8 @@ export interface ProjectRow {
   needs_build: number
   /** 1 si el docente lo dejó encendido: al arrancar, Dockyard lo vuelve a encender si está apagado. */
   keep_running: number
+  /** Texto libre del docente sobre el proyecto. */
+  notes: string
 }
 
 export interface ProgressResponse extends StartProgress {
@@ -49,6 +51,8 @@ export interface ProjectResponse {
   progress: ProgressResponse | null
   /** Se actualizó el código: el próximo encendido reconstruye las imágenes. */
   pendingBuild: boolean
+  /** Notas del docente; cadena vacía si no hay. */
+  notes: string
 }
 
 export interface ResourcesResponse {

@@ -27,10 +27,14 @@ const repositoryBodySchema = Type.Object(
   { additionalProperties: false },
 )
 
+const NOTES_MAX_LENGTH = 2000
+
 const editBodySchema = Type.Object(
   {
     team: Type.Optional(Type.String({ minLength: 1, maxLength: 120 })),
     name: Type.Optional(Type.String({ minLength: 1, maxLength: 120 })),
+    /** Puede quedar vacía: así se borran. */
+    notes: Type.Optional(Type.String({ maxLength: NOTES_MAX_LENGTH })),
   },
   { additionalProperties: false, minProperties: 1 },
 )
@@ -223,12 +227,13 @@ export function projectRoutes(service: ProjectService): FastifyPluginAsync {
       { schema: { params: idParamsSchema } },
       async (request) => {
         if (!Value.Check(editBodySchema, request.body)) {
-          throw new HttpError(400, 'Solo se pueden cambiar el equipo y el nombre, y no pueden quedar vacíos.')
+          throw new HttpError(400, `Solo se pueden cambiar el equipo, el nombre y las notas. El equipo y el nombre no pueden quedar vacíos, y las notas tienen hasta ${NOTES_MAX_LENGTH} caracteres.`)
         }
         const body = request.body as EditBody
         return service.edit(Number(request.params.id), {
           team: body.team === undefined ? undefined : requiredText(body.team, 'el nombre del equipo'),
           name: body.name === undefined ? undefined : requiredText(body.name, 'el nombre del proyecto'),
+          notes: body.notes?.trim(),
         })
       },
     )

@@ -284,6 +284,18 @@ import FaviconLinks from '../components/FaviconLinks.astro'
           />
           <span id="edit-dialog-name-hint" class="mt-1.5 block text-xs leading-5 text-slate-500"></span>
         </label>
+        <label class="block">
+          <span class="mb-1.5 block text-sm font-semibold text-slate-700">Notas <span class="font-normal text-slate-500">(opcional)</span></span>
+          <textarea
+            name="notes"
+            rows="4"
+            maxlength="2000"
+            aria-describedby="edit-dialog-notes-hint"
+            placeholder="Ej. Falta el inicio de sesión. Revisado el 12 de noviembre."
+            class="w-full resize-y rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-marca-tinta"
+          ></textarea>
+          <span id="edit-dialog-notes-hint" class="mt-1 block text-xs text-slate-500">Se ven debajo del nombre y solo se guardan en esta PC.</span>
+        </label>
         <p id="edit-dialog-error" class="hidden text-sm font-medium break-words whitespace-pre-wrap text-red-700" role="alert"></p>
         <div class="flex justify-end gap-3 pt-2">
           <button

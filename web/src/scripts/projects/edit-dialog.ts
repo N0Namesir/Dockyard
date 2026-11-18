@@ -1,4 +1,4 @@
-// "Editar": corrige el equipo o el nombre de un proyecto sin eliminarlo. La API normaliza el
+// "Editar": corrige el equipo o el nombre de un proyecto sin eliminarlo, y guarda sus notas. La API normaliza el
 // nombre y decide si se puede cambiar; aquí solo se envía lo que el docente cambió.
 import { api, messageOf } from './api.ts'
 import { showGlobalMessage } from './dom.ts'
@@ -11,6 +11,7 @@ const title = document.querySelector<HTMLElement>('#edit-dialog-title')!
 const form = document.querySelector<HTMLFormElement>('#edit-form')!
 const team = form.querySelector<HTMLInputElement>('input[name="team"]')!
 const name = form.querySelector<HTMLInputElement>('input[name="name"]')!
+const notes = form.querySelector<HTMLTextAreaElement>('textarea[name="notes"]')!
 const nameHint = document.querySelector<HTMLElement>('#edit-dialog-name-hint')!
 const error = document.querySelector<HTMLElement>('#edit-dialog-error')!
 const cancel = document.querySelector<HTMLButtonElement>('#edit-dialog-cancel')!
@@ -43,6 +44,7 @@ export function editProject(project: Project): void {
   title.textContent = `Editar ${project.name}`
   team.value = project.team
   name.value = project.name
+  notes.value = project.notes
   // El nombre también es el de sus contenedores y su carpeta: solo cambia con el proyecto apagado.
   name.disabled = project.state === 'running'
   nameHint.textContent = project.state === 'running'
@@ -57,9 +59,10 @@ export function editProject(project: Project): void {
 async function submit(): Promise<void> {
   const project = editing
   if (!project || saving) return
-  const changes: { team?: string; name?: string } = {}
+  const changes: { team?: string; name?: string; notes?: string } = {}
   if (team.value.trim() !== project.team) changes.team = team.value.trim()
   if (!name.disabled && name.value.trim() !== project.name) changes.name = name.value.trim()
+  if (notes.value.trim() !== project.notes) changes.notes = notes.value.trim()
   if (changes.team === '' || changes.name === '') {
     showError('El equipo y el nombre no pueden quedar vacíos.')
     return

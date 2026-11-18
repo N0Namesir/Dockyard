@@ -65,6 +65,7 @@ function toResponse(
     warnings: JSON.parse(row.warnings) as string[],
     progress,
     pendingBuild: row.needs_build === 1,
+    notes: row.notes,
   }
 }
 
@@ -352,10 +353,10 @@ export function createProjectService(
     },
 
     /**
-     * Cambia el equipo o el nombre. El equipo es solo un dato; el nombre también es el de compose y
+     * Cambia el equipo, el nombre o las notas. El equipo y las notas son solo datos; el nombre también es el de compose y
      * el de la carpeta, así que lo cambia el núcleo, con el proyecto apagado.
      */
-    async edit(id: number, input: { team?: string; name?: string }): Promise<ProjectResponse> {
+    async edit(id: number, input: { team?: string; name?: string; notes?: string }): Promise<ProjectResponse> {
       const project = requireProject(id)
       const newName = input.name === undefined ? project.name : core.normalizeProjectName(input.name)
       if (newName !== project.name) {
@@ -376,6 +377,7 @@ export function createProjectService(
         })
       }
       if (input.team !== undefined) repository.setTeam(id, input.team)
+      if (input.notes !== undefined) repository.setNotes(id, input.notes)
       return hydrate(requireProject(id))
     },
 

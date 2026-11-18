@@ -346,6 +346,7 @@ test('registra por GitHub, consulta, busca, enciende y apaga', async () => {
     progress: null,
     pendingBuild: false,
     sourceType: 'git',
+    notes: '',
   })
 
   const found = await app.inject({
@@ -862,6 +863,22 @@ test('editar: rechaza encendidos, nombres repetidos, campos vacíos o desconocid
   await app.close()
 })
 
+test('las notas se guardan, se borran con texto vacío y tienen un límite', async () => {
+  const app = await testApp()
+  const created = (await app.inject({ method: 'POST', url: '/api/projects', payload: { team: 'E', name: 'A', repoUrl: 'https://github.com/e/a' } })).json()
+  assert.equal(created.notes, '')
+
+  let response = await app.inject({ method: 'PATCH', url: `/api/projects/${created.id}`, payload: { notes: '  Falta el login.\nNota: 8  ' } })
+  assert.equal(response.statusCode, 200)
+  assert.equal(response.json().notes, 'Falta el login.\nNota: 8')
+  assert.equal((await app.inject({ method: 'GET', url: '/api/projects' })).json()[0].notes, 'Falta el login.\nNota: 8')
+
+  assert.equal((await app.inject({ method: 'PATCH', url: `/api/projects/${created.id}`, payload: { notes: 'x'.repeat(2001) } })).statusCode, 400)
+  response = await app.inject({ method: 'PATCH', url: `/api/projects/${created.id}`, payload: { notes: '' } })
+  assert.equal(response.json().notes, '')
+  await app.close()
+})
+
 test('una petición repetida se une a la operación en curso', async () => {
   const fake = fakeCore()
   let calls = 0
@@ -1311,6 +1328,7 @@ test('una base creada antes de la revisión recibe la columna de avisos', async 
   const repository = createProjectRepository(path)
   assert.equal(repository.list()[0]?.warnings, '[]')
   assert.equal(repository.list()[0]?.keep_running, 0)
+  assert.equal(repository.list()[0]?.notes, '')
   repository.close()
   await rm(dir, { recursive: true, force: true })
 })
