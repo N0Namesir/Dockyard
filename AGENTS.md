@@ -123,6 +123,7 @@ Se usa `node:test`, sin dependencias. `api/test/projects.test.ts` cubre las ruta
 
 - Código, mensajes de error y documentación en español.
 - Las acciones destructivas llevan doble verificación en la interfaz: el docente escribe el nombre exacto del proyecto para habilitar el botón. Las que se pueden deshacer, como apagar otro proyecto, piden una confirmación de un clic (`confirm-dialog.ts`).
+- Maquetación: las páginas se dividen en una rejilla de 12 columnas (`grid-cols-12` y `col-span-*`). En pantallas angostas cada bloque ocupa las 12. Proyectos usa 8 + 4 desde `xl`; la documentación, 3 + 9 desde `lg`.
 - Colores de la interfaz: usa los tokens `marca-*` de `web/src/styles/global.css`, no valores sueltos. El ámbar no se usa como texto sobre fondo claro; para eso está `marca-texto`.
 - `docs/privacidad.md` promete que Dockyard no recolecta datos. No agregues analítica, telemetría, cookies ni recursos de otros sitios (las fuentes van empaquetadas), y si cambia lo que se guarda, actualiza ese documento.
 - Flujo de git: una rama por persona y cambios pequeños. La rama principal es `main`.
