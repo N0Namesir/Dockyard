@@ -479,3 +479,53 @@ body:has(dialog[open]) {
 .sitio-cabecera dialog :focus-visible {
   outline-color: var(--color-marca-acento);
 }
+
+/* Selector Tabla | Cuadrícula: dos botones con aria-pressed. */
+.view-option {
+  min-height: 2.5rem;
+  padding: .375rem .875rem;
+  border-radius: .375rem;
+  font-size: .875rem;
+  font-weight: 600;
+  color: var(--color-marca-secundario);
+}
+.view-option[aria-pressed=true] {
+  background: white;
+  color: var(--color-marca-texto);
+  box-shadow: 0 1px 2px rgb(15 23 42 / .12);
+}
+.view-option:hover:not([aria-pressed=true]) {
+  color: var(--color-marca-tinta);
+}
+
+/* Carpetas por año: una fila que se desplaza en pantallas angostas, una columna desde lg. */
+.folder-link {
+  display: flex;
+  min-height: 2.75rem;
+  flex-direction: column;
+  justify-content: center;
+  white-space: nowrap;
+  padding: .375rem .75rem;
+  border: 1px solid #e2e8f0;
+  border-radius: .5rem;
+  background: white;
+  font-size: .875rem;
+  color: var(--color-marca-tinta);
+}
+.folder-link:hover {
+  border-color: var(--color-marca-tinta);
+}
+.folder-link[aria-current=page] {
+  border-color: var(--color-marca-fuerte);
+  background: var(--color-marca-suave);
+  color: var(--color-marca-texto);
+  font-weight: 700;
+}
+
+/* En la tarjeta, los botones y los mensajes se alinean a la izquierda, como el resto del texto. */
+.project-card-controls > div {
+  align-items: flex-start;
+}
+.project-card-controls .project-actions {
+  justify-content: flex-start;
+}

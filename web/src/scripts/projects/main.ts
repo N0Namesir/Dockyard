@@ -18,6 +18,8 @@ import { state } from './state.ts'
 import { stopAll } from './stop-all.ts'
 import { render, setRowHandlers } from './table.ts'
 import { pollVersion } from './version.ts'
+import { loadView, setupViewToggle } from './view-toggle.ts'
+import { loadYears, openFolder, pickInitialFolder, setupFolders } from './folders.ts'
 
 const REFRESH_INTERVAL_MS = 15_000
 const PROGRESS_INTERVAL_MS = 2_000
@@ -36,13 +38,15 @@ setRowHandlers({
   replaceConflicting: (project) => void replaceConflicting(project),
   toggleLogs: (project) => void toggleLogs(project),
   loadLogs: (project) => void loadLogs(project),
-}, (registration) => void dismissRegistration(registration))
+}, (registration) => void dismissRegistration(registration), () => openFolder('todos'))
 setupDialogFocus()
 setupRemoveDialog()
 setupConfirmDialog()
 page.stopAll.addEventListener('click', () => void stopAll())
 setupRegisterPanel()
 setupRegisterForm()
+setupViewToggle()
+setupFolders(() => void loadProjects())
 
 let searchTimer: ReturnType<typeof setTimeout> | undefined
 page.searchInput.addEventListener('input', () => {
@@ -53,6 +57,8 @@ page.searchInput.addEventListener('input', () => {
 // Mantiene al día el estado de los proyectos, por ejemplo si uno se cae solo.
 function refresh(): void {
   if (!document.hidden && !state.loading) void loadProjects(true)
+  // Las carpetas dicen cuántos hay y cuántos están encendidos en cada año.
+  if (!document.hidden) void loadYears()
   // También los registros de otra pestaña, que esta no sabe que empezaron.
   if (!document.hidden) void loadRegistrations()
 }
@@ -65,6 +71,12 @@ setInterval(() => void pollVersion(), VERSION_INTERVAL_MS)
 document.addEventListener('visibilitychange', refresh)
 
 render()
-void loadProjects().then(() => pollResources())
+// La vista y las carpetas antes que la lista, para no dibujarla dos veces.
+void Promise.all([loadView(), loadYears()])
+  .then(() => {
+    pickInitialFolder()
+    return loadProjects()
+  })
+  .then(() => pollResources())
 void loadRegistrations()
 void pollVersion()

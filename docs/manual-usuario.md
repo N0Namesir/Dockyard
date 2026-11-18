@@ -48,6 +48,14 @@ Los avisos no impiden encender: tú decides. Si no entiendes uno, pregúntale al
 
 Que no aparezcan avisos no garantiza que el proyecto sea seguro, así que registra solo proyectos que conozcas.
 
+## Tabla o cuadrícula, y carpetas por año
+
+Arriba de la lista, **Tabla | Cuadrícula** cambia cómo se ven los proyectos. La **cuadrícula** muestra una tarjeta por proyecto, con su imagen grande, el equipo, el estado y los mismos botones que la tabla. La **tabla** es más compacta. Dockyard recuerda tu elección, también en otro navegador de esta PC. En una instalación nueva empieza en cuadrícula; si ya tenías proyectos, sigue en tabla.
+
+A la izquierda (arriba en pantallas pequeñas) están las **carpetas por año**: una por cada año con proyectos, con cuántos tiene y cuántos están encendidos, y **Todos**. Al abrir Dockyard se abre el año más reciente. La carpeta abierta queda en la dirección de la página (por ejemplo `?año=2026`): al recargar o guardar el enlace, vuelve a la misma. Al registrar un proyecto de otro año, se abre su carpeta.
+
+La búsqueda mira dentro de la carpeta abierta. Si no encuentra nada, ofrece **Buscar en todos los años**.
+
 ## Buscar, encender, apagar y abrir
 
 **Abrir** y **Encender/Apagar** están siempre a mano. El nombre de cada proyecto lleva a su ficha. En el botón de tres puntos (**⋯**, Más acciones) están **Actualizar**, **Reemplazar ZIP**, **Editar ficha** y **Ver registro**, según el origen del proyecto, y al final, separadas, las que borran datos: **Reiniciar datos** y **Eliminar**. El menú se abre sobre la tabla sin mover los demás botones. Si una acción no se puede usar en ese momento, como Actualizar con el proyecto encendido, al pasar el puntero o intentar usarla aparece el motivo. En pantallas pequeñas cada proyecto se presenta en una fila apilada.
@@ -58,7 +66,7 @@ Que no aparezcan avisos no garantiza que el proyecto sea seguro, así que regist
 - **Actualizar:** solo en proyectos de GitHub y con el proyecto apagado. Trae la última versión del repositorio y la revisa de nuevo, sin encenderla. Lee los avisos, si los hay, y usa **Encender**: esa vez reconstruye el proyecto con el código nuevo. Sus datos se conservan, así que una base de datos sigue con lo que tenía. Para los proyectos registrados desde un ZIP está **Reemplazar ZIP**.
 - **Reemplazar ZIP:** solo en proyectos registrados desde un ZIP y con el proyecto apagado. Sirve cuando el equipo entrega una versión corregida: eliges el ZIP nuevo, escribes el nombre del proyecto para confirmar, y su código se cambia por el del ZIP sin perder el nombre ni el equipo. Se revisa de nuevo y la siguiente vez que lo enciendas se reconstruye. Los datos que el proyecto guarda en volúmenes de Docker, como la mayoría de las bases de datos, se conservan; lo que guardó dentro de su propia carpeta se borra. Si el ZIP nuevo está dañado o no trae compose, el proyecto queda como estaba.
 - **Apagar:** detiene el proyecto sin borrar nada. Sus datos se conservan para la próxima vez.
-- **Apagar todos:** aparece sobre la lista cuando hay proyectos encendidos. Apaga todos los proyectos de Dockyard, también los que la búsqueda no muestra, sin borrar nada. Sirve al terminar la clase o cuando la PC se pone lenta. Pide confirmar, y al final dice cuántos apagó y si alguno falló. Los que se están encendiendo, actualizando o eliminando no se tocan.
+- **Apagar todos:** aparece sobre la lista cuando hay proyectos encendidos. Apaga todos los proyectos de Dockyard, también los que la búsqueda no muestra y los de otros años; por eso, dentro de una carpeta, dice **Apagar todos (todos los años)**. No borra nada. Sirve al terminar la clase o cuando la PC se pone lenta. Pide confirmar, y al final dice cuántos apagó y si alguno falló. Los que se están encendiendo, actualizando o eliminando no se tocan.
 - **Editar ficha:** abre la ficha del proyecto lista para editar (ver [La ficha del proyecto](#la-ficha-del-proyecto)).
 - **Ver registro:** muestra las últimas líneas que escribió el proyecto. Sirve para saber por qué falla y compartirlo con el equipo. Si el proyecto está encendido, se actualiza solo cada pocos segundos. Si subes a leer o seleccionas texto, se detiene para no moverte; baja hasta el final para que siga.
 - **Reiniciar datos:** solo con el proyecto apagado. Borra sus bases de datos y lo demás que guardó en volúmenes de Docker, pero conserva su código, su ficha y sus notas. Úsalo cuando el equipo corrige el `.sql` de su base (por ejemplo en `db/init/`) y quieres que se vuelva a cargar, o para empezar una revisión desde cero: al encenderlo, la base se crea de nuevo y carga su `.sql`. Es más rápido que eliminar y registrar de nuevo, porque no reconstruye las imágenes. Lo que el proyecto guarda en carpetas propias (como `./data`) no se toca, porque es parte de su código. Para confirmar hay que escribir el nombre del proyecto, porque no se puede deshacer.
@@ -66,7 +74,7 @@ Que no aparezcan avisos no garantiza que el proyecto sea seguro, así que regist
 
 La tabla se actualiza sola cada 15 segundos. Si un proyecto aparece **Encendido** con el aviso **Con fallas**, uno de sus servicios se cayó; usa **Ver registro** para ver el motivo.
 
-Despliega **Recursos** debajo de **Encendido** para ver cuánta CPU y memoria usa el proyecto. Al pie de la lista aparece el consumo total de los proyectos encendidos. La CPU es sobre toda la PC. Si un proyecto tiene varios servicios, deja el cursor sobre esos datos para ver el detalle. Sirve para saber cuál apagar si la PC se pone lenta.
+En la tabla, despliega **Recursos** debajo de **Encendido** (en la cuadrícula, dentro de la tarjeta) para ver cuánta CPU y memoria usa el proyecto. Al pie de la lista aparece el consumo total de los proyectos encendidos. La CPU es sobre toda la PC. Si un proyecto tiene varios servicios, deja el cursor sobre esos datos para ver el detalle. Sirve para saber cuál apagar si la PC se pone lenta.
 
 Debajo de **Encendido** también se indica si la página del proyecto contesta:
 

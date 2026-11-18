@@ -30,7 +30,7 @@ export async function pollResources(): Promise<void> {
     page.resourcesTotal.textContent = total.memoryBytes > 0
       ? `Consumo de proyectos: CPU ${cpuText(total.cpuPercent)} · RAM ${bytesText(total.memoryBytes)} / ${bytesText(memoryLimit)} de la PC.`
       : ''
-    for (const target of page.projectsBody.querySelectorAll<HTMLElement>('[data-resources]')) {
+    for (const target of page.projectsArea.querySelectorAll<HTMLElement>('[data-resources]')) {
       fillResources(target, Number(target.dataset.resources))
     }
   } catch {

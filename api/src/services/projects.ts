@@ -309,8 +309,16 @@ export function createProjectService(
       return Promise.all(rows.map((row) => respond(row, statuses[row.name] ?? STOPPED)))
     },
 
-    years(): { year: number; count: number }[] {
-      return repository.years()
+    /** Carpetas: cada año con proyectos, cuántos tiene y cuántos están encendidos. */
+    async years(): Promise<{ year: number; count: number; running: number }[]> {
+      const years = repository.years()
+      if (years.length === 0) return []
+      const statuses = await core.getProjectStatuses()
+      const running = new Map<number, number>()
+      for (const row of repository.list()) {
+        if (statuses[row.name]?.state === 'running') running.set(row.year, (running.get(row.year) ?? 0) + 1)
+      }
+      return years.map((item) => ({ ...item, running: running.get(item.year) ?? 0 }))
     },
 
     async get(id: number): Promise<ProjectResponse> {

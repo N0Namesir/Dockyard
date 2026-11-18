@@ -10,6 +10,13 @@ function required<T extends Element>(selector: string): T {
 
 export const page = {
   projectsBody: required<HTMLTableSectionElement>('#projects'),
+  /** Contiene la tabla y la cuadrícula: lo que se busca en la lista se busca aquí. */
+  projectsArea: required<HTMLElement>('#projects-area'),
+  projectsTable: required<HTMLElement>('#projects-table-wrap'),
+  projectsGrid: required<HTMLElement>('#projects-grid'),
+  projectsTitle: required<HTMLElement>('#projects-title'),
+  viewButtons: [...document.querySelectorAll<HTMLButtonElement>('[data-view]')],
+  folderList: required<HTMLUListElement>('#folder-list'),
   projectCount: required<HTMLElement>('#project-count'),
   resourcesTotal: required<HTMLElement>('#resources-total'),
   searchInput: required<HTMLInputElement>('#search'),

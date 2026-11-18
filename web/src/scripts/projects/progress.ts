@@ -20,7 +20,7 @@ export async function pollProgress(): Promise<void> {
       // Sin petición propia en curso (se recargó la página), nadie más avisaría que terminó.
       if (progress === null && !state.pendingActions.has(project.id)) finished = true
       project.progress = progress
-      const row = page.projectsBody.querySelector<HTMLElement>(`[data-progress="${project.id}"]`)
+      const row = page.projectsArea.querySelector<HTMLElement>(`[data-progress="${project.id}"]`)
       if (row) fillProgress(row, progress)
     }))
   } catch {

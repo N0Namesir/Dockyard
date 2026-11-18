@@ -1,8 +1,9 @@
 // "Apagar todos": la API apaga los proyectos registrados que estén encendidos, también los que
-// la búsqueda oculta. Aquí solo se confirma, se marca lo que se está apagando y se resume.
+// la búsqueda oculta y los de otras carpetas. Aquí solo se confirma, se marca lo que se está apagando y se resume.
 import { messageOf, requestWithRetries } from './api.ts'
 import { confirmAction } from './confirm-dialog.ts'
 import { page, showGlobalMessage } from './dom.ts'
+import { loadYears } from './folders.ts'
 import { loadProjects } from './list.ts'
 import { pollResources } from './resources.ts'
 import { state } from './state.ts'
@@ -33,12 +34,16 @@ export async function stopAll(): Promise<void> {
   if (state.stoppingAll) return
   const visible = state.projects.filter((project) => project.state === 'running')
   const searching = page.searchInput.value.trim() !== ''
+  // Apaga todo, no solo la carpeta abierta: las carpetas dicen cuántos hay encendidos en cada año.
+  const inFolder = state.folder !== 'todos'
+  const total = inFolder ? state.years.reduce((sum, year) => sum + year.running, 0) : visible.length
+  const hidden = [searching && 'los que la búsqueda no muestra', inFolder && 'los de otros años'].filter(Boolean).join(' y ')
   const confirmed = await confirmAction({
-    title: searching
+    title: searching || total === 0
       ? '¿Apagar todos los proyectos encendidos?'
-      : `¿Apagar ${plural(visible.length, 'el proyecto encendido', `los ${visible.length} proyectos encendidos`)}?`,
+      : `¿Apagar ${plural(total, 'el proyecto encendido', `los ${total} proyectos encendidos`)}?`,
     text: `Se apagan sin borrar nada: su código y sus datos se conservan, y cada uno se puede volver a encender.${
-      searching ? ' Incluye los que la búsqueda no muestra.' : ''}`,
+      hidden ? ` Incluye ${hidden}.` : ''}`,
     confirmLabel: 'Apagar todos',
   })
   if (!confirmed) return
@@ -57,7 +62,7 @@ export async function stopAll(): Promise<void> {
   } finally {
     state.stoppingAll = false
     for (const project of marked) state.pendingActions.delete(project.id)
-    await loadProjects(true)
+    await Promise.all([loadProjects(true), loadYears()])
     render()
     // Sin esto, el consumo total seguiría mostrando lo de antes hasta el siguiente refresco.
     void pollResources()

@@ -45,7 +45,7 @@ export async function pollLogs(): Promise<void> {
       const { logs } = await api<{ logs: string }>(`/api/projects/${project.id}/logs`)
       if (!state.openLogs.has(project.id) || state.openLogs.get(project.id) === logs) return
       state.openLogs.set(project.id, logs)
-      const output = page.projectsBody.querySelector<HTMLElement>(`[data-logs="${project.id}"] pre`)
+      const output = page.projectsArea.querySelector<HTMLElement>(`[data-logs="${project.id}"] pre`)
       if (!output || state.logsScroll.has(project.id) || isSelectingIn(output)) return
       output.textContent = logs.trim() || EMPTY_LOGS
       output.scrollTop = output.scrollHeight

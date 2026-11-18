@@ -29,7 +29,7 @@ async function fixture(t, viewport={width:1440,height:1000}) {
   t.after(() => page.close())
   const errors=[]; page.on('pageerror',e=>errors.push(e.message))
   t.after(()=>assert.deepEqual(errors, []))
-  const data = { projects:[project(1,true),project(2)], fail:false, post:null, calls:[] }
+  const data = { projects:[project(1,true),project(2)], fail:false, post:null, calls:[], settings:{updateCheck:true,projectsView:'table'}, patches:[] }
   await page.route('**/api/**', async route => {
     const req=route.request(), url=new URL(req.url()), path=url.pathname
     const json=(body,status=200)=>route.fulfill({status,json:body})
@@ -41,8 +41,15 @@ async function fixture(t, viewport={width:1440,height:1000}) {
     if(path==='/api/projects') {
       if(data.fail) return json({message:'No se pudo conectar.'},500)
       const q=url.searchParams.get('q')?.toLowerCase() ?? ''
-      return json(data.projects.filter(p=>(p.name+' '+p.team).toLowerCase().includes(q)))
+      const year=url.searchParams.get('year')
+      return json(data.projects.filter(p=>(p.name+' '+p.team).toLowerCase().includes(q) && (!year || p.year===Number(year))))
     }
+    if(path==='/api/projects/years') {
+      const years=[...new Set(data.projects.map(p=>p.year))].sort((a,b)=>b-a)
+      return json(years.map(year=>({year,count:data.projects.filter(p=>p.year===year).length,running:data.projects.filter(p=>p.year===year&&p.state==='running').length})))
+    }
+    if(path==='/api/settings' && req.method()==='GET') return json(data.settings)
+    if(path==='/api/settings') { data.patches.push(req.postDataJSON()); Object.assign(data.settings,req.postDataJSON()); return json(data.settings) }
     if(path==='/api/registrations') return json([])
     if(path==='/api/projects/resources') return json({memoryLimit:24481313587,total:{cpuPercent:.5,memoryBytes:112197632},projects:{1:{cpuPercent:.5,memoryBytes:112197632,services:[]}}})
     if(path==='/api/version') return json({current:'1.2.0',latest:null,updateAvailable:false})
@@ -165,7 +172,8 @@ test('el menú de acciones se abre hacia arriba si no cabe debajo',async t=>{
 test('búsqueda, vacío, fallo y recuperación de la lista',async t=>{
   const {page,data}=await fixture(t)
   await page.locator('#search').fill('no-existe')
-  await page.getByText('No se encontraron proyectos con esa búsqueda.').waitFor()
+  // La búsqueda mira dentro de la carpeta abierta, la del año más reciente.
+  await page.getByText('No se encontraron proyectos de 2026 con esa búsqueda.').waitFor()
   await page.locator('#search').fill('Equipo 2')
   await page.locator('#project-count').filter({hasText:'1 proyecto'}).waitFor()
   assert.equal(await page.locator('.project-row').count(),1)
@@ -279,4 +287,74 @@ test('registrar: envía el año y, si el nombre existe, ofrece el sugerido con u
   await page.locator('#global-message').filter({hasText:'se registró'}).waitFor()
   assert.deepEqual(bodies[0],{team:'Equipo 3',name:'Tienda',repoUrl:'https://github.com/equipo/tienda',year:2026})
   assert.deepEqual(bodies[1],{team:'Equipo 3',name:'tienda-2026',repoUrl:'https://github.com/equipo/tienda',displayName:'Tienda',year:2026})
+})
+
+test('cuadrícula: tarjetas con las mismas acciones, sin desplazamiento horizontal, y la preferencia se guarda',async t=>{
+  const {page,data}=await fixture(t)
+  data.projects[1].warnings=['Servicio web: usa privileged.']
+  await page.locator('#view-grid').click()
+  assert.equal(await page.locator('#view-grid').getAttribute('aria-pressed'),'true')
+  assert.equal(await page.locator('#view-table').getAttribute('aria-pressed'),'false')
+  assert.deepEqual(data.patches,[{projectsView:'grid'}])
+  await page.evaluate(()=>document.dispatchEvent(new Event('visibilitychange')))
+  const card=page.locator('.project-card').first()
+  await card.waitFor()
+  assert.equal(await page.locator('#projects-table-wrap').isHidden(),true)
+  assert.equal(await page.locator('.project-card').count(),2)
+  assert.equal(await card.locator('[data-action=details]').getAttribute('href'),'/proyecto/?id=1')
+  for(const action of ['toggle','open','menu']) assert.equal(await card.locator(`[data-action=${action}]`).count(),1,action)
+  assert.match(await page.locator('.project-card').last().innerText(),/Revisar antes de encender: 1 aviso/)
+  // El menú y el foco sobreviven al refresco automático, como en la tabla.
+  await card.locator('[data-action=menu]').click()
+  await card.locator('[data-action=logs]').focus()
+  data.projects[0].notes='Desde la cuadrícula'
+  await page.evaluate(()=>document.dispatchEvent(new Event('visibilitychange')))
+  await card.getByText('Desde la cuadrícula',{exact:true}).waitFor()
+  assert.equal(await card.locator('[data-action=logs]').evaluate(e=>e===document.activeElement),true)
+  assert.equal(await card.locator('.project-menu-content').evaluate(e=>e.matches(':popover-open')),true)
+  await card.locator('[data-action=logs]').click()
+  await card.locator('[data-logs] pre').filter({hasText:'Servidor iniciado'}).waitFor()
+  for(const width of [320,375,768,1024,1440]) {
+    await page.setViewportSize({width,height:900})
+    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,`Ancho ${width}`)
+  }
+  // Recargar conserva la vista elegida: viene de la API.
+  await page.reload()
+  await page.locator('.project-card').first().waitFor()
+})
+
+test('carpetas por año: abre el más reciente, va en la URL y la búsqueda ofrece buscar en todos',async t=>{
+  const {page,data}=await fixture(t)
+  data.projects.push({...project(3),name:'huerto',displayName:'Huerto',team:'Equipo 9',year:2025,state:'running',ports:[8402],url:'http://localhost:8402',urls:['http://localhost:8402']})
+  data.projects[0].state='stopped'
+  await page.reload()
+  await page.locator('#project-count').filter({hasText:'2 proyectos'}).waitFor()
+  assert.equal(await page.locator('#projects-title').innerText(),'Proyectos de 2026')
+  assert.deepEqual(await page.locator('.folder-link').evaluateAll(links=>links.map(l=>[l.getAttribute('href'),l.getAttribute('aria-current')])),
+    [['?año=2026','page'],['?año=2025',null],['?año=todos',null]])
+  assert.match(await page.locator('.folder-link').nth(1).innerText(),/2025 · 1\s+1 encendido/)
+  // Lo encendido está en otra carpeta: Apagar todos se ofrece y dice que apaga todos los años.
+  assert.equal(await page.locator('#stop-all').innerText(),'Apagar todos (todos los años)')
+
+  await page.locator('.folder-link').nth(1).click()
+  await page.locator('#projects-title').filter({hasText:'Proyectos de 2025'}).waitFor()
+  assert.equal(new URL(page.url()).searchParams.get('año'),'2025')
+  await page.locator('#project-count').filter({hasText:'1 proyecto'}).waitFor()
+  assert.deepEqual(await page.locator('.project-row [data-action=details]').allInnerTexts(),['Huerto'])
+
+  await page.locator('#search').fill('biblioteca')
+  const all=page.locator('[data-action=search-all]')
+  await all.waitFor()
+  assert.match(await page.locator('#projects').innerText(),/No se encontraron proyectos de 2025 con esa búsqueda/)
+  await all.click()
+  await page.locator('#projects-title').filter({hasText:'Proyectos registrados'}).waitFor()
+  assert.equal(new URL(page.url()).searchParams.get('año'),'todos')
+  await page.locator('.project-row').first().waitFor()
+  assert.deepEqual(await page.locator('.project-row [data-action=details]').allInnerTexts(),['Biblioteca escolar'])
+  assert.equal(await page.locator('#stop-all').innerText(),'Apagar todos')
+
+  await page.goBack()
+  await page.locator('#projects-title').filter({hasText:'Proyectos de 2025'}).waitFor()
+  await page.goto(page.url())
+  await page.locator('#projects-title').filter({hasText:'Proyectos de 2025'}).waitFor()
 })

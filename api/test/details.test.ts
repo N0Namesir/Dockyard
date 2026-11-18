@@ -146,8 +146,8 @@ test('la búsqueda mira el nombre para mostrar y la descripción; las carpetas f
   assert.deepEqual(await names('/api/projects?year=todos'), ['c3', 'b2', 'a1'])
   assert.equal((await app.inject({ method: 'GET', url: '/api/projects?year=2026a' })).statusCode, 400)
   assert.deepEqual((await app.inject({ method: 'GET', url: '/api/projects/years' })).json(), [
-    { year: 2026, count: 2 },
-    { year: 2025, count: 1 },
+    { year: 2026, count: 2, running: 0 },
+    { year: 2025, count: 1, running: 0 },
   ])
   await app.close()
 })

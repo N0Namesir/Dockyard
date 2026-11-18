@@ -2,6 +2,7 @@
 import { registrationSubmitted } from './register-panel.ts'
 import { api, ApiResponseError, messageOf } from './api.ts'
 import { hideGlobalMessage, page, showGlobalMessage } from './dom.ts'
+import { loadYears, selectFolder } from './folders.ts'
 import { loadProjects } from './list.ts'
 import { loadRegistrations } from './registrations.ts'
 import { state } from './state.ts'
@@ -142,6 +143,9 @@ async function submit(event: SubmitEvent): Promise<void> {
     const created = await api<Project>('/api/projects', request)
     feedback.textContent = `${created.name} se registró. Puedes registrar otro proyecto.`
     page.searchInput.value = ''
+    // Se abre su carpeta para que se vea; en «Todos» ya se ve.
+    await loadYears()
+    if (state.folder !== 'todos' && state.folder !== created.year) selectFolder(created.year)
     if (await loadProjects()) {
       if (created.warnings.length > 0) {
         showGlobalMessage(`${created.name} se registró, pero la revisión encontró avisos. Léelos en su fila antes de encenderlo.`, 'warning')

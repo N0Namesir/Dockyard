@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import test from 'node:test'
 import { buildApp } from '../src/app.ts'
 import { createProjectRepository } from '../src/db/projects.ts'
+import { createSettingsStore } from '../src/services/settings.ts'
 import { createVersionChecker } from '../src/services/version.ts'
 import type { CoreAdapter } from '../src/types.ts'
 
@@ -51,20 +52,37 @@ async function setup(options: { supported?: boolean; env?: string } = {}) {
 test('Configuración: la consulta automática empieza según UPDATE_CHECK y luego manda lo guardado', async () => {
   const ctx = await setup({ env: 'off' })
   try {
-    assert.deepEqual((await ctx.app.inject({ method: 'GET', url: '/api/settings', headers: HOST })).json(), { updateCheck: false })
+    assert.deepEqual((await ctx.app.inject({ method: 'GET', url: '/api/settings', headers: HOST })).json(), { updateCheck: false, projectsView: 'grid' })
 
     const saved = await ctx.app.inject({ method: 'PATCH', url: '/api/settings', headers: HOST, payload: { updateCheck: true } })
     assert.equal(saved.statusCode, 200)
-    assert.deepEqual(saved.json(), { updateCheck: true })
-    assert.deepEqual((await ctx.app.inject({ method: 'GET', url: '/api/settings', headers: HOST })).json(), { updateCheck: true })
+    assert.deepEqual(saved.json(), { updateCheck: true, projectsView: 'grid' })
+    assert.deepEqual((await ctx.app.inject({ method: 'GET', url: '/api/settings', headers: HOST })).json(), { updateCheck: true, projectsView: 'grid' })
 
-    for (const payload of [{}, { updateCheck: 'sí' }, { otro: true }]) {
+    for (const payload of [{}, { updateCheck: 'sí' }, { otro: true }, { projectsView: 'lista' }]) {
       const bad = await ctx.app.inject({ method: 'PATCH', url: '/api/settings', headers: HOST, payload })
       assert.equal(bad.statusCode, 400, JSON.stringify(payload))
     }
   } finally {
     await ctx.close()
   }
+})
+
+test('la vista de Proyectos: cuadrícula en una instalación nueva, tabla si ya había proyectos, y se guarda', async () => {
+  const fresh = createProjectRepository(':memory:')
+  const app = await buildApp({ repository: fresh, core: fakeCore({ supported: false, running: false, started: 0 }) })
+  assert.equal((await app.inject({ method: 'GET', url: '/api/settings', headers: HOST })).json().projectsView, 'grid')
+  // Registrar el primer proyecto no la cambia: quedó guardada al arrancar.
+  fresh.insert({ name: 'primero', team: 'E', sourceType: 'git', source: 'https://github.com/e/p', dir: '/p', warnings: [] })
+  assert.equal(createSettingsStore(fresh).get().projectsView, 'grid')
+  const saved = await app.inject({ method: 'PATCH', url: '/api/settings', headers: HOST, payload: { projectsView: 'table' } })
+  assert.equal(saved.json().projectsView, 'table')
+  assert.equal((await app.inject({ method: 'GET', url: '/api/settings', headers: HOST })).json().projectsView, 'table')
+  await app.close()
+
+  const existing = createProjectRepository(':memory:')
+  existing.insert({ name: 'viejo', team: 'E', sourceType: 'git', source: 'https://github.com/e/p', dir: '/p', warnings: [] })
+  assert.equal(createSettingsStore(existing).get().projectsView, 'table')
 })
 
 test('la consulta automática obedece al ajuste en cada llamada; Comprobar ahora consulta siempre', async () => {

@@ -1,9 +1,15 @@
 // Estado de la página. Es una copia de lo que respondió la API más lo que el docente tiene
 // abierto; la fuente de verdad sigue siendo la API.
-import type { PortConflict, Project, ProjectAction, Registration, Resources } from './types.ts'
+import type { Folder, PortConflict, Project, ProjectAction, ProjectsView, Registration, Resources, YearFolder } from './types.ts'
 
 export const state = {
   projects: [] as Project[],
+  /** Tabla o cuadrícula; la preferencia se guarda en la API. */
+  view: 'table' as ProjectsView,
+  /** Carpeta abierta: un año o «todos». Va en la URL (?año=). */
+  folder: 'todos' as Folder,
+  /** Años con proyectos, según la API. */
+  years: [] as YearFolder[],
   loading: true,
   loadFailed: false,
   resources: null as Resources | null,

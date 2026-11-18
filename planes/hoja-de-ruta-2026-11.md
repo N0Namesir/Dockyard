@@ -323,3 +323,18 @@ Entorno de la sesión: Node 24.22 (`/opt/node24`), Docker 29.10 levantado dentro
   - El encendido desde la ficha no muestra el avance de Docker línea por línea (eso sigue en la lista); muestra «Encendiendo…» y el error si falla.
 - **Pruebas:** `build`, `typecheck` y `npm test` bien (83 + 76; 9 pruebas nuevas de la API en `api/test/details.test.ts`: valores por defecto, sugerencia de nombre, validación de cada campo, búsqueda y años, firma de bytes, subir/servir/cambiar/borrar la imagen, rechazo de SVG y de más de 2 MB, borrado al eliminar y migración de una base anterior). `test:ui` bien (28 y 1 omitida; nuevas: `web/test/project.test.mjs` con 6 pruebas de la ficha, y 2 en `ui.test.mjs` para el enlace a la ficha y la sugerencia de nombre al registrar). No toca Docker.
 - **Pendientes y riesgos:** el ícono automático del proyecto (opcional) no se hizo. La ficha refresca su estado cada 15 s, no cada 2 s como la lista mientras enciende.
+
+### 4. Vista en cuadrícula o tabla y carpetas por año
+
+- **Estado:** terminada.
+- **Commit:** ver la lista de commits al final.
+- **Decisiones que se apartaron del plan:**
+  - `GET /api/projects/years` agrega `running` (cuántos encendidos tiene cada año). Sin eso, con la carpeta de un año abierta, «Apagar todos» no sabía si había algo encendido en otro año y podía quedar oculto. Usa la misma consulta única a Docker que la lista. Las carpetas también lo muestran («2 encendidos»).
+  - El valor por defecto de `projectsView` se decide y **se guarda** la primera vez que arranca esta versión (`table` si hay proyectos, `grid` si no). Si se calculara en cada lectura, una instalación nueva pasaría a tabla al registrar su primer proyecto.
+  - Las piezas comunes salieron de `rows/project-row.ts` a `parts/` (`identity.ts`, `status.ts`, `ports.ts`, `controls.ts`, este último con el menú popover) y los paneles de avance, avisos y registro a `progressPanel`, `warningsPanel` y `logsPanel`; la fila y la tarjeta (`cards/project-card.ts`) solo los acomodan. Los registros en curso también tienen tarjeta (`cards/registration-card.ts`).
+  - «Apagar todos» dice «Apagar todos (todos los años)» dentro de una carpeta y «Apagar todos» en «Todos»; la confirmación dice que incluye los de otros años.
+  - Al registrar un proyecto de otro año, se abre su carpeta para que se vea.
+  - Atrás y Adelante del navegador cambian de carpeta (`pushState` y `popstate`).
+  - Se corrigió de paso un desborde horizontal a 320 px: la rejilla de 12 columnas con `gap-7` suma 11 separaciones que no caben. Proyectos y Configuración usan ahora `gap-y-* lg:gap-x-*`, y quedó la regla en `AGENTS.md`.
+- **Pruebas:** `build`, `typecheck` y `npm test` bien (83 + 77, con una prueba nueva de la API para la vista por defecto y su guardado). `test:ui` bien (30 y 1 omitida; nuevas: cuadrícula con sus acciones, menú y foco tras refrescar, registro dentro de la tarjeta, sin desplazamiento horizontal de 320 a 1440 px y preferencia guardada; carpetas con el año más reciente por defecto, URL, buscar en todos, Atrás y recarga). Se revisaron capturas de la tabla y la cuadrícula a 1440 y 390 px.
+- **Pendientes y riesgos:** en tarjetas angostas, el botón ⋯ baja a una segunda línea junto a Encender/Apagar y Abrir; funciona, pero ocupa más alto.

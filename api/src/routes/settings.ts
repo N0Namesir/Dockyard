@@ -6,7 +6,10 @@ import type { createSelfUpdate } from '../services/self-update.ts'
 import type { SettingsStore } from '../services/settings.ts'
 
 const settingsBodySchema = Type.Object(
-  { updateCheck: Type.Optional(Type.Boolean()) },
+  {
+    updateCheck: Type.Optional(Type.Boolean()),
+    projectsView: Type.Optional(Type.Union([Type.Literal('table'), Type.Literal('grid')])),
+  },
   { additionalProperties: false, minProperties: 1 },
 )
 
@@ -25,7 +28,7 @@ export function settingsRoutes(
       { schema: { body: settingsBodySchema } },
       (request) => {
         // Fastify quita los campos desconocidos antes de validar: sin un ajuste conocido, no hay cambio.
-        if (request.body.updateCheck === undefined) {
+        if (request.body.updateCheck === undefined && request.body.projectsView === undefined) {
           throw new HttpError(400, 'Indica qué ajuste cambiar.')
         }
         return settings.update(request.body)

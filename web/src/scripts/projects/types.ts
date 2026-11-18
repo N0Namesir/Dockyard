@@ -41,6 +41,18 @@ export interface Contact {
   phone?: string
 }
 
+export type ProjectsView = 'table' | 'grid'
+
+/** Un año o todos los proyectos. */
+export type Folder = number | 'todos'
+
+/** Una carpeta: un año con proyectos, cuántos tiene y cuántos están encendidos. */
+export interface YearFolder {
+  year: number
+  count: number
+  running: number
+}
+
 /** Un registro en curso, o uno que falló sin una pestaña esperando la respuesta. */
 export interface Registration {
   key: string
