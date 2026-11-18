@@ -126,6 +126,15 @@ function actionsCell(project: Project, handlers: RowHandlers): HTMLTableCellElem
     replace.addEventListener('click', () => handlers.replaceZip(project))
     secondary.append(replace)
   }
+  const edit = element(
+    'button',
+    'text-slate-600 underline hover:text-marca-texto disabled:cursor-wait disabled:no-underline disabled:opacity-50',
+    pending === 'edit' ? 'Guardando…' : 'Editar',
+  )
+  edit.type = 'button'
+  edit.disabled = isPending
+  edit.addEventListener('click', () => handlers.editProject(project))
+  secondary.append(edit)
   const logs = element(
     'button',
     'text-slate-600 underline hover:text-marca-texto',

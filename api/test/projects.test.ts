@@ -72,6 +72,12 @@ function fakeCore() {
     async removeProject(name) {
       statuses.delete(name)
     },
+    async renameProject(name, newName) {
+      const status = statuses.get(name)
+      statuses.delete(name)
+      if (status) statuses.set(newName, status)
+      return { dir: `/projects/${newName}`, name: newName }
+    },
   }
 
   return { core, getReceivedSource: () => receivedSource }
@@ -787,6 +793,73 @@ test('sin la opción, construir la app no enciende nada', async () => {
   await app.listen({ host: '127.0.0.1', port: 0 })
   await app.close()
   assert.equal(starts, 0)
+})
+
+test('editar cambia el equipo y el nombre; el siguiente encendido usa el nombre nuevo y reconstruye', async () => {
+  const { core } = fakeCore()
+  const renames: string[][] = []
+  const starts: { dir: string; name: string; build?: boolean }[] = []
+  const app = await testApp({
+    ...core,
+    async renameProject(name, newName) {
+      renames.push([name, newName])
+      return core.renameProject(name, newName)
+    },
+    async startProject(dir, name, options) {
+      starts.push({ dir, name, build: options?.build })
+      return core.startProject(dir, name, options)
+    },
+  })
+  const created = (await app.inject({ method: 'POST', url: '/api/projects', payload: { team: 'E', name: 'Tienda Mal', repoUrl: 'https://github.com/e/t' } })).json()
+
+  // Solo el equipo: no toca Docker.
+  let response = await app.inject({ method: 'PATCH', url: `/api/projects/${created.id}`, payload: { team: '  Equipo 9 ' } })
+  assert.equal(response.statusCode, 200)
+  assert.equal(response.json().team, 'Equipo 9')
+  assert.equal(response.json().pendingBuild, false)
+  assert.deepEqual(renames, [])
+
+  // El mismo nombre, escrito distinto, tampoco.
+  await app.inject({ method: 'PATCH', url: `/api/projects/${created.id}`, payload: { name: 'TIENDA mal' } })
+  assert.deepEqual(renames, [])
+
+  response = await app.inject({ method: 'PATCH', url: `/api/projects/${created.id}`, payload: { name: 'Tienda Escolar' } })
+  assert.equal(response.statusCode, 200)
+  assert.equal(response.json().name, 'tienda-escolar')
+  assert.equal(response.json().pendingBuild, true)
+  assert.deepEqual(renames, [['tienda-mal', 'tienda-escolar']])
+
+  // El nombre anterior queda libre y el nuevo se encuentra.
+  assert.equal((await app.inject({ method: 'GET', url: '/api/projects?q=escolar' })).json().length, 1)
+  assert.equal((await app.inject({ method: 'POST', url: '/api/projects', payload: { team: 'E', name: 'Tienda Mal', repoUrl: 'https://github.com/e/t' } })).statusCode, 201)
+
+  await app.inject({ method: 'POST', url: `/api/projects/${created.id}/start` })
+  assert.deepEqual(starts, [{ dir: '/projects/tienda-escolar', name: 'tienda-escolar', build: true }])
+  await app.close()
+})
+
+test('editar: rechaza encendidos, nombres repetidos, campos vacíos o desconocidos y proyectos que no existen', async () => {
+  const app = await testApp()
+  const a = (await app.inject({ method: 'POST', url: '/api/projects', payload: { team: 'E', name: 'A', repoUrl: 'https://github.com/e/a' } })).json()
+  await app.inject({ method: 'POST', url: '/api/projects', payload: { team: 'E', name: 'B', repoUrl: 'https://github.com/e/b' } })
+
+  let response = await app.inject({ method: 'PATCH', url: `/api/projects/${a.id}`, payload: { name: 'b' } })
+  assert.equal(response.statusCode, 409)
+  assert.match(response.json().message, /Ya existe un proyecto con el nombre “b”/)
+
+  for (const payload of [{ team: '' }, { name: '   ' }, { team: 'E', dir: '/etc' }, {}]) {
+    response = await app.inject({ method: 'PATCH', url: `/api/projects/${a.id}`, payload })
+    assert.equal(response.statusCode, 400, JSON.stringify(payload))
+  }
+  assert.equal((await app.inject({ method: 'PATCH', url: '/api/projects/999', payload: { team: 'X' } })).statusCode, 404)
+
+  await app.inject({ method: 'POST', url: `/api/projects/${a.id}/start` })
+  response = await app.inject({ method: 'PATCH', url: `/api/projects/${a.id}`, payload: { name: 'nuevo' } })
+  assert.equal(response.statusCode, 409)
+  assert.equal(response.json().message, 'Apaga el proyecto antes de cambiarle el nombre.')
+  // El equipo sí se cambia encendido.
+  assert.equal((await app.inject({ method: 'PATCH', url: `/api/projects/${a.id}`, payload: { team: 'Otro' } })).json().team, 'Otro')
+  await app.close()
 })
 
 test('una petición repetida se une a la operación en curso', async () => {

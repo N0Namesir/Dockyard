@@ -4,7 +4,7 @@
 export { normalizeProjectName } from './name.ts'
 export { prepareProject, replaceProjectZip, updateProject } from './sources.ts'
 export { reviewProject } from './review.ts'
-export { startProject, stopProject, getProjectStatus, getProjectStatuses, getProjectLogs, removeProject } from './docker.ts'
+export { startProject, stopProject, getProjectStatus, getProjectStatuses, getProjectLogs, removeProject, renameProject } from './docker.ts'
 export { getResources } from './resources.ts'
 export { getLatestVersion, isNewerVersion } from './version.ts'
 export { projectsDir } from './paths.ts'

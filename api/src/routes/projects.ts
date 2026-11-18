@@ -27,7 +27,16 @@ const repositoryBodySchema = Type.Object(
   { additionalProperties: false },
 )
 
+const editBodySchema = Type.Object(
+  {
+    team: Type.Optional(Type.String({ minLength: 1, maxLength: 120 })),
+    name: Type.Optional(Type.String({ minLength: 1, maxLength: 120 })),
+  },
+  { additionalProperties: false, minProperties: 1 },
+)
+
 type ListQuery = Static<typeof listQuerySchema>
+type EditBody = Static<typeof editBodySchema>
 type IdParams = Static<typeof idParamsSchema>
 type RepositoryBody = Static<typeof repositoryBodySchema>
 
@@ -206,6 +215,21 @@ export function projectRoutes(service: ProjectService): FastifyPluginAsync {
       async (request, reply) => {
         await service.remove(Number(request.params.id))
         return reply.code(204).send()
+      },
+    )
+
+    app.patch<{ Params: IdParams }>(
+      '/projects/:id',
+      { schema: { params: idParamsSchema } },
+      async (request) => {
+        if (!Value.Check(editBodySchema, request.body)) {
+          throw new HttpError(400, 'Solo se pueden cambiar el equipo y el nombre, y no pueden quedar vacíos.')
+        }
+        const body = request.body as EditBody
+        return service.edit(Number(request.params.id), {
+          team: body.team === undefined ? undefined : requiredText(body.team, 'el nombre del equipo'),
+          name: body.name === undefined ? undefined : requiredText(body.name, 'el nombre del proyecto'),
+        })
       },
     )
 

@@ -59,7 +59,7 @@ export interface ReplaceResult {
   leftover: string | null
 }
 
-export type ProjectAction = 'start' | 'stop' | 'remove' | 'update' | 'replace'
+export type ProjectAction = 'start' | 'stop' | 'remove' | 'update' | 'replace' | 'edit'
 
 /** Otro proyecto registrado que ocupa un puerto de este; la API lo manda al fallar el encendido. */
 export interface PortConflict {
@@ -73,6 +73,7 @@ export interface RowHandlers {
   changeState(project: Project): void
   updateProject(project: Project): void
   replaceZip(project: Project): void
+  editProject(project: Project): void
   removeProject(project: Project): void
   /** Apaga el proyecto que ocupa su puerto y lo enciende. */
   replaceConflicting(project: Project): void

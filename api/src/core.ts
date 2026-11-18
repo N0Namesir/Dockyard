@@ -8,6 +8,7 @@ export {
   normalizeProjectName,
   prepareProject,
   removeProject,
+  renameProject,
   replaceProjectZip,
   reviewProject,
   startProject,

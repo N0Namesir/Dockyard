@@ -1,11 +1,11 @@
-import { rm } from 'node:fs/promises'
+import { rename, rm, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { assertNormalizedName } from './name.ts'
 import { findComposeFile, projectRepoDir, projectsDir } from './paths.ts'
 import { createProgressTracker } from './progress.ts'
 import { CommandError, run, type RunOptions } from './run.ts'
-import { PortConflictError, type ProjectStatus, type StartOptions } from './types.ts'
+import { PortConflictError, type PreparedProject, type ProjectStatus, type StartOptions } from './types.ts'
 
 const START_TIMEOUT = 10 * 60_000
 const STOP_TIMEOUT = 2 * 60_000
@@ -360,8 +360,68 @@ export async function removeProject(name: string): Promise<void> {
   }
 }
 
-async function removeContainers(target: string, name: string): Promise<void> {
-  const down = ['down', '-v', '--remove-orphans']
+/**
+ * Cambia el nombre de un proyecto apagado: su nombre de compose, su carpeta y la de su repositorio.
+ * Los volúmenes de Docker no se pueden renombrar, así que se niega si el proyecto tiene alguno:
+ * con otro nombre empezaría sin sus datos. Borra los contenedores, la red y las imágenes del nombre
+ * anterior; el siguiente encendido los crea de nuevo. Devuelve la carpeta del compose.
+ */
+export async function renameProject(name: string, newName: string): Promise<PreparedProject> {
+  assertNormalizedName(name)
+  assertNormalizedName(newName)
+  const from = join(projectsDir(), name)
+  const to = join(projectsDir(), newName)
+  if (!await isDirectory(from)) throw new Error(`No se encontró la carpeta del proyecto en ${from}. Elimínalo y regístralo de nuevo.`)
+  if (name !== newName) {
+    if ((await getProjectStatus(name)).state === 'running') {
+      throw new Error('Apaga el proyecto antes de cambiarle el nombre.')
+    }
+    await assertProjectNameFree(newName)
+    for (const dir of [to, projectRepoDir(newName)]) {
+      if (await exists(dir)) throw new Error(`Ya existe la carpeta ${dir}. Usa otro nombre o, si ese proyecto ya no se usa, borra la carpeta.`)
+    }
+    const volumes = (await docker(
+      ['volume', 'ls', '-q', '--filter', `label=com.docker.compose.project=${name}`],
+      { timeoutMs: STATUS_TIMEOUT },
+    )).split('\n').filter(Boolean)
+    if (volumes.length > 0) {
+      throw new Error(`No se puede cambiar el nombre porque el proyecto guarda datos en volúmenes de Docker (${volumes.join(', ')}): con otro nombre empezaría sin ellos. Si esos datos no hacen falta, elimínalo y regístralo de nuevo con el nombre correcto.`)
+    }
+    try {
+      await removeContainers(from, name, { volumes: false })
+    } catch (err) {
+      if (err instanceof CommandError) {
+        throw new Error(`No se pudieron borrar los contenedores del nombre anterior. Docker respondió:\n${lastLines(err.stderr, 10)}`)
+      }
+      throw err
+    }
+    // Renombrar no depende de los permisos de lo que hay dentro: no falla a medias por archivos de root.
+    await rename(from, to)
+    if (await exists(projectRepoDir(name))) {
+      try {
+        await rename(projectRepoDir(name), projectRepoDir(newName))
+      } catch (err) {
+        await rename(to, from)
+        throw err
+      }
+    }
+    await rm(join(projectsDir(), '.reemplazos', name), { recursive: true, force: true }).catch(() => {})
+  }
+  const location = await findComposeFile(to)
+  if (!location) throw new Error(`No se encontró un archivo compose en ${to}.`)
+  return { dir: location.dir, name: newName }
+}
+
+function exists(path: string): Promise<boolean> {
+  return stat(path).then(() => true, () => false)
+}
+
+function isDirectory(path: string): Promise<boolean> {
+  return stat(path).then((info) => info.isDirectory(), () => false)
+}
+
+async function removeContainers(target: string, name: string, { volumes = true } = {}): Promise<void> {
+  const down = volumes ? ['down', '-v', '--remove-orphans'] : ['down', '--remove-orphans']
   const location = await findComposeFile(target).catch(() => null)
   if (location) {
     try {

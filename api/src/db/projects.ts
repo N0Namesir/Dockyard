@@ -41,6 +41,9 @@ export interface ProjectRepository {
   /** Código nuevo: guarda la carpeta, los avisos y, si cambió, el origen. El próximo encendido reconstruye. */
   applyUpdate(id: number, update: { dir: string; warnings: string[]; source?: string }): void
   clearNeedsBuild(id: number): void
+  setTeam(id: number, team: string): void
+  /** Nombre y carpeta nuevos tras renombrarlo en el núcleo. El próximo encendido reconstruye. */
+  rename(id: number, project: { name: string; dir: string }): void
   /** Si el docente lo dejó encendido: Dockyard lo vuelve a encender al arrancar. */
   setKeepRunning(id: number, keepRunning: boolean): void
   delete(id: number): void
@@ -108,6 +111,8 @@ export function createProjectRepository(
 
   const update = db.prepare('UPDATE projects SET dir = ?, warnings = ?, source = COALESCE(?, source), needs_build = 1 WHERE id = ?')
   const built = db.prepare('UPDATE projects SET needs_build = 0 WHERE id = ?')
+  const team = db.prepare('UPDATE projects SET team = ? WHERE id = ?')
+  const rename = db.prepare('UPDATE projects SET name = ?, dir = ?, needs_build = 1 WHERE id = ?')
   const keepRunning = db.prepare('UPDATE projects SET keep_running = ? WHERE id = ?')
   const remove = db.prepare('DELETE FROM projects WHERE id = ?')
 
@@ -153,6 +158,14 @@ export function createProjectRepository(
 
     clearNeedsBuild(id) {
       built.run(id)
+    },
+
+    setTeam(id, value) {
+      team.run(value, id)
+    },
+
+    rename(id, { name, dir }) {
+      rename.run(name, dir, id)
     },
 
     setKeepRunning(id, value) {

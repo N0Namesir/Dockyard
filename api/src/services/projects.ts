@@ -78,7 +78,7 @@ export function createProjectService(
 
   function once<T>(
     id: number,
-    action: 'start' | 'stop' | 'remove' | 'update' | 'replace',
+    action: 'start' | 'stop' | 'remove' | 'update' | 'replace' | 'rename',
     run: () => Promise<T>,
   ): Promise<T> {
     const key = `${id}:${action}`
@@ -151,8 +151,8 @@ export function createProjectService(
 
   async function start(id: number): Promise<ProjectResponse> {
     const project = requireProject(id)
-    if (inFlight.has(`${id}:update`) || inFlight.has(`${id}:replace`)) {
-      throw new HttpError(409, 'El proyecto se está actualizando. Espera a que termine.')
+    if (['update', 'replace', 'rename'].some((action) => inFlight.has(`${id}:${action}`))) {
+      throw new HttpError(409, 'El proyecto se está actualizando o cambiando de nombre. Espera a que termine.')
     }
     return once(id, 'start', async () => {
       const start = { startedAt: Date.now(), current: { stage: '', lines: [] } as StartProgress }
@@ -187,7 +187,7 @@ export function createProjectService(
     const queue = [...running]
     async function worker(): Promise<void> {
       for (let row = queue.shift(); row; row = queue.shift()) {
-        if (['start', 'update', 'replace', 'remove'].some((action) => inFlight.has(`${row!.id}:${action}`))) {
+        if (['start', 'update', 'replace', 'remove', 'rename'].some((action) => inFlight.has(`${row!.id}:${action}`))) {
           result.skipped.push(row.name)
           continue
         }
@@ -293,7 +293,7 @@ export function createProjectService(
 
     async remove(id: number): Promise<void> {
       const project = requireProject(id)
-      if (['start', 'stop', 'update', 'replace'].some((action) => inFlight.has(`${id}:${action}`))) {
+      if (['start', 'stop', 'update', 'replace', 'rename'].some((action) => inFlight.has(`${id}:${action}`))) {
         throw new HttpError(409, 'El proyecto se está encendiendo, apagando o actualizando. Espera a que termine.')
       }
       return once(id, 'remove', async () => {
@@ -310,7 +310,7 @@ export function createProjectService(
       if (project.source_type !== 'git') {
         throw new HttpError(409, 'Solo se actualizan los proyectos registrados desde GitHub. Para un proyecto registrado desde un ZIP, usa Reemplazar ZIP.')
       }
-      if (['start', 'stop', 'remove'].some((action) => inFlight.has(`${id}:${action}`))) {
+      if (['start', 'stop', 'remove', 'rename'].some((action) => inFlight.has(`${id}:${action}`))) {
         throw new HttpError(409, 'El proyecto se está encendiendo, apagando o eliminando. Espera a que termine.')
       }
       return once(id, 'update', async () => {
@@ -334,7 +334,7 @@ export function createProjectService(
       if (project.source_type !== 'zip') {
         throw new HttpError(409, 'Solo se reemplaza el ZIP de los proyectos registrados desde un ZIP. Para uno de GitHub, usa Actualizar.')
       }
-      if (['start', 'stop', 'remove'].some((action) => inFlight.has(`${id}:${action}`))) {
+      if (['start', 'stop', 'remove', 'rename'].some((action) => inFlight.has(`${id}:${action}`))) {
         throw new HttpError(409, 'El proyecto se está encendiendo, apagando o eliminando. Espera a que termine.')
       }
       return once(id, 'replace', async () => {
@@ -349,6 +349,34 @@ export function createProjectService(
         webChecks.delete(id)
         return { project: await hydrate(requireProject(id)), leftover }
       })
+    },
+
+    /**
+     * Cambia el equipo o el nombre. El equipo es solo un dato; el nombre también es el de compose y
+     * el de la carpeta, así que lo cambia el núcleo, con el proyecto apagado.
+     */
+    async edit(id: number, input: { team?: string; name?: string }): Promise<ProjectResponse> {
+      const project = requireProject(id)
+      const newName = input.name === undefined ? project.name : core.normalizeProjectName(input.name)
+      if (newName !== project.name) {
+        if (['start', 'stop', 'update', 'replace', 'remove'].some((action) => inFlight.has(`${id}:${action}`))) {
+          throw new HttpError(409, 'El proyecto se está encendiendo, apagando o actualizando. Espera a que termine.')
+        }
+        if (repository.findByName(newName)) {
+          throw new HttpError(409, `Ya existe un proyecto con el nombre “${newName}”. Usa otro nombre.`)
+        }
+        await once(id, 'rename', async () => {
+          const status = await core.getProjectStatus(project.name)
+          if (status.state === 'running') {
+            throw new HttpError(409, 'Apaga el proyecto antes de cambiarle el nombre.')
+          }
+          const { dir } = await core.renameProject(project.name, newName)
+          repository.rename(id, { name: newName, dir })
+          webChecks.delete(id)
+        })
+      }
+      if (input.team !== undefined) repository.setTeam(id, input.team)
+      return hydrate(requireProject(id))
     },
 
     async stop(id: number): Promise<ProjectResponse> {

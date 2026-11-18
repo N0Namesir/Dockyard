@@ -13,7 +13,7 @@ import { basename, join } from 'node:path'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { after, before, describe, test } from 'node:test'
 import { buildZip, createTestZips, entriesFrom } from '../../ejemplos/crear-zips.ts'
-import { getProjectLogs, getProjectStatus, getProjectStatuses, getResources, normalizeProjectName, PortConflictError, prepareProject, removeProject, replaceProjectZip, startProject, stopProject } from '../src/index.ts'
+import { getProjectLogs, getProjectStatus, getProjectStatuses, getResources, normalizeProjectName, PortConflictError, prepareProject, removeProject, renameProject, replaceProjectZip, startProject, stopProject } from '../src/index.ts'
 import { run } from '../src/run.ts'
 import type { StartProgress } from '../src/types.ts'
 
@@ -391,5 +391,61 @@ describe('replaceProjectZip', () => {
     assert.equal((await replaceProjectZip(name, zips.raiz)).leftover, null)
     await removeProject(name)
     assert.ok(!existsSync(join(process.env.PROJECTS_DIR!, '.reemplazos', name)))
+  })
+})
+
+describe('renameProject', () => {
+  test('cambia el nombre de compose y la carpeta; enciende con el nombre nuevo', async () => {
+    const name = uniqueName('nombre-viejo')
+    const newName = uniqueName('nombre-nuevo')
+    const { dir } = await prepareProject({ type: 'zip', filePath: zips.raiz }, name)
+    assert.equal((await startProject(dir, name)).state, 'running')
+    await assert.rejects(renameProject(name, newName), /Apaga el proyecto antes de cambiarle el nombre/)
+    await stopProject(dir, name)
+
+    const renamed = await renameProject(name, newName)
+    assert.deepEqual(renamed, { dir: join(process.env.PROJECTS_DIR!, newName), name: newName })
+    assert.ok(!existsSync(dir), 'queda la carpeta con el nombre anterior')
+    assert.equal((await getProjectStatuses())[name], undefined, 'quedan contenedores con el nombre anterior')
+
+    try {
+      // La carpeta montada con ruta relativa sigue funcionando desde la carpeta nueva.
+      assert.deepEqual(await startProject(renamed.dir, newName), { state: 'running', ports: [8081] })
+      assert.match(await fetchText(8081), /prueba-estatico funciona/)
+    } finally {
+      await stopProject(renamed.dir, newName)
+    }
+    await removeProject(newName)
+  })
+
+  test('se niega si el proyecto guarda datos en volúmenes o el nombre nuevo ya existe', async () => {
+    const name = uniqueName('con-volumen')
+    const other = uniqueName('ocupado')
+    const compose = [
+      'services:',
+      '  web:',
+      '    image: nginx:alpine',
+      '    volumes:',
+      '      - datos:/datos',
+      'volumes:',
+      '  datos:',
+      '',
+    ].join('\n')
+    const zip = join(base, 'zips', 'con-volumen.zip')
+    await writeFile(zip, buildZip([{ name: 'compose.yaml', data: Buffer.from(compose) }]))
+    const { dir } = await prepareProject({ type: 'zip', filePath: zip }, name)
+    await prepareProject({ type: 'zip', filePath: zips.raiz }, other)
+
+    await assert.rejects(renameProject(name, other), /Ya existe la carpeta/)
+    // Encender crea el volumen: desde ahí el nombre ya no se puede cambiar.
+    await startProject(dir, name)
+    await stopProject(dir, name)
+    await assert.rejects(renameProject(name, uniqueName('sin-datos')), (err: Error) => {
+      assert.match(err.message, new RegExp(`volúmenes de Docker \\(${name}_datos\\)`))
+      return true
+    })
+    assert.ok(existsSync(dir), 'la carpeta debe quedar como estaba')
+    await removeProject(name)
+    await removeProject(other)
   })
 })

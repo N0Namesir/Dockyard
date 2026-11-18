@@ -99,6 +99,7 @@ export interface CoreAdapter {
   getProjectLogs(name: string): Promise<string>
   getResources(): Promise<ResourceUsage>
   removeProject(name: string): Promise<void>
+  renameProject(name: string, newName: string): Promise<PreparedProject>
 }
 
 export interface NewProjectRow {

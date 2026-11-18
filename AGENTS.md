@@ -65,6 +65,7 @@ reviewProject(dir: string, name: string): Promise<string[]>                     
 // ProjectSource = { type: 'git'; url } | { type: 'zip'; filePath }
 updateProject(name: string): Promise<ProjectUpdate>                             // { dir, changed, commit, summary }
 replaceProjectZip(name: string, filePath: string): Promise<ZipReplacement>     // { dir, leftover }: código nuevo desde un ZIP
+renameProject(name: string, newName: string): Promise<PreparedProject>         // nombre de compose y carpetas; apagado y sin volúmenes
 // StartOptions = { onProgress?, build? }
 // StartProgress = { stage, lines }: etapa en español y últimas líneas de Docker
 ```
@@ -89,12 +90,13 @@ replaceProjectZip(name: string, filePath: string): Promise<ZipReplacement>     /
 - `getLatestVersion` usa `git ls-remote --tags` e ignora las etiquetas que no sean `vX.Y.Z`. La API decide cuándo consultar (`api/src/services/version.ts`): como máximo cada 6 horas y solo si la piden, nunca al arrancar. `UPDATE_CHECK=off` la apaga y `update.sh` conserva ese valor.
 - `updateProject` no enciende nada y no pisa archivos cambiados en la PC. La API solo actualiza proyectos apagados, repite la revisión y hace que el siguiente encendido use `--build`.
 - `replaceProjectZip` abre y revisa el ZIP nuevo en `projects/.reemplazos/<nombre>/nuevo` y solo entonces cambia la carpeta con `rename`: si el ZIP no sirve, el proyecto queda como estaba. Borra la versión anterior con lo que el proyecto guardó en su carpeta; los volúmenes de Docker no se tocan. Si la anterior tiene archivos de root, la deja en `.reemplazos/<nombre>/anterior` y la devuelve en `leftover`. La API solo reemplaza proyectos de ZIP apagados, repite la revisión y hace que el siguiente encendido use `--build`. En la interfaz pide escribir el nombre, como eliminar.
+- `renameProject` se niega con el proyecto encendido, con un nombre que ya usa otro proyecto de Docker o una carpeta, y si el proyecto tiene volúmenes (Docker no los renombra y se perderían sus datos). Borra contenedores, red e imágenes del nombre anterior sin `-v` y renombra `projects/<nombre>` y `projects/.repos/<nombre>`. La API marca reconstruir.
 - `startProject`, `stopProject` y `getProjectStatus` rechazan nombres sin normalizar (`assertNormalizedName`).
 - Los comandos de Docker pasan por el ayudante `docker()` de `core/src/docker.ts`, que traduce "Docker no responde" y "sin permiso". Los demás, por `run()` de `core/src/run.ts`.
 
 ### Rutas de la API (contrato con `web/`)
 
-`GET /api/projects?q=`, `GET /api/projects/resources`, `POST /api/projects`, `GET /api/projects/:id`, `POST /api/projects/:id/start`, `POST /api/projects/:id/stop`, `POST /api/projects/stop-all`, `POST /api/projects/:id/update`, `POST /api/projects/:id/replace` (multipart, campo `file`), `GET /api/projects/:id/logs`, `GET /api/projects/:id/progress`, `DELETE /api/projects/:id`, `GET /api/version`.
+`GET /api/projects?q=`, `GET /api/projects/resources`, `POST /api/projects`, `GET /api/projects/:id`, `PATCH /api/projects/:id` (`team`, `name`), `POST /api/projects/:id/start`, `POST /api/projects/:id/stop`, `POST /api/projects/stop-all`, `POST /api/projects/:id/update`, `POST /api/projects/:id/replace` (multipart, campo `file`), `GET /api/projects/:id/logs`, `GET /api/projects/:id/progress`, `DELETE /api/projects/:id`, `GET /api/version`.
 
 Al arrancar, `server.ts` llama a `service.resume()`: vuelve a encender los proyectos con `keep_running = 1` que estén apagados (el docente los dejó encendidos y la PC o Docker se reiniciaron). Encender marca la columna y apagar la desmarca; ninguna ruta la cambia directamente.
 
