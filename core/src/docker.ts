@@ -361,6 +361,23 @@ export async function removeProject(name: string): Promise<void> {
 }
 
 /**
+ * Borra los contenedores, la red y los volúmenes del proyecto, y conserva su carpeta y sus imágenes:
+ * el siguiente encendido crea la base de nuevo, vuelve a cargar su `.sql` y no reconstruye. Las
+ * carpetas montadas desde el proyecto (`./data:/var/lib/mysql`) no se tocan: son código del equipo.
+ */
+export async function resetProjectData(dir: string, name: string): Promise<void> {
+  const prefix = await composePrefix(dir, name)
+  try {
+    await docker([...prefix, 'down', '-v', '--remove-orphans'], { timeoutMs: STOP_TIMEOUT })
+  } catch (err) {
+    if (err instanceof CommandError) {
+      throw new Error(`No se pudieron borrar los datos del proyecto. Docker respondió:\n${lastLines(err.stderr, 10)}`)
+    }
+    throw err
+  }
+}
+
+/**
  * Cambia el nombre de un proyecto apagado: su nombre de compose, su carpeta y la de su repositorio.
  * Los volúmenes de Docker no se pueden renombrar, así que se niega si el proyecto tiene alguno:
  * con otro nombre empezaría sin sus datos. Borra los contenedores, la red y las imágenes del nombre

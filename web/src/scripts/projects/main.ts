@@ -1,7 +1,7 @@
 // Punto de entrada de la página de proyectos: conecta los módulos y programa los refrescos.
 // Para agregar un botón a la fila: la acción va en actions.ts, el botón en rows/project-row.ts y
 // la conexión en RowHandlers (types.ts) y aquí.
-import { changeState, removeProject, replaceConflicting, updateProject } from './actions.ts'
+import { changeState, removeProject, replaceConflicting, resetData, updateProject } from './actions.ts'
 import { setupConfirmDialog } from './confirm-dialog.ts'
 import { editProject, setupEditDialog } from './edit-dialog.ts'
 import { setupDialogFocus } from './dialog-focus.ts'
@@ -34,6 +34,7 @@ setRowHandlers({
   replaceZip: (project) => void replaceZip(project),
   editProject: (project) => editProject(project),
   removeProject: (project) => void removeProject(project),
+  resetData: (project) => void resetData(project),
   replaceConflicting: (project) => void replaceConflicting(project),
   toggleLogs: (project) => void toggleLogs(project),
   loadLogs: (project) => void loadLogs(project),

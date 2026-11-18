@@ -13,7 +13,7 @@ import { basename, join } from 'node:path'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { after, before, describe, test } from 'node:test'
 import { buildZip, createTestZips, entriesFrom } from '../../ejemplos/crear-zips.ts'
-import { getProjectLogs, getProjectStatus, getProjectStatuses, getResources, normalizeProjectName, PortConflictError, prepareProject, removeProject, renameProject, replaceProjectZip, startProject, stopProject } from '../src/index.ts'
+import { getProjectLogs, getProjectStatus, getProjectStatuses, getResources, normalizeProjectName, PortConflictError, prepareProject, removeProject, renameProject, replaceProjectZip, resetProjectData, startProject, stopProject } from '../src/index.ts'
 import { run } from '../src/run.ts'
 import type { StartProgress } from '../src/types.ts'
 
@@ -284,6 +284,34 @@ describe('encender, consultar y apagar', () => {
     assert.equal(await run('docker', ['volume', 'ls', '-q', '--filter', `name=${name}_datos`]), '')
     assert.equal(await run('docker', ['images', '-q', `${name}-app`]), '')
     await removeProject(name)
+  })
+
+  test('resetProjectData borra contenedores y volúmenes, y conserva la carpeta, la imagen y las carpetas montadas', { timeout: 300_000 }, async () => {
+    const name = uniqueName('reiniciar')
+    const dir = join(process.env.PROJECTS_DIR!, name)
+    await mkdir(join(dir, 'montada'), { recursive: true })
+    await writeFile(join(dir, 'montada', 'del-equipo.txt'), 'no se toca\n')
+    await writeFile(join(dir, 'Dockerfile'), 'FROM busybox\n')
+    await writeFile(
+      join(dir, 'compose.yaml'),
+      'services:\n  app:\n    build: .\n    command: ["sleep", "600"]\n    volumes: ["datos:/datos", "./montada:/montada"]\nvolumes:\n  datos:\n',
+    )
+    const prefix = ['compose', '-p', name, '--project-directory', dir, '-f', join(dir, 'compose.yaml')]
+    assert.equal((await startProject(dir, name, { build: true })).state, 'running')
+    await run('docker', [...prefix, 'exec', '-T', 'app', 'touch', '/datos/marca'])
+    await stopProject(dir, name)
+
+    await resetProjectData(dir, name)
+    assert.equal(await run('docker', ['volume', 'ls', '-q', '--filter', `label=com.docker.compose.project=${name}`]), '')
+    assert.equal((await run('docker', ['ps', '-aq', '--filter', `label=com.docker.compose.project=${name}`])).trim(), '')
+    assert.notEqual((await run('docker', ['images', '-q', `${name}-app`])).trim(), '', 'la imagen se conserva')
+    assert.equal(await readFile(join(dir, 'montada', 'del-equipo.txt'), 'utf8'), 'no se toca\n')
+
+    // El siguiente encendido crea el volumen de nuevo, vacío, sin reconstruir.
+    assert.equal((await startProject(dir, name)).state, 'running')
+    await assert.rejects(run('docker', [...prefix, 'exec', '-T', 'app', 'test', '-f', '/datos/marca']))
+    await stopProject(dir, name)
+    await assert.rejects(resetProjectData(dir, 'Sin Normalizar'), /no es válido/)
   })
 
   test('removeProject funciona aunque el compose ya no sea válido', async () => {

@@ -271,6 +271,12 @@ export function projectRoutes(service: ProjectService): FastifyPluginAsync {
     )
 
     app.post<{ Params: IdParams }>(
+      '/projects/:id/reset-data',
+      { schema: { params: idParamsSchema } },
+      async (request) => service.resetData(Number(request.params.id)),
+    )
+
+    app.post<{ Params: IdParams }>(
       '/projects/:id/replace',
       { schema: { params: idParamsSchema } },
       async (request) => {

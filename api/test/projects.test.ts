@@ -78,6 +78,7 @@ function fakeCore() {
       if (status) statuses.set(newName, status)
       return { dir: `/projects/${newName}`, name: newName }
     },
+    async resetProjectData() {},
     async getSelfUpdateStatus() {
       return { supported: false, running: false }
     },
@@ -263,6 +264,67 @@ test('no se actualiza un proyecto encendido, ni uno de ZIP, ni uno que no existe
   const zip = await zipApp.inject({ method: 'POST', url: '/api/projects/1/update' })
   assert.equal(zip.statusCode, 409)
   assert.match(zip.json().message, /GitHub/)
+})
+
+test('reiniciar datos borra los volúmenes con el proyecto apagado y conserva la ficha', async () => {
+  const { core } = fakeCore()
+  const resets: string[] = []
+  const builds: (boolean | undefined)[] = []
+  const app = await testApp({
+    ...core,
+    async resetProjectData(dir, name) {
+      resets.push(`${dir} ${name}`)
+    },
+    async startProject(dir, name, options) {
+      builds.push(options?.build)
+      return core.startProject(dir, name, options)
+    },
+  })
+  await app.inject({ method: 'POST', url: '/api/projects', payload: REPO })
+  await app.inject({ method: 'PATCH', url: '/api/projects/1', payload: { notes: 'Revisar login' } })
+  await app.inject({ method: 'POST', url: '/api/projects/1/start' })
+
+  const running = await app.inject({ method: 'POST', url: '/api/projects/1/reset-data' })
+  assert.equal(running.statusCode, 409)
+  assert.match(running.json().message, /Apaga el proyecto/)
+  assert.deepEqual(resets, [])
+
+  await app.inject({ method: 'POST', url: '/api/projects/1/stop' })
+  const reset = await app.inject({ method: 'POST', url: '/api/projects/1/reset-data' })
+  assert.equal(reset.statusCode, 200)
+  const body = reset.json()
+  assert.deepEqual([body.name, body.notes, body.state, body.pendingBuild], ['a', 'Revisar login', 'stopped', false])
+  assert.deepEqual(resets, ['/projects/a a'])
+
+  // No pide reconstruir: las imágenes se conservan.
+  await app.inject({ method: 'POST', url: '/api/projects/1/start' })
+  assert.deepEqual(builds, [false, false])
+  assert.equal((await app.inject({ method: 'POST', url: '/api/projects/99/reset-data' })).statusCode, 404)
+})
+
+test('reiniciar datos se niega mientras el proyecto se enciende', async () => {
+  let finish = () => {}
+  const { core } = fakeCore()
+  let resets = 0
+  const app = await testApp({
+    ...core,
+    async startProject(dir, name, options) {
+      await new Promise<void>((resolve) => { finish = resolve })
+      return core.startProject(dir, name, options)
+    },
+    async resetProjectData() {
+      resets++
+    },
+  })
+  await app.inject({ method: 'POST', url: '/api/projects', payload: REPO })
+  const starting = app.inject({ method: 'POST', url: '/api/projects/1/start' })
+  await new Promise((resolve) => setTimeout(resolve, 20))
+  const busy = await app.inject({ method: 'POST', url: '/api/projects/1/reset-data' })
+  assert.equal(busy.statusCode, 409)
+  assert.match(busy.json().message, /Espera a que termine/)
+  finish()
+  await starting
+  assert.equal(resets, 0)
 })
 
 test('el consumo solo incluye proyectos registrados, suma el total y comparte la muestra', async () => {

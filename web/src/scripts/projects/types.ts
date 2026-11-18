@@ -75,7 +75,7 @@ export interface ReplaceResult {
   leftover: string | null
 }
 
-export type ProjectAction = 'start' | 'stop' | 'remove' | 'update' | 'replace' | 'edit'
+export type ProjectAction = 'start' | 'stop' | 'remove' | 'update' | 'replace' | 'edit' | 'reset'
 
 /** Otro proyecto registrado que ocupa un puerto de este; la API lo manda al fallar el encendido. */
 export interface PortConflict {
@@ -91,6 +91,8 @@ export interface RowHandlers {
   replaceZip(project: Project): void
   editProject(project: Project): void
   removeProject(project: Project): void
+  /** Borra sus volúmenes de Docker y conserva el código y la ficha. */
+  resetData(project: Project): void
   /** Apaga el proyecto que ocupa su puerto y lo enciende. */
   replaceConflicting(project: Project): void
   toggleLogs(project: Project): void

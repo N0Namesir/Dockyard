@@ -9,6 +9,7 @@ export {
   prepareProject,
   removeProject,
   renameProject,
+  resetProjectData,
   getSelfUpdateStatus,
   startSelfUpdate,
   SELF_UPDATE_EXIT_CODE,

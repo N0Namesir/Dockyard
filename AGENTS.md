@@ -59,6 +59,7 @@ getProjectStatuses(): Promise<Record<string, ProjectStatus>>                    
 getProjectLogs(name: string): Promise<string>                                   // últimas 200 líneas
 getResources(): Promise<ResourceUsage>                                          // { memoryLimit, projects }: consumo por proyecto de compose
 removeProject(name: string): Promise<void>                                      // se puede repetir
+resetProjectData(dir: string, name: string): Promise<void>                      // down -v sin --rmi: borra volúmenes, conserva carpeta e imágenes
 getLatestVersion(repoUrl: string): Promise<string | null>                       // etiqueta vX.Y.Z más alta, sin descargar el repositorio
 isNewerVersion(candidate: string, current: string): boolean
 reviewProject(dir: string, name: string): Promise<string[]>                     // avisos para el docente, nunca lanza por el proyecto
@@ -84,6 +85,7 @@ startSelfUpdate(): Promise<void>                                                
 - `reviewProject` solo lee: nada del proyecto se ejecuta. Sus avisos dicen dónde está el problema y nunca incluyen el valor de una clave. No impiden encender. La API los guarda al registrar y la interfaz solo los muestra.
 - La comprobación de que la web responde (`web` en la respuesta) la hace la API en `api/src/services/web-check.ts`, porque el núcleo no usa HTTP.
 - `failedServices` nombra los servicios caídos (salida distinta de 0) o reiniciándose de un proyecto encendido, y solo aparece si hay alguno.
+- `resetProjectData` usa `down -v --remove-orphans` sin `--rmi`: el siguiente encendido no reconstruye y crea la base de nuevo. No toca las carpetas montadas desde el proyecto. La API solo lo hace con el proyecto apagado y sin otra operación en curso (409), y no cambia `keep_running` ni `needs_build`.
 - `removeProject` usa `down -v` y borra la carpeta. Si quedan archivos de root, lanza el comando `sudo` a ejecutar.
 - Un contenedor en estado `restarting` cuenta como encendido para poder apagarlo. Si tras `up -d` ninguno queda `running`, `startProject` los detiene y lanza su registro.
 - Si `prepareProject` falla a mitad de camino, borra la carpeta que creó. El ZIP lo borra la API, no el núcleo.
@@ -101,7 +103,7 @@ startSelfUpdate(): Promise<void>                                                
 
 ### Rutas de la API (contrato con `web/`)
 
-`GET /api/projects?q=`, `GET /api/projects/resources`, `POST /api/projects`, `GET /api/projects/:id`, `PATCH /api/projects/:id` (`team`, `name`, `notes`), `POST /api/projects/:id/start`, `POST /api/projects/:id/stop`, `POST /api/projects/stop-all`, `POST /api/projects/:id/update`, `POST /api/projects/:id/replace` (multipart, campo `file`), `GET /api/projects/:id/logs`, `GET /api/projects/:id/progress`, `DELETE /api/projects/:id`, `GET /api/registrations`, `DELETE /api/registrations/:key`, `GET /api/version`, `POST /api/version/check`, `GET /api/settings`, `PATCH /api/settings` (`updateCheck`), `GET /api/update`, `POST /api/update`.
+`GET /api/projects?q=`, `GET /api/projects/resources`, `POST /api/projects`, `GET /api/projects/:id`, `PATCH /api/projects/:id` (`team`, `name`, `notes`), `POST /api/projects/:id/start`, `POST /api/projects/:id/stop`, `POST /api/projects/stop-all`, `POST /api/projects/:id/update`, `POST /api/projects/:id/replace` (multipart, campo `file`), `POST /api/projects/:id/reset-data`, `GET /api/projects/:id/logs`, `GET /api/projects/:id/progress`, `DELETE /api/projects/:id`, `GET /api/registrations`, `DELETE /api/registrations/:key`, `GET /api/version`, `POST /api/version/check`, `GET /api/settings`, `PATCH /api/settings` (`updateCheck`), `GET /api/update`, `POST /api/update`.
 
 `POST /api/projects` sigue respondiendo al terminar, pero el registro no se corta si se cierra la pestaña. Mientras corre, figura en `GET /api/registrations` con su etapa (solo en memoria). Si falla sin nadie esperando la respuesta, queda ahí con el motivo hasta que se descarta con `DELETE /api/registrations/:key`.
 

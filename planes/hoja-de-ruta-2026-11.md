@@ -285,4 +285,12 @@ Al final:
 - el enlace del pull request;
 - un resumen de lo que conviene revisar primero.
 
-_(vacío)_
+Entorno de la sesión: Node 24.22 (`/opt/node24`), Docker 29.10 levantado dentro del contenedor de la sesión (`dockerd`, con el almacén de imágenes de containerd) y Chromium 1243 preinstalado. Para `test:ui` se apuntó `PLAYWRIGHT_BROWSERS_PATH` a una carpeta temporal con enlaces a ese Chromium, porque el proyecto pide la revisión 1255 y no hay red para descargarla; no se cambió nada del repositorio por esto. Antes de empezar, `test:docker` daba 29 bien, 2 omitidas (las de archivos de root, porque la sesión corre como root) y 1 falla ajena al código: Docker Hub respondió 429 (límite de descargas) a `postgres:16-alpine` en «prueba-bd».
+
+### 1. Reiniciar los datos de un proyecto
+
+- **Estado:** terminada.
+- **Commit:** ver la lista de commits al final.
+- **Decisiones que se apartaron del plan:** `resetProjectData` usa `down -v --remove-orphans` (sin `--rmi`, como pide el plan); `--remove-orphans` solo quita contenedores de servicios que el compose ya no tiene. La ayuda que bloquea la acción con el proyecto encendido quedó en un ayudante común de `rows/project-row.ts` (`blockedWhileRunning`), que ahora usan también Actualizar y Reemplazar ZIP. El id del globo pasó de `update-hint-<id>` a `<acción>-hint-<id>`.
+- **Pruebas:** `build`, `typecheck` y `npm test` bien (80 + 62). `test:ui` bien (8 de `ui.test.mjs`, con una nueva). `test:docker`: la prueba nueva de `resetProjectData` (borra volúmenes y contenedores, conserva carpeta, imagen y carpetas montadas, y el siguiente encendido empieza vacío) pasa con Docker real.
+- **Pendientes y riesgos:** ninguno conocido. Un proyecto que guarda su base en una carpeta montada no se reinicia con esto; quedó escrito en el manual y en los límites conocidos.

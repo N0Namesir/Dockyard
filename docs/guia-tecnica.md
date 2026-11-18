@@ -22,7 +22,7 @@ navegador ──► web (Astro) ──► api (Fastify + SQLite) ──► core 
 |---|---|
 | `core/src/index.ts` | Contrato público del núcleo; la API importa solo desde aquí |
 | `core/src/sources.ts` | `prepareProject`, `updateProject` y `replaceProjectZip`: clonado, actualización, descompresión, reemplazo del ZIP, búsqueda del compose y limpieza |
-| `core/src/docker.ts` | Encender, apagar, estado y detección de choques de puertos |
+| `core/src/docker.ts` | Encender, apagar, estado, reiniciar datos, eliminar, renombrar y detección de choques de puertos |
 | `core/src/resources.ts` | Consumo de CPU y memoria por proyecto, a partir de `docker stats` |
 | `core/src/progress.ts` | Traduce la salida de `up -d` a etapas para el docente |
 | `core/src/review.ts` | `reviewProject`: revisión del compose y de los archivos al registrar |
@@ -55,8 +55,8 @@ navegador ──► web (Astro) ──► api (Fastify + SQLite) ──► core 
 | `table.ts` | Dibuja la tabla a partir del estado |
 | `rows/` | Una fila por archivo: proyecto, avance del encendido, avisos, registro y registro en curso |
 | `list.ts`, `progress.ts`, `logs.ts`, `resources.ts`, `version.ts`, `registrations.ts` | Cargar la lista y consultar cada cierto tiempo el avance, el registro, el consumo, la versión y los proyectos que se están registrando |
-| `run-action.ts`, `actions.ts`, `stop-all.ts`, `replace-zip.ts`, `edit-dialog.ts` | Marcar la acción en curso y su error; encender, apagar, apagar el que choca, actualizar y eliminar; apagar todos; reemplazar el ZIP; editar equipo, nombre y notas |
-| `remove-dialog.ts`, `confirm-dialog.ts`, `register-form.ts` | Confirmación escribiendo el nombre para lo que no se puede deshacer (eliminar, reemplazar el ZIP) y de un clic para lo demás; formulario de registro |
+| `run-action.ts`, `actions.ts`, `stop-all.ts`, `replace-zip.ts`, `edit-dialog.ts` | Marcar la acción en curso y su error; encender, apagar, apagar el que choca, actualizar, reiniciar datos y eliminar; apagar todos; reemplazar el ZIP; editar equipo, nombre y notas |
+| `remove-dialog.ts`, `confirm-dialog.ts`, `register-form.ts` | Confirmación escribiendo el nombre para lo que no se puede deshacer (eliminar, reiniciar datos, reemplazar el ZIP) y de un clic para lo demás; formulario de registro |
 | `main.ts` | Conecta las acciones con la tabla, el buscador y los intervalos de refresco |
 
 Para agregar un botón a la fila: la acción va en `actions.ts`, el botón en `rows/project-row.ts`, y se conectan en `RowHandlers` y en `main.ts`. Como es TypeScript normal, `npm run typecheck` revisa también este código, cosa que no hacía mientras estaba dentro del `.astro`. Las clases de Tailwind escritas aquí se generan igual que las del `.astro`.
@@ -131,6 +131,7 @@ No crees etiquetas a mano: sin el cambio en `package.json`, una instalación al 
 - **Registro en segundo plano:** `POST /api/projects` responde al terminar, como siempre, pero lo que hace no depende de la pestaña: si se cierra, la API sigue. Mientras tanto, el registro figura en `GET /api/registrations` con su etapa y, al clonar, el porcentaje que escribe `git clone --progress` (`core/src/sources.ts`). La lista vive en memoria. Al terminar bien, el registro desaparece y queda el proyecto; si falla y la pestaña sigue esperando (el socket sigue abierto), el error va en la respuesta y no queda en la lista. Si falla sin nadie esperando, queda con el motivo hasta que el docente lo descarta (`DELETE /api/registrations/:key`). Un nombre que se está registrando responde 409. La interfaz vacía el formulario al enviar, así que se pueden registrar varios a la vez; si falla y el formulario sigue vacío, vuelve a poner los datos con el error. Consulta los registros cada 1,5 s solo mientras hay alguno en curso, y además con la actualización de la lista, para ver los de otra pestaña. Si la API se detiene a mitad de un registro (por ejemplo, con `update.sh`), queda la carpeta `projects/<nombre>` y el siguiente intento lo dice con la ruta a borrar.
 - **Volver a encender al arrancar:** la columna `keep_running` dice si el docente dejó el proyecto encendido. Encender la pone en 1 y apagar (también apagar todos y apagar el que choca) en 0. Al empezar a escuchar, `server.ts` llama a `service.resume()` sin esperarlo: vuelve a encender, de a 2, los marcados que Docker da por apagados, con el mismo `start` que la interfaz, así que se ve el avance y una petición repetida se une. Los que encuentra encendidos y no estaban marcados quedan marcados; así, al instalar esta versión, cuenta lo que ya corría. No hace falta detectar el reinicio de la PC: si Dockyard se reinicia por `update.sh`, los proyectos siguen encendidos y no se toca nada; si se reinicia el servicio de Docker, también vuelven. Un proyecto que no enciende sigue marcado y la falla queda en el registro del contenedor. Si Docker aún no responde, se reintenta cada 10 s durante unos 2 minutos. Lo decide la API porque es estado guardado; el núcleo solo enciende.
 - **Apagar todos:** `POST /api/projects/stop-all` apaga los proyectos registrados que estén encendidos según `getProjectStatuses`, de a 4 a la vez, y responde `{ stopped, skipped, failed }` con sus nombres. Salta los que se están encendiendo, actualizando o eliminando, para no cortar esa operación. Cada uno pasa por la misma unión que `stop` (`once`), y una segunda petición mientras corre la tanda espera la misma respuesta, así que la repetición tras un corte de Firefox no apaga dos veces. Lo hace la API y no la interfaz proyecto por proyecto: sigue aunque se cierre la pestaña.
+- **Reiniciar datos:** `POST /api/projects/:id/reset-data` llama a `resetProjectData` del núcleo, que ejecuta `down -v --remove-orphans` con el prefijo de siempre y sin `--rmi`: borra contenedores, red y volúmenes, y conserva la carpeta y las imágenes, así que el siguiente encendido no reconstruye pero crea la base de nuevo y vuelve a cargar su `.sql`. La API responde 409 con el proyecto encendido o con otra operación en curso, como al actualizar, y responde el proyecto. No cambia `keep_running` ni `needs_build`. La interfaz pide escribir el nombre, como al eliminar.
 - **Eliminar:** `DELETE /api/projects/:id` llama a `removeProject` y luego borra la fila. Si falla, la fila queda para poder reintentar. No se permite mientras el proyecto enciende o apaga (409).
 - **Avance del encendido:** `GET /api/projects/:id/progress` devuelve `{ progress }`, con la etapa, las últimas 8 líneas de Docker y los segundos transcurridos, o `null` si no se está encendiendo. También llega en el campo `progress` de cada proyecto, para que recargar la página no lo pierda. Se guarda solo en memoria. La interfaz lo consulta cada 2 s.
 - **Registro:** `GET /api/projects/:id/logs` devuelve las últimas 200 líneas. Mientras un proyecto está encendido y su registro abierto, la interfaz lo pide cada 3 s. No es una conexión abierta: así, cerrar la pestaña no deja procesos de `docker compose logs` colgados. El texto no se mueve mientras el docente lee más arriba o selecciona algo.
@@ -150,6 +151,7 @@ prepareProject(source: ProjectSource, name: string, options?: PrepareOptions): P
 startProject(dir: string, name: string, options?: StartOptions): Promise<ProjectStatus>   // { state, ports }
 updateProject(name: string): Promise<ProjectUpdate>   // { dir, changed, commit, summary }
 replaceProjectZip(name: string, filePath: string): Promise<ZipReplacement>   // { dir, leftover }
+resetProjectData(dir: string, name: string): Promise<void>
 stopProject(dir: string, name: string): Promise<ProjectStatus>
 getProjectStatus(name: string): Promise<ProjectStatus>
 getProjectStatuses(): Promise<Record<string, ProjectStatus>>   // por nombre de proyecto de compose
@@ -172,6 +174,7 @@ type ProjectSource = { type: 'git'; url: string } | { type: 'zip'; filePath: str
 | `getProjectStatuses` | Lee `docker ps -a` una sola vez y agrupa por proyecto de compose. Un proyecto sin contenedores no aparece: está apagado | Docker no responde |
 | `updateProject` | Trae la última versión del repositorio sin encender ni reconstruir | No hay conexión, el repositorio ya no es público, pisaría un archivo cambiado en la PC o la versión nueva no trae compose |
 | `replaceProjectZip` | Cambia el código por el de un ZIP nuevo sin encender ni reconstruir. `leftover` es la carpeta anterior que no se pudo borrar por tener archivos de root | El ZIP está dañado, no es seguro, no trae compose o no existe la carpeta del proyecto. En todos esos casos el proyecto queda como estaba |
+| `resetProjectData` | Ejecuta `down -v` sin `--rmi`: borra contenedores, red y volúmenes; conserva la carpeta, las imágenes y las carpetas montadas | El nombre no está normalizado, no hay compose o Docker no responde |
 | `getResources` | Une `docker ps` y `docker stats` por proyecto de compose | Docker no responde |
 | `getLatestVersion` | Devuelve la etiqueta `vX.Y.Z` más alta del repositorio con `git ls-remote`, sin descargarlo. Ignora otros formatos | No hay conexión o el repositorio no responde en 15 s |
 | `isNewerVersion` | Compara dos versiones por número | Nunca; un formato distinto no cuenta como más nuevo |
@@ -231,8 +234,9 @@ Esta entrega no las incluye. Mientras tanto, el docente registra solo proyectos 
 - **Login** para el docente.
 - La comprobación de la web no alcanza un puerto publicado solo en `127.0.0.1` (como `"127.0.0.1:8101:80"`) cuando Dockyard corre en contenedor: dirá que no responde aunque abra en el navegador. Tampoco entiende HTTPS.
 - La detección de puertos solo ve contenedores. Si otro programa de la PC usa el puerto, falla `up -d` y el mensaje de Docker llega al docente.
-- Actualizar no toca los datos: un volumen de base de datos conserva sus tablas, así que un `.sql` nuevo de `db/init/` no se vuelve a cargar. Tampoco cambia un `.env` que ya exista, aunque cambie `.env.example`. Para empezar limpio, elimina el proyecto y regístralo de nuevo.
-- Un proyecto de ZIP no se actualiza: se reemplaza su ZIP. Como en Actualizar, un volumen de base de datos conserva sus tablas y un `.sql` nuevo de `db/init/` no se vuelve a cargar. El `.env`, en cambio, sale del ZIP nuevo o de su `.env.example`, porque la carpeta se cambia entera. Para empezar limpio, elimina el proyecto y regístralo de nuevo.
+- Actualizar no toca los datos: un volumen de base de datos conserva sus tablas, así que un `.sql` nuevo de `db/init/` no se vuelve a cargar hasta usar **Reiniciar datos**. Tampoco cambia un `.env` que ya exista, aunque cambie `.env.example`.
+- Un proyecto de ZIP no se actualiza: se reemplaza su ZIP. Como en Actualizar, un volumen de base de datos conserva sus tablas y un `.sql` nuevo de `db/init/` no se vuelve a cargar hasta usar **Reiniciar datos**. El `.env`, en cambio, sale del ZIP nuevo o de su `.env.example`, porque la carpeta se cambia entera.
+- **Reiniciar datos** solo borra volúmenes de Docker. Un proyecto que guarda su base en una carpeta montada (`./data:/var/lib/mysql`) la conserva, porque esa carpeta es parte de su código; para empezar limpio, el equipo debe quitarla o el docente eliminar el proyecto y registrarlo de nuevo.
 
 ## Pruebas de interfaz
 

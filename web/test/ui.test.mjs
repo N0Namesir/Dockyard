@@ -91,14 +91,15 @@ test('menú, motivo de bloqueo y foco conservado tras refresco automático', asy
   // El menú flota: Abrir no se mueve, así un doble clic en ⋯ no termina abriendo el proyecto.
   assert.deepEqual(await row.locator('[data-action=open]').boundingBox(),openBefore)
   const update=row.locator('[data-action=update]')
+  const hint=row.locator('#update-hint-1')
   assert.equal(await update.getAttribute('aria-disabled'),'true')
-  assert.equal(await row.locator('.action-hint').isVisible(),false,'el motivo no se muestra hasta que se busca')
+  assert.equal(await hint.isVisible(),false,'el motivo no se muestra hasta que se busca')
   await update.hover()
-  assert.match(await row.locator('.action-hint').innerText(),/Apaga el proyecto/)
+  assert.match(await hint.innerText(),/Apaga el proyecto/)
   await row.locator('[data-action=edit]').hover()
-  assert.equal(await row.locator('.action-hint').isVisible(),false)
+  assert.equal(await hint.isVisible(),false)
   await update.click({force:true})
-  assert.equal(await row.locator('.action-hint').isVisible(),true,'al intentar usarlo, explica por qué no se puede')
+  assert.equal(await hint.isVisible(),true,'al intentar usarlo, explica por qué no se puede')
   assert.equal(await row.locator('.project-menu-content').evaluate(e=>e.matches(':popover-open')),true)
   assert.ok(!data.calls.some(c=>c.endsWith('/update')),'no llama a la API')
   await row.locator('[data-action=edit]').focus()
@@ -116,6 +117,33 @@ test('menú, motivo de bloqueo y foco conservado tras refresco automático', asy
   await page.locator('#edit-dialog-cancel').click()
   await page.waitForFunction(() => document.activeElement?.getAttribute('data-action') === 'menu', null, {timeout:2000})
   assert.equal(await row.locator('[data-action=menu]').evaluate(e=>e===document.activeElement),true)
+})
+
+test('reiniciar datos: bloqueado si está encendido y pide escribir el nombre',async t=>{
+  const {page,data}=await fixture(t)
+  const reset=[]
+  await page.route('**/api/projects/*/reset-data', route => { reset.push(route.request().url()); return route.fulfill({status:200,json:data.projects[1]}) })
+  const running=page.locator('.project-row').first()
+  await running.locator('[data-action=menu]').click()
+  const blocked=running.locator('[data-action=reset]')
+  assert.equal(await blocked.getAttribute('aria-disabled'),'true')
+  await blocked.click({force:true})
+  assert.match(await running.locator('#reset-hint-1').innerText(),/Apaga el proyecto/)
+  await page.keyboard.press('Escape')
+
+  const row=page.locator('.project-row').last()
+  await row.locator('[data-action=menu]').click()
+  // Separado de las acciones normales, junto a Eliminar.
+  assert.equal(await row.locator('.menu-danger [data-action=reset] + [data-action=remove]').count(),1)
+  await row.locator('[data-action=reset]').click()
+  await page.locator('#remove-dialog').waitFor({state:'visible'})
+  assert.match(await page.locator('#remove-dialog-text').innerText(),/volúmenes de Docker.*código y su ficha/s)
+  assert.equal(await page.locator('#remove-dialog-confirm').isDisabled(),true)
+  await page.locator('#remove-dialog-input').fill('biblioteca-escolar')
+  await page.locator('#remove-dialog-confirm').click()
+  await page.locator('#global-message').filter({hasText:'Se reiniciaron los datos de biblioteca-escolar'}).waitFor()
+  assert.equal(reset.length,1)
+  assert.match(reset[0],/\/api\/projects\/2\/reset-data$/)
 })
 
 test('el menú de acciones se abre hacia arriba si no cabe debajo',async t=>{

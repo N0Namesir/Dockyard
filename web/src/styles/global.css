@@ -334,10 +334,14 @@ body:has(dialog[open]) {
   opacity: .65;
   cursor: not-allowed;
 }
-.project-menu-content .action-danger {
+/* Lo que borra datos (Reiniciar datos, Eliminar) va separado de las acciones normales. */
+.project-menu-content .menu-danger {
+  display: flex;
+  flex-direction: column;
+  gap: .25rem;
   border-top: 1px solid #cbd5e1;
   margin-top: .25rem;
-  border-radius: 0;
+  padding-top: .25rem;
 }
 /* Motivo de una acción bloqueada: solo al pasar el puntero, al enfocarla o al intentar usarla. */
 .action-blocked {

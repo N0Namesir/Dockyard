@@ -128,21 +128,12 @@ function actionsCell(project: Project, handlers: RowHandlers): HTMLTableCellElem
   source.type = 'button'
   source.dataset.action = isGit ? 'update' : 'replace'
   source.disabled = isPending
-  if (project.state === 'running') {
-    // Bloqueado pero enfocable: el motivo aparece al pasar el puntero, al enfocarlo o al intentar usarlo.
-    source.setAttribute('aria-disabled', 'true')
-    const hint = element('p', 'action-hint', isGit ? 'Apaga el proyecto para actualizarlo.' : 'Apaga el proyecto para reemplazar su ZIP.')
-    hint.id = `update-hint-${project.id}`
-    source.setAttribute('aria-describedby', hint.id)
-    source.addEventListener('click', () => hint.classList.add('action-hint-visible'))
-    source.addEventListener('blur', () => hint.classList.remove('action-hint-visible'))
-    const blocked = element('div', 'action-blocked')
-    blocked.append(source, hint)
-    secondary.append(blocked)
-  } else {
-    source.addEventListener('click', () => (isGit ? handlers.updateProject(project) : handlers.replaceZip(project)))
-    secondary.append(source)
-  }
+  secondary.append(blockedWhileRunning(
+    source,
+    project,
+    isGit ? 'Apaga el proyecto para actualizarlo.' : 'Apaga el proyecto para reemplazar su ZIP.',
+    () => (isGit ? handlers.updateProject(project) : handlers.replaceZip(project)),
+  ))
   const edit = element(
     'button',
     'text-slate-600 underline hover:text-marca-texto disabled:cursor-wait disabled:no-underline disabled:opacity-50',
@@ -162,6 +153,19 @@ function actionsCell(project: Project, handlers: RowHandlers): HTMLTableCellElem
   logs.dataset.action = 'logs'
   logs.setAttribute('aria-expanded', String(state.openLogs.has(project.id)))
   logs.addEventListener('click', () => handlers.toggleLogs(project))
+  secondary.append(logs)
+
+  // Lo que borra datos va aparte, al final del menú.
+  const danger = element('div', 'menu-danger')
+  const reset = element(
+    'button',
+    'text-red-700 underline hover:text-red-900 disabled:cursor-wait disabled:opacity-50',
+    pending === 'reset' ? 'Reiniciando datos…' : 'Reiniciar datos',
+  )
+  reset.type = 'button'
+  reset.dataset.action = 'reset'
+  reset.disabled = isPending
+  danger.append(blockedWhileRunning(reset, project, 'Apaga el proyecto para reiniciar sus datos.', () => handlers.resetData(project)))
   const remove = element(
     'button',
     'text-red-700 underline hover:text-red-900 disabled:cursor-wait disabled:opacity-50',
@@ -169,10 +173,10 @@ function actionsCell(project: Project, handlers: RowHandlers): HTMLTableCellElem
   )
   remove.type = 'button'
   remove.dataset.action = 'remove'
-  remove.classList.add('action-danger')
   remove.disabled = isPending
   remove.addEventListener('click', () => handlers.removeProject(project))
-  secondary.append(logs, remove)
+  danger.append(remove)
+  secondary.append(danger)
 
   const stack = element('div', 'flex flex-col items-end gap-2')
   // El menú es un popover: flota sobre la tabla sin mover las demás acciones de la fila.
@@ -237,6 +241,26 @@ function actionsCell(project: Project, handlers: RowHandlers): HTMLTableCellElem
   const cell = element('td', 'px-5 py-4')
   cell.append(stack)
   return cell
+}
+
+/**
+ * Con el proyecto encendido, la acción queda bloqueada pero enfocable: el motivo aparece al pasar el
+ * puntero, al enfocarla o al intentar usarla. Apagado, el botón ejecuta la acción.
+ */
+function blockedWhileRunning(button: HTMLButtonElement, project: Project, reason: string, run: () => void): HTMLElement {
+  if (project.state !== 'running') {
+    button.addEventListener('click', run)
+    return button
+  }
+  button.setAttribute('aria-disabled', 'true')
+  const hint = element('p', 'action-hint', reason)
+  hint.id = `${button.dataset.action}-hint-${project.id}`
+  button.setAttribute('aria-describedby', hint.id)
+  button.addEventListener('click', () => hint.classList.add('action-hint-visible'))
+  button.addEventListener('blur', () => hint.classList.remove('action-hint-visible'))
+  const blocked = element('div', 'action-blocked')
+  blocked.append(button, hint)
+  return blocked
 }
 
 const anchorSupported = typeof CSS !== 'undefined' && CSS.supports('position-area: block-end')
