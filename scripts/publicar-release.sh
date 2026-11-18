@@ -34,7 +34,9 @@ ${cambios}
 
 ## Actualizar
 
-En la carpeta de Dockyard:
+Desde Dockyard 1.3.0, en el navegador: **Configuración → Comprobar ahora → Actualizar ahora**.
+
+Si tienes una versión anterior a la 1.3.0, o prefieres la terminal, ejecuta en la carpeta de Dockyard:
 
 \`\`\`bash
 ./update.sh

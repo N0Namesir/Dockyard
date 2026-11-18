@@ -29,10 +29,11 @@ async function fixture(t, viewport={width:1440,height:1000}) {
   t.after(() => page.close())
   const errors=[]; page.on('pageerror',e=>errors.push(e.message))
   t.after(()=>assert.deepEqual(errors, []))
-  const data = { projects:[project(1,true),project(2)], fail:false, post:null }
+  const data = { projects:[project(1,true),project(2)], fail:false, post:null, calls:[] }
   await page.route('**/api/**', async route => {
     const req=route.request(), url=new URL(req.url()), path=url.pathname
     const json=(body,status=200)=>route.fulfill({status,json:body})
+    data.calls.push(`${req.method()} ${path}`)
     if(path==='/api/projects' && req.method()==='POST') {
       if(data.post) return data.post(route)
       return json({...project(3),...req.postDataJSON()},201)
@@ -85,16 +86,28 @@ test('menú, motivo de bloqueo y foco conservado tras refresco automático', asy
   const {page,data}=await fixture(t)
   await page.clock.install()
   const row=page.locator('.project-row').first()
+  const openBefore=await row.locator('[data-action=open]').boundingBox()
   await row.locator('[data-action=menu]').click()
-  assert.equal(await row.locator('[data-action=update]').isDisabled(),true)
+  // El menú flota: Abrir no se mueve, así un doble clic en ⋯ no termina abriendo el proyecto.
+  assert.deepEqual(await row.locator('[data-action=open]').boundingBox(),openBefore)
+  const update=row.locator('[data-action=update]')
+  assert.equal(await update.getAttribute('aria-disabled'),'true')
+  assert.equal(await row.locator('.action-hint').isVisible(),false,'el motivo no se muestra hasta que se busca')
+  await update.hover()
   assert.match(await row.locator('.action-hint').innerText(),/Apaga el proyecto/)
+  await row.locator('[data-action=edit]').hover()
+  assert.equal(await row.locator('.action-hint').isVisible(),false)
+  await update.click({force:true})
+  assert.equal(await row.locator('.action-hint').isVisible(),true,'al intentar usarlo, explica por qué no se puede')
+  assert.equal(await row.locator('.project-menu-content').evaluate(e=>e.matches(':popover-open')),true)
+  assert.ok(!data.calls.some(c=>c.endsWith('/update')),'no llama a la API')
   await row.locator('[data-action=edit]').focus()
   data.projects[0].notes='Revisado'
   // visibilitychange usa el mismo refresco que el temporizador, sin esperar 15 segundos.
   await page.evaluate(()=>document.dispatchEvent(new Event('visibilitychange')))
   await row.getByText('Revisado',{exact:true}).waitFor()
   assert.equal(await row.locator('[data-action=edit]').evaluate(e=>e===document.activeElement),true)
-  assert.equal(await row.locator('.project-menu').getAttribute('open'),'')
+  assert.equal(await row.locator('.project-menu-content').evaluate(e=>e.matches(':popover-open')),true)
   await page.keyboard.press('Escape')
   assert.equal(await row.locator('[data-action=menu]').evaluate(e=>e===document.activeElement),true)
   await row.locator('[data-action=menu]').click()
@@ -103,6 +116,20 @@ test('menú, motivo de bloqueo y foco conservado tras refresco automático', asy
   await page.locator('#edit-dialog-cancel').click()
   await page.waitForFunction(() => document.activeElement?.getAttribute('data-action') === 'menu', null, {timeout:2000})
   assert.equal(await row.locator('[data-action=menu]').evaluate(e=>e===document.activeElement),true)
+})
+
+test('el menú de acciones se abre hacia arriba si no cabe debajo',async t=>{
+  const {page}=await fixture(t,{width:1280,height:420})
+  const row=page.locator('.project-row').last()
+  await row.scrollIntoViewIfNeeded()
+  await page.evaluate(()=>{const b=document.querySelectorAll('[data-action=menu]');const r=b[b.length-1].getBoundingClientRect();scrollBy(0,r.bottom-innerHeight+20)})
+  await row.locator('[data-action=menu]').click()
+  const button=await row.locator('[data-action=menu]').boundingBox()
+  const menu=await row.locator('.project-menu-content').boundingBox()
+  assert.ok(menu.y+menu.height<=button.y+1,`menú ${JSON.stringify(menu)} sobre el botón ${JSON.stringify(button)}`)
+  assert.ok(menu.y>=0)
+  await page.keyboard.press('Escape')
+  assert.equal(await row.locator('.project-menu-content').isVisible(),false)
 })
 
 test('búsqueda, vacío, fallo y recuperación de la lista',async t=>{

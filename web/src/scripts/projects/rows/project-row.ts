@@ -119,36 +119,29 @@ function actionsCell(project: Project, handlers: RowHandlers): HTMLTableCellElem
   }
 
   const secondary = element('div', 'project-menu-content')
-  if (project.sourceType === 'git') {
-    const update = element(
-      'button',
-      'text-slate-600 underline hover:text-marca-texto disabled:cursor-not-allowed disabled:no-underline disabled:opacity-50',
-      pending === 'update' ? 'Actualizando…' : 'Actualizar',
-    )
-    update.type = 'button'
-    update.disabled = isPending || project.state === 'running'
-    if (project.state === 'running') update.title = 'Apaga el proyecto para actualizarlo'
-    update.addEventListener('click', () => handlers.updateProject(project))
-    update.dataset.action = 'update'
-    secondary.append(update)
-  } else {
-    const replace = element(
-      'button',
-      'text-slate-600 underline hover:text-marca-texto disabled:cursor-not-allowed disabled:no-underline disabled:opacity-50',
-      pending === 'replace' ? 'Reemplazando…' : 'Reemplazar ZIP',
-    )
-    replace.type = 'button'
-    replace.disabled = isPending || project.state === 'running'
-    if (project.state === 'running') replace.title = 'Apaga el proyecto para reemplazar su ZIP'
-    replace.addEventListener('click', () => handlers.replaceZip(project))
-    replace.dataset.action = 'replace'
-    secondary.append(replace)
-  }
+  const isGit = project.sourceType === 'git'
+  const source = element(
+    'button',
+    'text-slate-600 underline hover:text-marca-texto disabled:cursor-not-allowed disabled:no-underline disabled:opacity-50',
+    isGit ? (pending === 'update' ? 'Actualizando…' : 'Actualizar') : (pending === 'replace' ? 'Reemplazando…' : 'Reemplazar ZIP'),
+  )
+  source.type = 'button'
+  source.dataset.action = isGit ? 'update' : 'replace'
+  source.disabled = isPending
   if (project.state === 'running') {
-    const hint = element('p', 'action-hint', project.sourceType === 'git' ? 'Apaga el proyecto para actualizarlo.' : 'Apaga el proyecto para reemplazar su ZIP.')
+    // Bloqueado pero enfocable: el motivo aparece al pasar el puntero, al enfocarlo o al intentar usarlo.
+    source.setAttribute('aria-disabled', 'true')
+    const hint = element('p', 'action-hint', isGit ? 'Apaga el proyecto para actualizarlo.' : 'Apaga el proyecto para reemplazar su ZIP.')
     hint.id = `update-hint-${project.id}`
-    secondary.querySelector('button')?.setAttribute('aria-describedby', hint.id)
-    secondary.append(hint)
+    source.setAttribute('aria-describedby', hint.id)
+    source.addEventListener('click', () => hint.classList.add('action-hint-visible'))
+    source.addEventListener('blur', () => hint.classList.remove('action-hint-visible'))
+    const blocked = element('div', 'action-blocked')
+    blocked.append(source, hint)
+    secondary.append(blocked)
+  } else {
+    source.addEventListener('click', () => (isGit ? handlers.updateProject(project) : handlers.replaceZip(project)))
+    secondary.append(source)
   }
   const edit = element(
     'button',
@@ -182,10 +175,12 @@ function actionsCell(project: Project, handlers: RowHandlers): HTMLTableCellElem
   secondary.append(logs, remove)
 
   const stack = element('div', 'flex flex-col items-end gap-2')
-  const menu = element('details', 'project-menu')
-  menu.dataset.disclosure = 'actions'
-  const summary = element('summary', 'ui-button')
-  summary.title = 'Más acciones'
+  // El menú es un popover: flota sobre la tabla sin mover las demás acciones de la fila.
+  const menuId = `project-menu-${project.id}`
+  const trigger = element('button', 'ui-button project-menu-trigger')
+  trigger.type = 'button'
+  trigger.title = 'Más acciones'
+  trigger.setAttribute('popovertarget', menuId)
   const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
   icon.setAttribute('viewBox', '0 0 24 24')
   icon.setAttribute('width', '24')
@@ -199,21 +194,30 @@ function actionsCell(project: Project, handlers: RowHandlers): HTMLTableCellElem
     dot.setAttribute('r', '2')
     icon.append(dot)
   }
-  summary.append(icon)
-  summary.dataset.action = 'menu'
-  summary.setAttribute('aria-label', `Más acciones de ${project.name}`)
-  menu.append(summary, secondary)
+  trigger.append(icon)
+  trigger.dataset.action = 'menu'
+  trigger.setAttribute('aria-label', `Más acciones de ${project.name}`)
+  secondary.id = menuId
+  secondary.popover = 'auto'
+  secondary.dataset.disclosure = 'actions'
+  const anchor = `--project-menu-${project.id}`
+  trigger.style.setProperty('anchor-name', anchor)
+  secondary.style.setProperty('position-anchor', anchor)
+  secondary.addEventListener('toggle', (event) => {
+    if ((event as ToggleEvent).newState === 'open') placeMenu(trigger, secondary)
+  })
   // Cierra antes de ejecutar para que los diálogos recuperen un foco visible al terminar.
   secondary.addEventListener('click', (event) => {
-    if (!(event.target instanceof HTMLButtonElement) || event.target.disabled) return
-    menu.open = false
-    summary.focus()
+    const target = event.target
+    if (!(target instanceof HTMLButtonElement) || target.disabled || target.getAttribute('aria-disabled') === 'true') return
+    secondary.hidePopover()
+    trigger.focus()
   }, { capture: true })
-  menu.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape') { menu.open = false; summary.focus(); event.stopPropagation() }
+  secondary.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') { secondary.hidePopover(); trigger.focus(); event.stopPropagation() }
   })
   const controls = element('div', 'project-actions')
-  controls.append(actions, menu)
+  controls.append(actions, trigger, secondary)
   stack.append(controls)
   const error = state.actionErrors.get(project.id)
   if (error) {
@@ -233,4 +237,24 @@ function actionsCell(project: Project, handlers: RowHandlers): HTMLTableCellElem
   const cell = element('td', 'px-5 py-4')
   cell.append(stack)
   return cell
+}
+
+const anchorSupported = typeof CSS !== 'undefined' && CSS.supports('position-area: block-end')
+
+/**
+ * Sin anclaje en CSS (Firefox), coloca el menú bajo el botón, o encima si no cabe, dentro de la
+ * ventana. Al desplazar la página se cierra, porque ya no seguiría al botón.
+ */
+function placeMenu(trigger: HTMLElement, menu: HTMLElement): void {
+  if (anchorSupported) return
+  const gap = 4
+  const edge = 8
+  const button = trigger.getBoundingClientRect()
+  const box = menu.getBoundingClientRect()
+  const below = button.bottom + gap
+  const top = below + box.height <= innerHeight - edge ? below : Math.max(edge, button.top - gap - box.height)
+  const left = Math.max(edge, Math.min(button.right - box.width, innerWidth - edge - box.width))
+  menu.style.top = `${top}px`
+  menu.style.left = `${left}px`
+  addEventListener('scroll', () => menu.hidePopover(), { once: true, passive: true })
 }

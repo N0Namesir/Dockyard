@@ -278,35 +278,48 @@ body:has(dialog[open]) {
   flex-wrap: wrap;
   gap: .5rem;
 }
-.project-menu {
-  min-width: 44px;
-  text-align: left;
-}
-.project-menu > summary {
+.project-menu-trigger {
   width: 44px;
   padding: 0;
-  list-style: none;
 }
-.project-menu > summary::-webkit-details-marker {
-  display: none;
-}
-.project-menu[open] {
-  width: 100%;
-}
-.project-menu[open] > summary {
+.project-actions:has(.project-menu-content:popover-open) .project-menu-trigger {
   border-color: var(--color-marca-acento);
 }
+/* Menú de acciones: popover en la capa superior, así no empuja la fila ni lo recorta la tabla. */
 .project-menu-content {
+  min-width: 14rem;
+  padding: .5rem;
+  border: 1px solid #e2e8f0;
+  border-radius: .5rem;
+  background: white;
+  color: inherit;
+  text-align: left;
+  overflow: visible;
+  box-shadow: 0 10px 25px -5px rgb(15 23 42 / .18), 0 4px 8px -4px rgb(15 23 42 / .12);
+}
+.project-menu-content:popover-open {
   display: flex;
   flex-direction: column;
   gap: .25rem;
-  padding: .5rem;
-  margin-top: .5rem;
-  border: 1px solid #e2e8f0;
-  border-radius: .5rem;
-  background: var(--color-marca-fondo);
+}
+@supports (position-area: block-end) {
+  .project-menu-content {
+    inset: auto;
+    margin: .25rem 0;
+    position-area: block-end span-inline-start;
+    position-try-fallbacks: flip-block, flip-inline, flip-block flip-inline;
+  }
+}
+/* Sin anclaje en CSS, project-row.ts calcula top y left al abrir. */
+@supports not (position-area: block-end) {
+  .project-menu-content {
+    position: fixed;
+    inset: auto;
+    margin: 0;
+  }
 }
 .project-menu-content button {
+  width: 100%;
   min-height: 44px;
   padding: .5rem .75rem;
   text-align: left;
@@ -314,10 +327,10 @@ body:has(dialog[open]) {
   text-decoration: none;
   border-radius: .25rem;
 }
-.project-menu-content button:hover:not(:disabled) {
-  background: white;
+.project-menu-content button:hover:not(:disabled, [aria-disabled=true]) {
+  background: var(--color-marca-fondo);
 }
-.project-menu-content button:disabled {
+.project-menu-content button:is(:disabled, [aria-disabled=true]) {
   opacity: .65;
   cursor: not-allowed;
 }
@@ -326,11 +339,42 @@ body:has(dialog[open]) {
   margin-top: .25rem;
   border-radius: 0;
 }
+/* Motivo de una acción bloqueada: solo al pasar el puntero, al enfocarla o al intentar usarla. */
+.action-blocked {
+  position: relative;
+}
 .action-hint {
-  max-width: 24rem;
-  padding: .25rem .75rem;
-  font-size: .875rem;
-  color: var(--color-marca-secundario);
+  display: none;
+  position: absolute;
+  inset-inline-end: calc(100% + .5rem);
+  top: 50%;
+  translate: 0 -50%;
+  width: max-content;
+  max-width: 16rem;
+  padding: .5rem .75rem;
+  border-radius: .375rem;
+  background: var(--color-marca-tinta);
+  color: white;
+  font-size: .8125rem;
+  line-height: 1.35;
+  box-shadow: 0 4px 12px rgb(15 23 42 / .2);
+}
+.action-blocked:hover .action-hint,
+.action-blocked:has(button:focus-visible) .action-hint,
+.action-hint.action-hint-visible {
+  display: block;
+}
+/* En pantallas angostas no cabe al costado: aparece debajo, dentro del menú. */
+@media (max-width: 40rem) {
+  .action-hint {
+    position: static;
+    translate: none;
+    max-width: none;
+    padding: .25rem .75rem;
+    background: none;
+    box-shadow: none;
+    color: var(--color-marca-secundario);
+  }
 }
 .project-diagnostics {
   margin-top: .5rem;

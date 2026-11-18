@@ -34,12 +34,17 @@ export function render(): void {
   const index = oldRow && active ? [...oldRow.querySelectorAll(focusable)].indexOf(active) : -1
   const disclosures = new Map<string, Map<string, boolean>>()
   for (const row of page.projectsBody.querySelectorAll<HTMLElement>('[data-row-key]')) {
-    disclosures.set(row.dataset.rowKey!, new Map([...row.querySelectorAll('details')].map(item => [item.dataset.disclosure ?? '', item.open])))
+    disclosures.set(row.dataset.rowKey!, new Map([...row.querySelectorAll<HTMLElement>('details, [popover]')].map(item => [item.dataset.disclosure ?? '', isOpen(item)])))
   }
   try { renderRows() } finally {
     for (const row of page.projectsBody.querySelectorAll<HTMLElement>('[data-row-key]')) {
       const previous = disclosures.get(row.dataset.rowKey!)
-      if (previous) row.querySelectorAll('details').forEach(item => { item.open = previous.get(item.dataset.disclosure ?? '') ?? item.open })
+      if (previous) row.querySelectorAll<HTMLElement>('details, [popover]').forEach(item => {
+        const open = previous.get(item.dataset.disclosure ?? '')
+        if (open === undefined) return
+        if (item instanceof HTMLDetailsElement) item.open = open
+        else if (open) item.showPopover()
+      })
     }
     if (rowKey && active && !active.isConnected) {
       const row = [...page.projectsBody.querySelectorAll<HTMLElement>('[data-row-key]')].find(item => item.dataset.rowKey === rowKey)
@@ -50,6 +55,11 @@ export function render(): void {
       ;(target ?? fallback).focus({ preventScroll: true })
     }
   }
+}
+
+/** Un desplegable de la fila (`details`) o su menú de acciones (popover) está abierto. */
+function isOpen(item: HTMLElement): boolean {
+  return item instanceof HTMLDetailsElement ? item.open : item.matches(':popover-open')
 }
 
 function appendRow(row: HTMLTableRowElement, key: string): void {
