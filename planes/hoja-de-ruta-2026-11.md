@@ -338,3 +338,18 @@ Entorno de la sesión: Node 24.22 (`/opt/node24`), Docker 29.10 levantado dentro
   - Se corrigió de paso un desborde horizontal a 320 px: la rejilla de 12 columnas con `gap-7` suma 11 separaciones que no caben. Proyectos y Configuración usan ahora `gap-y-* lg:gap-x-*`, y quedó la regla en `AGENTS.md`.
 - **Pruebas:** `build`, `typecheck` y `npm test` bien (83 + 77, con una prueba nueva de la API para la vista por defecto y su guardado). `test:ui` bien (30 y 1 omitida; nuevas: cuadrícula con sus acciones, menú y foco tras refrescar, registro dentro de la tarjeta, sin desplazamiento horizontal de 320 a 1440 px y preferencia guardada; carpetas con el año más reciente por defecto, URL, buscar en todos, Atrás y recarga). Se revisaron capturas de la tabla y la cuadrícula a 1440 y 390 px.
 - **Pendientes y riesgos:** en tarjetas angostas, el botón ⋯ baja a una segunda línea junto a Encender/Apagar y Abrir; funciona, pero ocupa más alto.
+
+### 5. Registrar varios proyectos a la vez
+
+- **Estado:** terminada.
+- **Commit:** ver la lista de commits al final.
+- **Decisiones que se apartaron del plan:**
+  - El registro de la API se separó en `reserve` (reserva el nombre y lo pone en la lista) y `prepare` (descarga, revisa y guarda), que usan el registro de uno y la cola. La cola reserva todos los nombres al recibir la tanda, con la etapa «En espera»: así un nombre encolado no se puede registrar por otro lado y `busy()` cuenta la tanda entera (no deja actualizar Dockyard ni liberar espacio a mitad).
+  - Un registro de uno, desde el formulario de siempre, no espera a la cola: corre como antes, en paralelo.
+  - Límite de 60 proyectos por tanda.
+  - `POST /api/projects/batch` valida las URL una por una y devuelve las malas en `rejected` en vez de responder 400 a toda la tanda.
+  - La vista previa repite en la interfaz la normalización del nombre del núcleo, solo para avisar de repetidos antes de enviar; para saber qué nombres existen pide `GET /api/projects?year=todos` al abrir «Varios».
+  - El campo de año de «Varios» se aplica a los ZIP también.
+  - Mientras se suben los ZIP, la pestaña pide confirmar antes de cerrarse (`beforeunload`), además del aviso escrito.
+- **Pruebas:** `build`, `typecheck` y `npm test` bien (83 + 80; nuevas en `api/test/batch.test.ts`: una tanda con líneas válidas e inválidas registra solo las válidas, en orden y de a una, con el núcleo simulado y midiendo cuántas corren a la vez; reserva de nombres y `busy()`; tandas inválidas). `test:ui` bien (32 y 1 omitida; nuevas: vista previa con cada tipo de error y envío de solo las válidas; varios ZIP subidos de a uno con una falla).
+- **Pendientes y riesgos:** la cola vive en memoria, como los registros: si Dockyard se reinicia a mitad (por ejemplo con `update.sh`), los que estaban en espera se pierden sin aviso y hay que volver a enviarlos. Actualizar desde la página no lo permite mientras hay una tanda, pero `update.sh` desde la terminal sí.

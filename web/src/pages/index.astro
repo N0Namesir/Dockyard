@@ -129,7 +129,12 @@ import ConfirmDialog from '../components/ConfirmDialog.astro'
             </p>
           </div>
 
-          <form id="register-form" class="space-y-5" novalidate>
+          <div role="tablist" aria-label="Cuántos proyectos" class="mb-6 grid grid-cols-2 gap-2 rounded-md bg-slate-100 p-1">
+            <button id="tab-one" type="button" role="tab" aria-selected="true" aria-controls="register-form" class="register-tab">Uno</button>
+            <button id="tab-many" type="button" role="tab" aria-selected="false" aria-controls="register-many" tabindex="-1" class="register-tab">Varios</button>
+          </div>
+
+          <form id="register-form" role="tabpanel" aria-labelledby="tab-one" class="space-y-5" novalidate>
             <label class="block">
               <span class="mb-1.5 block text-sm font-semibold text-slate-700">Equipo</span>
               <input
@@ -221,6 +226,55 @@ import ConfirmDialog from '../components/ConfirmDialog.astro'
             </button>
             <label class="flex items-center gap-2 text-sm text-slate-600"><input id="register-another" type="checkbox" class="size-4 accent-marca-tinta" /> Seguir registrando proyectos</label>
           </form>
+
+          <section id="register-many" role="tabpanel" aria-labelledby="tab-many" hidden class="space-y-8">
+            <label class="block">
+              <span class="mb-1.5 block text-sm font-semibold text-slate-700">Año de todos</span>
+              <input id="batch-year" type="number" min="2000" max="2100" step="1" class="w-40 rounded-md border border-slate-300 px-3.5 py-2.5 text-sm focus:border-marca-tinta" />
+            </label>
+
+            <form id="batch-git" class="space-y-4" novalidate>
+              <h3 class="text-lg font-bold text-slate-900">Desde GitHub</h3>
+              <label class="block">
+                <span class="mb-1.5 block text-sm font-semibold text-slate-700">Un proyecto por línea: <code>equipo; nombre; url</code></span>
+                <textarea
+                  id="batch-lines"
+                  rows="7"
+                  spellcheck="false"
+                  aria-describedby="batch-lines-hint"
+                  placeholder="Equipo 1; Tienda escolar; https://github.com/equipo1/tienda&#10;Equipo 2; Biblioteca; https://github.com/equipo2/biblioteca"
+                  class="w-full resize-y rounded-md border border-slate-300 px-3 py-2 font-mono text-xs text-slate-900 placeholder:text-slate-500 focus:border-marca-tinta"
+                ></textarea>
+                <span id="batch-lines-hint" class="mt-1 block text-xs text-slate-500">También sirven comas o tabuladores: puedes copiar tres columnas de una hoja de cálculo.</span>
+              </label>
+              <div class="overflow-x-auto">
+                <table aria-label="Vista previa" class="batch-preview w-full text-left text-xs">
+                  <thead class="bg-slate-50 text-slate-600"><tr><th class="px-2 py-1.5">Línea</th><th class="px-2 py-1.5">Equipo</th><th class="px-2 py-1.5">Nombre</th><th class="px-2 py-1.5">Estado</th></tr></thead>
+                  <tbody id="batch-preview" class="divide-y divide-slate-100"></tbody>
+                </table>
+              </div>
+              <p id="batch-git-status" role="status" class="text-sm text-slate-700"></p>
+              <button id="batch-git-submit" type="submit" disabled class="ui-button ui-button-primary w-full">Registrar los proyectos válidos</button>
+            </form>
+
+            <form id="batch-zip" class="space-y-4 border-t border-slate-200 pt-6" novalidate>
+              <h3 class="text-lg font-bold text-slate-900">Desde ZIP</h3>
+              <label class="block">
+                <span class="mb-1.5 block text-sm font-semibold text-slate-700">Archivos ZIP <span class="font-normal text-slate-500">(200 MB como máximo cada uno)</span></span>
+                <input
+                  id="batch-files"
+                  type="file"
+                  multiple
+                  accept=".zip,application/zip"
+                  class="block w-full cursor-pointer rounded-md border border-slate-300 text-sm text-slate-500 file:mr-3 file:border-0 file:bg-slate-100 file:px-3 file:py-2.5 file:font-semibold file:text-slate-700 hover:file:bg-slate-200"
+                />
+              </label>
+              <ol id="batch-zip-rows" class="flex flex-col gap-3"></ol>
+              <p class="rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-900">Los ZIP se suben desde esta pestaña, uno a la vez. Si la cierras o recargas antes de terminar, los que no se subieron no se registran.</p>
+              <p id="batch-zip-status" role="status" class="text-sm text-slate-700"></p>
+              <button id="batch-zip-submit" type="submit" disabled class="ui-button ui-button-primary w-full">Subir y registrar los ZIP</button>
+            </form>
+          </section>
 
     </dialog>
 

@@ -42,7 +42,7 @@ async function fixture(t, viewport={width:1440,height:1000}) {
       if(data.fail) return json({message:'No se pudo conectar.'},500)
       const q=url.searchParams.get('q')?.toLowerCase() ?? ''
       const year=url.searchParams.get('year')
-      return json(data.projects.filter(p=>(p.name+' '+p.team).toLowerCase().includes(q) && (!year || p.year===Number(year))))
+      return json(data.projects.filter(p=>(p.name+' '+p.team).toLowerCase().includes(q) && (!year || year==='todos' || p.year===Number(year))))
     }
     if(path==='/api/projects/years') {
       const years=[...new Set(data.projects.map(p=>p.year))].sort((a,b)=>b-a)
@@ -357,4 +357,86 @@ test('carpetas por año: abre el más reciente, va en la URL y la búsqueda ofre
   await page.locator('#projects-title').filter({hasText:'Proyectos de 2025'}).waitFor()
   await page.goto(page.url())
   await page.locator('#projects-title').filter({hasText:'Proyectos de 2025'}).waitFor()
+})
+
+test('varios desde GitHub: vista previa con errores y solo se envían las líneas válidas',async t=>{
+  const {page}=await fixture(t)
+  const sent=[]
+  await page.route('**/api/projects/batch',route=>{
+    const body=route.request().postDataJSON()
+    sent.push(body)
+    return route.fulfill({status:202,json:{queued:['tienda','huerto'],rejected:[{index:2,name:'Agenda',message:'Ya se está registrando un proyecto con el nombre “agenda”.'}]}})
+  })
+  await page.locator('#open-register').click()
+  await page.locator('#tab-many').click()
+  assert.equal(await page.locator('#register-form').isHidden(),true)
+  assert.equal(await page.locator('#tab-many').getAttribute('aria-selected'),'true')
+  assert.equal(await page.locator('#batch-year').inputValue(),String(new Date().getFullYear()))
+  await page.locator('#batch-year').fill('2026')
+  await page.locator('#batch-lines').fill([
+    'Equipo 1; Tienda; https://github.com/e1/tienda',
+    'Equipo 2, Huerto, https://github.com/e2/huerto',
+    'Equipo 3\tAgenda\thttps://github.com/e3/agenda',
+    'Equipo 4; tienda; https://github.com/e4/otra',
+    'Equipo 5; Biblioteca Escolar; https://github.com/e5/b',
+    'Equipo 6; Sin URL',
+    '',
+    'Equipo 7; Gitlab; https://gitlab.com/e7/p',
+  ].join('\n'))
+  // Los nombres ya registrados llegan de la API al abrir Varios; la vista previa se actualiza sola.
+  await page.locator('#batch-preview').getByText('Ya hay un proyecto llamado biblioteca-escolar.').waitFor()
+  const statuses=await page.locator('#batch-preview tr td:last-child').allInnerTexts()
+  assert.deepEqual(statuses,[
+    'Lista para registrar','Lista para registrar','Lista para registrar',
+    'El nombre se repite en la línea 1.',
+    'Ya hay un proyecto llamado biblioteca-escolar.',
+    'Línea incompleta: faltan el equipo, el nombre o la URL.',
+    'La URL debe ser de GitHub y empezar con https://.',
+  ])
+  assert.equal(await page.locator('#batch-git-submit').innerText(),'Registrar 3 proyectos')
+  await page.locator('#batch-git-submit').click()
+  await page.locator('#batch-git-status').filter({hasText:'Se encolaron 2 proyectos'}).waitFor()
+  assert.deepEqual(sent,[{year:2026,items:[
+    {team:'Equipo 1',name:'Tienda',repoUrl:'https://github.com/e1/tienda'},
+    {team:'Equipo 2',name:'Huerto',repoUrl:'https://github.com/e2/huerto'},
+    {team:'Equipo 3',name:'Agenda',repoUrl:'https://github.com/e3/agenda'},
+  ]}])
+  assert.match(await page.locator('#batch-git-status').innerText(),/No se registró Agenda/)
+  // Quedan para corregir las que tenían error y la que rechazó la API.
+  assert.equal((await page.locator('#batch-lines').inputValue()).split('\n').length,5)
+  assert.match(await page.locator('#batch-lines').inputValue(),/^Equipo 3\tAgenda/)
+})
+
+test('varios desde ZIP: una fila por archivo y se suben de a uno',async t=>{
+  const {page,data}=await fixture(t)
+  const uploads=[]
+  let release
+  data.post=async route=>{
+    const body=route.request().postData() ?? ''
+    uploads.push(body.match(/name="name"\r\n\r\n([^\r]*)/)[1])
+    if(uploads.length===1) await new Promise(r=>release=r)
+    if(uploads.length===2) return route.fulfill({status:409,json:{message:'Ya existe un proyecto con el nombre “agenda”.'}})
+    return route.fulfill({status:201,json:{...project(3),name:'tienda-escolar'}})
+  }
+  await page.locator('#open-register').click()
+  await page.locator('#tab-many').click()
+  await page.locator('#batch-files').setInputFiles([
+    {name:'Tienda Escolar.zip',mimeType:'application/zip',buffer:Buffer.from('a')},
+    {name:'agenda.zip',mimeType:'application/zip',buffer:Buffer.from('b')},
+  ])
+  const rows=page.locator('#batch-zip-rows li')
+  assert.equal(await rows.count(),2)
+  assert.equal(await rows.first().locator('input').nth(1).inputValue(),'tienda-escolar')
+  await page.locator('#batch-zip-submit').click()
+  assert.equal(await page.locator('#batch-zip-status').innerText(),'Cada ZIP necesita su equipo y su nombre.')
+  await rows.first().locator('input').first().fill('Equipo 1')
+  await rows.last().locator('input').first().fill('Equipo 2')
+  await page.locator('#batch-zip-submit').click()
+  await page.locator('#batch-zip-status').filter({hasText:'Subiendo 1 de 2'}).waitFor()
+  assert.deepEqual(uploads,['tienda-escolar'],'el segundo espera a que termine el primero')
+  release()
+  await page.locator('#batch-zip-status').filter({hasText:'Se registraron 1 de 2'}).waitFor()
+  assert.deepEqual(uploads,['tienda-escolar','agenda'])
+  assert.equal(await rows.first().locator('p').last().innerText(),'Registrado')
+  assert.match(await rows.last().locator('p').last().innerText(),/Ya existe/)
 })

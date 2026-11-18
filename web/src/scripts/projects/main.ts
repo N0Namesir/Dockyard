@@ -11,6 +11,7 @@ import { pollProgress } from './progress.ts'
 import { dismissRegistration, loadRegistrations, pollRegistrations } from './registrations.ts'
 import { setupRegisterPanel } from './register-panel.ts'
 import { setupRegisterForm } from './register-form.ts'
+import { setupBatch } from './batch/main.ts'
 import { setupRemoveDialog } from './remove-dialog.ts'
 import { replaceZip } from './replace-zip.ts'
 import { pollResources } from './resources.ts'
@@ -45,6 +46,7 @@ setupConfirmDialog()
 page.stopAll.addEventListener('click', () => void stopAll())
 setupRegisterPanel()
 setupRegisterForm()
+setupBatch()
 setupViewToggle()
 setupFolders(() => void loadProjects())
 

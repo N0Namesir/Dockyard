@@ -529,3 +529,25 @@ body:has(dialog[open]) {
 .project-card-controls .project-actions {
   justify-content: flex-start;
 }
+
+/* Pestañas Uno | Varios del panel de registro. Con Varios, el panel se ensancha para la vista previa. */
+.register-tab {
+  min-height: 2.5rem;
+  border-radius: .375rem;
+  font-size: .875rem;
+  font-weight: 600;
+  color: #64748b;
+}
+.register-tab[aria-selected=true] {
+  background: white;
+  color: var(--color-marca-texto);
+  box-shadow: 0 1px 2px rgb(15 23 42 / .12);
+}
+.register-panel:has(#register-many:not([hidden])) {
+  width: min(100%, 46rem);
+}
+.batch-preview td {
+  padding: .375rem .5rem;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}

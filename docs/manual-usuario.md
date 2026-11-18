@@ -38,6 +38,14 @@ El nombre técnico no se puede repetir, ni entre años. Si el año pasado ya reg
 
 Al enviar, el panel se cierra y aparece un aviso inmediato mientras se envía y prepara el proyecto. Activa **Seguir registrando proyectos** para mantener el formulario abierto. Cuando la API recibe el proyecto, aparece arriba en la lista como **Registrando**, con lo que está haciendo y, al descargar de GitHub, el porcentaje. Puedes registrar otro mientras tanto, seguir usando Dockyard o cerrar la pestaña una vez recibido el proyecto: la preparación sigue en segundo plano. No cierres la pestaña mientras se está subiendo un ZIP. Cuando termina, aparece como un proyecto más. Si falla, aparece un aviso; abre **Registrar proyecto** para corregir los datos recuperados (si no habías empezado otro registro); si ya habías cerrado la pestaña, la fila dice **No se registró** con el motivo, y **Descartar** la quita.
 
+### Registrar varios a la vez
+
+El día de la entrega puedes registrar todos los proyectos juntos. En el panel de registro, abre la pestaña **Varios** y elige el **Año de todos**.
+
+**Desde GitHub.** Escribe o pega un proyecto por línea, con el equipo, el nombre y la URL separados por punto y coma: `Equipo 1; Tienda escolar; https://github.com/equipo1/tienda`. También sirven comas o tabuladores, así que puedes copiar tres columnas de una hoja de cálculo. Debajo aparece una vista previa con cada línea y, en rojo, lo que hay que corregir: una línea incompleta, una URL que no es de GitHub con `https://`, un nombre que se repite en la lista o que ya está registrado. Al presionar **Registrar N proyectos** se envían solo las líneas válidas; las que tenían errores quedan en el cuadro para corregirlas. Dockyard los descarga **de a uno**, para no saturar la red ni el disco, y cada uno aparece arriba en la lista con su avance (**En espera** mientras le toca). Puedes cerrar el panel o la pestaña: siguen igual. Si alguno falla, queda con su motivo hasta que lo descartes.
+
+**Desde ZIP.** Elige varios ZIP a la vez. Aparece una fila por archivo, con el **Nombre** sacado del archivo y el **Equipo** para llenar. Al presionar **Subir y registrar** se suben de a uno desde la pestaña, y cada fila dice si se registró o por qué no. **No cierres la pestaña hasta que termine**: los ZIP están en tu PC y los que no se alcanzaron a subir no se registran (el navegador pregunta antes de cerrar). Los que fallen se pueden corregir y volver a enviar.
+
 En los dos casos, el proyecto debe traer su archivo compose. Reparte entre los equipos la [Guía para estudiantes](guia-estudiantes.md) para evitar problemas. Toda la documentación se puede leer dentro de Dockyard, en la sección **Documentación**.
 
 ### Revisar antes de encender

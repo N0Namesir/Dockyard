@@ -4,6 +4,7 @@ import type { ProjectResources, ProjectSource, ProjectStatus, ResourceUsage, Sta
 import { defaultDataDir, type ProjectDetails, type ProjectRepository } from '../db/projects.ts'
 import { errorMessage, HttpError } from '../errors.ts'
 import type {
+  BatchResponse,
   Contact,
   CoreAdapter,
   ProgressResponse,
@@ -285,6 +286,92 @@ export function createProjectService(
     return new HttpError(409, `Ya existe un proyecto con el nombre “${name}”. Usa otro nombre, por ejemplo “${suggestion}”.`, { suggestion })
   }
 
+  /**
+   * Reserva el nombre: falla si ya hay un proyecto o un registro en curso con él. Desde aquí el
+   * registro figura en registrations().
+   */
+  function reserve(input: RegisterProjectInput, stage: string): Registration {
+    const normalizedName = core.normalizeProjectName(input.name)
+    const year = input.year ?? new Date().getFullYear()
+    if (repository.findByName(normalizedName)) throw nameTaken(normalizedName, year)
+    for (const [key, other] of registrations) {
+      if (other.name !== normalizedName) continue
+      if (other.error === null) {
+        throw new HttpError(409, `Ya se está registrando un proyecto con el nombre “${normalizedName}”. Espera a que termine.`)
+      }
+      // Volver a intentarlo reemplaza la falla anterior.
+      registrations.delete(key)
+    }
+    const registration: Registration = {
+      key: randomUUID(),
+      name: normalizedName,
+      team: input.team,
+      sourceType: input.source.type,
+      stage,
+      percent: null,
+      error: null,
+      startedAt: Date.now(),
+    }
+    registrations.set(registration.key, registration)
+    return registration
+  }
+
+  /** Descarga o descomprime el proyecto, lo revisa y lo guarda. */
+  async function prepare(registration: Registration, input: RegisterProjectInput): Promise<ProjectRow> {
+    let row: ProjectRow
+    try {
+      const prepared = await core.prepareProject(input.source, input.name, {
+        onProgress: ({ stage, percent }) => {
+          registration.stage = stage
+          registration.percent = percent
+        },
+      })
+      registration.stage = 'Revisando el proyecto'
+      registration.percent = null
+      const warnings = await core.reviewProject(prepared.dir, prepared.name)
+      row = repository.insert({
+        name: prepared.name,
+        team: input.team,
+        sourceType: input.source.type,
+        source: input.sourceLabel,
+        dir: prepared.dir,
+        warnings,
+        displayName: (input.displayName?.trim() || input.name.trim()).slice(0, DISPLAY_NAME_MAX_LENGTH),
+        year: input.year ?? new Date().getFullYear(),
+      })
+    } catch (error) {
+      // Si la pestaña sigue abierta, ella muestra el error; si no, queda en la lista.
+      if (input.abandoned?.()) {
+        registration.error = errorMessage(error)
+        registration.percent = null
+      } else {
+        registrations.delete(registration.key)
+      }
+      throw error
+    }
+    registrations.delete(registration.key)
+    return row
+  }
+
+  // Cola de registros en tanda: se preparan de a uno, en el orden en que llegaron.
+  const queue: { registration: Registration; input: RegisterProjectInput }[] = []
+  let draining = false
+
+  async function drainQueue(): Promise<void> {
+    if (draining) return
+    draining = true
+    try {
+      for (let job = queue.shift(); job; job = queue.shift()) {
+        // El tiempo cuenta desde que empieza, no desde que entró a la cola.
+        job.registration.startedAt = Date.now()
+        job.registration.stage = 'Preparando'
+        await prepare(job.registration, job.input).catch(() => {})
+      }
+    } finally {
+      draining = false
+    }
+  }
+
   function requireProject(id: number): ProjectRow {
     const project = repository.findById(id)
     if (!project) throw new HttpError(404, 'El proyecto solicitado no existe.')
@@ -330,62 +417,29 @@ export function createProjectService(
      * registrations() con su etapa, para que la página lo muestre aunque se recargue.
      */
     async register(input: RegisterProjectInput): Promise<ProjectResponse> {
-      const normalizedName = core.normalizeProjectName(input.name)
-      const year = input.year ?? new Date().getFullYear()
-      if (repository.findByName(normalizedName)) throw nameTaken(normalizedName, year)
-      for (const [key, other] of registrations) {
-        if (other.name !== normalizedName) continue
-        if (other.error === null) {
-          throw new HttpError(409, `Ya se está registrando un proyecto con el nombre “${normalizedName}”. Espera a que termine.`)
-        }
-        // Volver a intentarlo reemplaza la falla anterior.
-        registrations.delete(key)
-      }
+      const registration = reserve(input, 'Preparando')
+      return hydrate(await prepare(registration, input))
+    },
 
-      const registration: Registration = {
-        key: randomUUID(),
-        name: normalizedName,
-        team: input.team,
-        sourceType: input.source.type,
-        stage: 'Preparando',
-        percent: null,
-        error: null,
-        startedAt: Date.now(),
-      }
-      registrations.set(registration.key, registration)
-      let row: ProjectRow
-      try {
-        const prepared = await core.prepareProject(input.source, input.name, {
-          onProgress: ({ stage, percent }) => {
-            registration.stage = stage
-            registration.percent = percent
-          },
-        })
-        registration.stage = 'Revisando el proyecto'
-        registration.percent = null
-        const warnings = await core.reviewProject(prepared.dir, prepared.name)
-        row = repository.insert({
-          name: prepared.name,
-          team: input.team,
-          sourceType: input.source.type,
-          source: input.sourceLabel,
-          dir: prepared.dir,
-          warnings,
-          displayName: (input.displayName?.trim() || input.name.trim()).slice(0, DISPLAY_NAME_MAX_LENGTH),
-          year,
-        })
-      } catch (error) {
-        // Si la pestaña sigue abierta, ella muestra el error; si no, queda en la lista.
-        if (input.abandoned?.()) {
-          registration.error = errorMessage(error)
-          registration.percent = null
-        } else {
-          registrations.delete(registration.key)
+    /**
+     * Encola varios registros y los prepara de a uno, para no saturar la red ni el disco. Cada uno
+     * figura enseguida en registrations(); el que falla queda ahí con su motivo, porque nadie espera
+     * su respuesta. Los que no se pueden encolar (nombre repetido) vuelven en rejected, sin tocar
+     * a los demás.
+     */
+    enqueue(inputs: RegisterProjectInput[]): BatchResponse {
+      const result: BatchResponse = { queued: [], rejected: [] }
+      inputs.forEach((input, index) => {
+        try {
+          const registration = reserve(input, 'En espera')
+          queue.push({ registration, input: { ...input, abandoned: () => true } })
+          result.queued.push(registration.name)
+        } catch (error) {
+          result.rejected.push({ index, name: input.name, message: errorMessage(error) })
         }
-        throw error
-      }
-      registrations.delete(registration.key)
-      return hydrate(row)
+      })
+      void drainQueue()
+      return result
     },
 
     /** Registros en curso y fallidos sin descartar, el más reciente primero. */

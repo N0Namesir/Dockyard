@@ -46,6 +46,27 @@ const repositoryBodySchema = Type.Object(
   { additionalProperties: false },
 )
 
+/** Una tanda es un curso: de sobra para 10 a 20 equipos. */
+const BATCH_MAX = 60
+
+const batchBodySchema = Type.Object(
+  {
+    year: Type.Optional(yearSchema),
+    items: Type.Array(
+      Type.Object(
+        {
+          team: Type.String({ minLength: 1, maxLength: 120 }),
+          name: Type.String({ minLength: 1, maxLength: 120 }),
+          repoUrl: Type.String({ minLength: 1, maxLength: 2048 }),
+        },
+        { additionalProperties: false },
+      ),
+      { minItems: 1, maxItems: BATCH_MAX },
+    ),
+  },
+  { additionalProperties: false },
+)
+
 const NOTES_MAX_LENGTH = 2000
 const DESCRIPTION_MAX_LENGTH = 2000
 const INSTRUCTIONS_MAX_LENGTH = 4000
@@ -76,6 +97,7 @@ type RegistrationParams = Static<typeof registrationParamsSchema>
 type EditBody = Static<typeof editBodySchema>
 type IdParams = Static<typeof idParamsSchema>
 type RepositoryBody = Static<typeof repositoryBodySchema>
+type BatchBody = Static<typeof batchBodySchema>
 
 interface MultipartProject {
   team: string
@@ -294,6 +316,30 @@ export function projectRoutes(service: ProjectService): FastifyPluginAsync {
         abandoned,
       })
       return reply.code(201).send(project)
+    })
+
+    app.post('/projects/batch', async (request, reply) => {
+      if (!Value.Check(batchBodySchema, request.body)) {
+        throw new HttpError(400, `La lista debe tener entre 1 y ${BATCH_MAX} proyectos, cada uno con equipo, nombre y URL del repositorio, y el año va de ${YEAR.minimum} a ${YEAR.maximum}.`)
+      }
+      const { year, items } = request.body as BatchBody
+      // Las URL que no sirven se rechazan aquí, una por una, sin frenar al resto de la tanda.
+      const rejected: { index: number; name: string; message: string }[] = []
+      const accepted: { index: number; input: Parameters<ProjectService['enqueue']>[0][number] }[] = []
+      items.forEach((item, index) => {
+        try {
+          const repoUrl = validateRepositoryUrl(item.repoUrl.trim())
+          const team = requiredText(item.team, 'el nombre del equipo')
+          const name = requiredText(item.name, 'el nombre del proyecto')
+          accepted.push({ index, input: { team, name, year, source: { type: 'git', url: repoUrl }, sourceLabel: repoUrl } })
+        } catch (error) {
+          rejected.push({ index, name: item.name, message: error instanceof Error ? error.message : 'Línea no válida.' })
+        }
+      })
+      const result = service.enqueue(accepted.map((item) => item.input))
+      for (const failure of result.rejected) rejected.push({ ...failure, index: accepted[failure.index]!.index })
+      rejected.sort((a, b) => a.index - b.index)
+      return reply.code(202).send({ queued: result.queued, rejected })
     })
 
     app.get<{ Params: IdParams }>(

@@ -118,6 +118,14 @@ export interface RegistrationResponse {
   elapsedSeconds: number
 }
 
+/** Resultado de encolar una tanda de registros. */
+export interface BatchResponse {
+  /** Nombres técnicos encolados, en orden. */
+  queued: string[]
+  /** Los que no se encolaron, con su posición en la lista y el motivo. */
+  rejected: { index: number; name: string; message: string }[]
+}
+
 /** Lo que se volvió a encender al arrancar Dockyard. */
 export interface ResumeResult {
   started: string[]
