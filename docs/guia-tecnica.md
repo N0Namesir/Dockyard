@@ -230,3 +230,16 @@ Esta entrega no las incluye. Mientras tanto, el docente registra solo proyectos 
 - La detección de puertos solo ve contenedores. Si otro programa de la PC usa el puerto, falla `up -d` y el mensaje de Docker llega al docente.
 - Actualizar no toca los datos: un volumen de base de datos conserva sus tablas, así que un `.sql` nuevo de `db/init/` no se vuelve a cargar. Tampoco cambia un `.env` que ya exista, aunque cambie `.env.example`. Para empezar limpio, elimina el proyecto y regístralo de nuevo.
 - Un proyecto de ZIP no se actualiza: se reemplaza su ZIP. Como en Actualizar, un volumen de base de datos conserva sus tablas y un `.sql` nuevo de `db/init/` no se vuelve a cargar. El `.env`, en cambio, sale del ZIP nuevo o de su `.env.example`, porque la carpeta se cambia entera. Para empezar limpio, elimina el proyecto y regístralo de nuevo.
+
+## Pruebas de interfaz
+
+`web/test/ui.test.mjs` usa Chromium con Playwright, sirve solo el frontend compilado e intercepta todas las rutas de la API. No usa Docker ni modifica proyectos reales. CI también ejecuta estas pruebas después de compilar.
+
+```bash
+npx playwright install chromium  # una vez, después de npm install
+npm run test:ui -w web
+```
+
+Cubre registro por ZIP y GitHub, registro continuo, recuperación de errores, búsqueda, teclado, foco tras refrescos, cierre de diálogos, confirmación de eliminación y anchos de 320 a 1440 px. Para guardar capturas, define `UI_SCREENSHOTS` con una carpeta existente.
+
+El registro se abre con `register-panel.ts`. `dialog-focus.ts` recupera el botón lógico al cerrar un diálogo aunque el refresco haya reemplazado la fila. `table.ts` conserva foco y desplegables por identidad, y las acciones secundarias usan un `details` nativo.

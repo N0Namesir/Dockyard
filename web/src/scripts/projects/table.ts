@@ -24,7 +24,40 @@ function messageRow(text: string): HTMLTableRowElement {
   return row
 }
 
+const focusable = 'button, a, input, textarea, select, summary, [tabindex]'
+
 export function render(): void {
+  const active = document.activeElement as HTMLElement | null
+  const rowKey = active?.closest<HTMLElement>('[data-row-key]')?.dataset.rowKey
+  const action = active?.dataset.action
+  const oldRow = active?.closest('tr')
+  const index = oldRow && active ? [...oldRow.querySelectorAll(focusable)].indexOf(active) : -1
+  const disclosures = new Map<string, Map<string, boolean>>()
+  for (const row of page.projectsBody.querySelectorAll<HTMLElement>('[data-row-key]')) {
+    disclosures.set(row.dataset.rowKey!, new Map([...row.querySelectorAll('details')].map(item => [item.dataset.disclosure ?? '', item.open])))
+  }
+  try { renderRows() } finally {
+    for (const row of page.projectsBody.querySelectorAll<HTMLElement>('[data-row-key]')) {
+      const previous = disclosures.get(row.dataset.rowKey!)
+      if (previous) row.querySelectorAll('details').forEach(item => { item.open = previous.get(item.dataset.disclosure ?? '') ?? item.open })
+    }
+    if (rowKey && active && !active.isConnected) {
+      const row = [...page.projectsBody.querySelectorAll<HTMLElement>('[data-row-key]')].find(item => item.dataset.rowKey === rowKey)
+      let target = action ? row?.querySelector<HTMLElement>(`[data-action="${action}"]`) : row?.querySelectorAll<HTMLElement>(focusable)[index]
+      if (target && !target.checkVisibility()) target = row?.querySelector<HTMLElement>('[data-action="menu"]')
+      if (target?.matches(':disabled')) target = row?.querySelector<HTMLElement>('[data-action="menu"]')
+      const fallback = row?.querySelector<HTMLElement>('[data-action="menu"]') ?? page.searchInput
+      ;(target ?? fallback).focus({ preventScroll: true })
+    }
+  }
+}
+
+function appendRow(row: HTMLTableRowElement, key: string): void {
+  row.dataset.rowKey = key
+  page.projectsBody.append(row)
+}
+
+function renderRows(): void {
   if (!handlers) throw new Error('Falta conectar las acciones de la tabla (setRowHandlers).')
   const { projects, loading, loadFailed } = state
   // Se ofrece si hay algo encendido a la vista; la API apaga también lo que la búsqueda oculta.
@@ -48,7 +81,7 @@ export function render(): void {
   }
   // Los registros en curso van arriba y no dependen de la búsqueda: son pocos y duran poco.
   for (const registration of state.registrations) {
-    page.projectsBody.append(registrationRow(registration, dismiss!))
+    appendRow(registrationRow(registration, dismiss!), `registration-${registration.key}`)
   }
   if (projects.length === 0) {
     if (state.registrations.length > 0) return
@@ -59,9 +92,9 @@ export function render(): void {
   }
 
   for (const project of projects) {
-    page.projectsBody.append(projectRow(project, handlers))
-    if (isStarting(project)) page.projectsBody.append(progressRow(project))
-    if (project.warnings.length > 0) page.projectsBody.append(warningsRow(project))
-    if (state.openLogs.has(project.id)) page.projectsBody.append(logsRow(project, handlers.loadLogs))
+    appendRow(projectRow(project, handlers), `project-${project.id}`)
+    if (isStarting(project)) appendRow(progressRow(project), `progress-${project.id}`)
+    if (project.warnings.length > 0) appendRow(warningsRow(project), `warnings-${project.id}`)
+    if (state.openLogs.has(project.id)) appendRow(logsRow(project, handlers.loadLogs), `logs-${project.id}`)
   }
 }

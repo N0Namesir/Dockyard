@@ -2,7 +2,7 @@
 
 Dockyard te permite registrar los proyectos de tus estudiantes, encenderlos, verlos funcionando y apagarlos desde el navegador, sin usar la terminal.
 
-![Pantalla principal de Dockyard: la lista de proyectos a la izquierda y el formulario de registro a la derecha](img/pantalla-principal.png)
+![Pantalla principal de Dockyard: listado de proyectos del aula](img/pantalla-principal.png)
 
 ## Abrir la herramienta
 
@@ -14,13 +14,13 @@ Al reiniciar la PC, Dockyard vuelve solo y enciende de nuevo los proyectos que d
 
 ## Registrar un proyecto
 
-En el panel **Registrar proyecto**, llena **Equipo** y **Nombre del proyecto**, elige el **Origen** y presiona **Registrar proyecto**. Cada proyecto se registra una vez. Dockyard ajusta el nombre a un formato válido: por ejemplo, `Tienda Equipo 3` queda como `tienda-equipo-3`.
+Pulsa **+ Registrar proyecto** para abrir el panel lateral. Llena **Equipo** y **Nombre del proyecto**, elige el **Origen** y presiona **Registrar proyecto**. Cada proyecto se registra una vez. Dockyard ajusta el nombre a un formato válido: por ejemplo, `Tienda Equipo 3` queda como `tienda-equipo-3`.
 
 **Origen GitHub.** Pega la **URL del repositorio**, que debe empezar con `https://` y ser pública (por ejemplo, `https://github.com/equipo3/tienda`). Dockyard descarga el código.
 
 **Origen Archivo ZIP.** Elige el ZIP que te entregó el equipo, de 200 MB como máximo. Dockyard lo descomprime.
 
-Al presionar el botón, el formulario queda libre y el proyecto aparece arriba en la lista como **Registrando**, con lo que está haciendo y, al descargar de GitHub, el porcentaje. Puedes registrar otro mientras tanto, seguir usando Dockyard o cerrar la pestaña: el registro sigue. Cuando termina, aparece como un proyecto más. Si falla, el formulario vuelve a mostrar los datos con el motivo; si ya habías cerrado la pestaña, la fila dice **No se registró** con el motivo, y **Descartar** la quita.
+Al enviar, el panel se cierra y aparece un aviso inmediato mientras se envía y prepara el proyecto. Activa **Seguir registrando proyectos** para mantener el formulario abierto. Cuando la API recibe el proyecto, aparece arriba en la lista como **Registrando**, con lo que está haciendo y, al descargar de GitHub, el porcentaje. Puedes registrar otro mientras tanto, seguir usando Dockyard o cerrar la pestaña una vez recibido el proyecto: la preparación sigue en segundo plano. No cierres la pestaña mientras se está subiendo un ZIP. Cuando termina, aparece como un proyecto más. Si falla, aparece un aviso; abre **Registrar proyecto** para corregir los datos recuperados (si no habías empezado otro registro); si ya habías cerrado la pestaña, la fila dice **No se registró** con el motivo, y **Descartar** la quita.
 
 En los dos casos, el proyecto debe traer su archivo compose. Reparte entre los equipos la [Guía para estudiantes](guia-estudiantes.md) para evitar problemas. Toda la documentación se puede leer dentro de Dockyard, en la sección **Documentación**.
 
@@ -33,6 +33,8 @@ Los avisos no impiden encender: tú decides. Si no entiendes uno, pregúntale al
 Que no aparezcan avisos no garantiza que el proyecto sea seguro, así que registra solo proyectos que conozcas.
 
 ## Buscar, encender, apagar y abrir
+
+**Abrir** y **Encender/Apagar** están siempre a mano. En **Más acciones** están **Actualizar**, **Reemplazar ZIP**, **Editar**, **Ver registro** y **Eliminar**, según el origen del proyecto. En pantallas pequeñas cada proyecto se presenta en una fila apilada.
 
 - **Buscar:** escribe parte del nombre del proyecto o del equipo en **Buscar nombre o equipo**. No importan las mayúsculas ni las tildes.
 - **Encender:** la primera vez puede tardar varios minutos, porque Docker descarga y construye las imágenes del proyecto. Mientras tanto, el botón dice **Encendiendo…** y debajo del proyecto se ve qué está haciendo Docker, cuánto lleva y sus últimas líneas. Puedes recargar la página sin interrumpirlo, pero si falla mientras tanto no verás el motivo: usa **Ver registro**. Las siguientes veces es rápido.
@@ -47,11 +49,11 @@ Que no aparezcan avisos no garantiza que el proyecto sea seguro, así que regist
 
 La tabla se actualiza sola cada 15 segundos. Si un proyecto aparece **Encendido** con el aviso **Con fallas**, uno de sus servicios se cayó; usa **Ver registro** para ver el motivo.
 
-Debajo de **Encendido** se ve cuánta CPU y memoria usa el proyecto, y sobre la lista, el total de los proyectos encendidos. La CPU es sobre toda la PC. Si un proyecto tiene varios servicios, deja el cursor sobre esos datos para ver el detalle. Sirve para saber cuál apagar si la PC se pone lenta.
+Despliega **Recursos** debajo de **Encendido** para ver cuánta CPU y memoria usa el proyecto. Al pie de la lista aparece el consumo total de los proyectos encendidos. La CPU es sobre toda la PC. Si un proyecto tiene varios servicios, deja el cursor sobre esos datos para ver el detalle. Sirve para saber cuál apagar si la PC se pone lenta.
 
 Debajo de **Encendido** también se indica si la página del proyecto contesta:
 
-- **La web responde:** Dockyard recibió una respuesta. No revisa si cada función sirve, pero la página está arriba.
+- **Web disponible:** Dockyard recibió una respuesta. No revisa si cada función sirve, pero la página está arriba.
 - **La web aún no responde:** es normal unos segundos o minutos después de encender, mientras arranca. Si no cambia, usa **Ver registro**.
 - **La web responde con error:** el servidor contesta, pero falla. Suele ser un problema del proyecto, como una base de datos que no conecta.
 

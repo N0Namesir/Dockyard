@@ -5,7 +5,7 @@ import type { Project, RowHandlers } from '../types.ts'
 
 /** Fila principal de un proyecto: nombre, equipo, estado, puertos y acciones. */
 export function projectRow(project: Project, handlers: RowHandlers): HTMLTableRowElement {
-  const row = element('tr', 'text-slate-700 hover:bg-slate-50/70')
+  const row = element('tr', 'project-row text-slate-700 hover:bg-slate-50/70')
   const nameCell = element('td', 'px-5 py-4')
   nameCell.append(element('p', 'font-bold text-slate-900', project.name))
   if (project.notes) {
@@ -15,7 +15,7 @@ export function projectRow(project: Project, handlers: RowHandlers): HTMLTableRo
     nameCell.append(notes)
   }
   row.append(nameCell)
-  row.append(element('td', 'px-5 py-4', project.team))
+  row.append(element('td', 'project-team px-5 py-4', project.team))
   row.append(stateCell(project), portsCell(project), actionsCell(project, handlers))
   return row
 }
@@ -48,7 +48,7 @@ function stateCell(project: Project): HTMLTableCellElement {
     const { state: web, httpStatus } = project.web
     note(
       web === 'ok'
-        ? 'La web responde'
+        ? 'Web disponible'
         : web === 'error'
           ? `La web responde con error ${httpStatus}`
           : 'La web aún no responde',
@@ -56,10 +56,15 @@ function stateCell(project: Project): HTMLTableCellElement {
     )
   }
   if (project.state === 'running') {
-    const usage = element('p', 'mt-1 max-w-40 text-xs text-slate-600')
+    const usage = element('p', 'mt-1 max-w-40 text-sm text-slate-600')
     usage.dataset.resources = String(project.id)
     fillResources(usage, project.id)
-    cell.append(usage)
+    const details = element('details', 'project-diagnostics')
+    details.dataset.disclosure = 'resources'
+    const summary = element('summary', '', 'Recursos')
+    summary.dataset.action = 'resources'
+    details.append(summary, usage)
+    cell.append(details)
   }
   return cell
 }
@@ -83,10 +88,10 @@ function actionsCell(project: Project, handlers: RowHandlers): HTMLTableCellElem
   const pending = state.pendingActions.get(project.id)
   const isPending = pending !== undefined || starting
 
-  const actions = element('div', 'flex items-center justify-end gap-2')
+  const actions = element('div', 'primary-actions')
   const toggle = element(
     'button',
-    'rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 hover:border-marca-tinta hover:text-marca-texto disabled:cursor-wait disabled:opacity-50',
+    'ui-button',
     pending === 'stop'
       ? 'Apagando…'
       : starting
@@ -94,6 +99,7 @@ function actionsCell(project: Project, handlers: RowHandlers): HTMLTableCellElem
         : project.state === 'running' ? 'Apagar' : 'Encender',
   )
   toggle.type = 'button'
+  toggle.dataset.action = 'toggle'
   toggle.disabled = isPending
   toggle.addEventListener('click', () => handlers.changeState(project))
   actions.append(toggle)
@@ -101,16 +107,18 @@ function actionsCell(project: Project, handlers: RowHandlers): HTMLTableCellElem
   if (!starting && project.state === 'running' && project.url) {
     const open = element(
       'a',
-      'rounded-lg bg-marca px-3 py-1.5 text-xs font-bold text-marca-tinta hover:bg-marca-fuerte',
+      'ui-button ui-button-primary',
       'Abrir',
     )
+    open.dataset.action = 'open'
+    open.setAttribute('aria-label', `Abrir ${project.name} en una pestaña nueva`)
     open.href = project.url
     open.target = '_blank'
     open.rel = 'noopener noreferrer'
     actions.append(open)
   }
 
-  const secondary = element('div', 'flex items-center justify-end gap-3 whitespace-nowrap text-xs font-semibold')
+  const secondary = element('div', 'project-menu-content')
   if (project.sourceType === 'git') {
     const update = element(
       'button',
@@ -121,6 +129,7 @@ function actionsCell(project: Project, handlers: RowHandlers): HTMLTableCellElem
     update.disabled = isPending || project.state === 'running'
     if (project.state === 'running') update.title = 'Apaga el proyecto para actualizarlo'
     update.addEventListener('click', () => handlers.updateProject(project))
+    update.dataset.action = 'update'
     secondary.append(update)
   } else {
     const replace = element(
@@ -132,7 +141,14 @@ function actionsCell(project: Project, handlers: RowHandlers): HTMLTableCellElem
     replace.disabled = isPending || project.state === 'running'
     if (project.state === 'running') replace.title = 'Apaga el proyecto para reemplazar su ZIP'
     replace.addEventListener('click', () => handlers.replaceZip(project))
+    replace.dataset.action = 'replace'
     secondary.append(replace)
+  }
+  if (project.state === 'running') {
+    const hint = element('p', 'action-hint', project.sourceType === 'git' ? 'Apaga el proyecto para actualizarlo.' : 'Apaga el proyecto para reemplazar su ZIP.')
+    hint.id = `update-hint-${project.id}`
+    secondary.querySelector('button')?.setAttribute('aria-describedby', hint.id)
+    secondary.append(hint)
   }
   const edit = element(
     'button',
@@ -140,6 +156,7 @@ function actionsCell(project: Project, handlers: RowHandlers): HTMLTableCellElem
     pending === 'edit' ? 'Guardando…' : 'Editar',
   )
   edit.type = 'button'
+  edit.dataset.action = 'edit'
   edit.disabled = isPending
   edit.addEventListener('click', () => handlers.editProject(project))
   secondary.append(edit)
@@ -149,6 +166,8 @@ function actionsCell(project: Project, handlers: RowHandlers): HTMLTableCellElem
     state.openLogs.has(project.id) ? 'Ocultar registro' : 'Ver registro',
   )
   logs.type = 'button'
+  logs.dataset.action = 'logs'
+  logs.setAttribute('aria-expanded', String(state.openLogs.has(project.id)))
   logs.addEventListener('click', () => handlers.toggleLogs(project))
   const remove = element(
     'button',
@@ -156,12 +175,31 @@ function actionsCell(project: Project, handlers: RowHandlers): HTMLTableCellElem
     pending === 'remove' ? 'Eliminando…' : 'Eliminar',
   )
   remove.type = 'button'
+  remove.dataset.action = 'remove'
+  remove.classList.add('action-danger')
   remove.disabled = isPending
   remove.addEventListener('click', () => handlers.removeProject(project))
   secondary.append(logs, remove)
 
   const stack = element('div', 'flex flex-col items-end gap-2')
-  stack.append(actions, secondary)
+  const menu = element('details', 'project-menu')
+  menu.dataset.disclosure = 'actions'
+  const summary = element('summary', 'ui-button', 'Más acciones')
+  summary.dataset.action = 'menu'
+  summary.setAttribute('aria-label', `Más acciones de ${project.name}`)
+  menu.append(summary, secondary)
+  // Cierra antes de ejecutar para que los diálogos recuperen un foco visible al terminar.
+  secondary.addEventListener('click', (event) => {
+    if (!(event.target instanceof HTMLButtonElement) || event.target.disabled) return
+    menu.open = false
+    summary.focus()
+  }, { capture: true })
+  menu.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') { menu.open = false; summary.focus(); event.stopPropagation() }
+  })
+  const controls = element('div', 'project-actions')
+  controls.append(actions, menu)
+  stack.append(controls)
   const error = state.actionErrors.get(project.id)
   if (error) {
     stack.append(element('p', 'max-w-md whitespace-pre-wrap break-words text-left text-xs text-red-700', error))

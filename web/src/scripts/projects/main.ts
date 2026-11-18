@@ -4,11 +4,13 @@
 import { changeState, removeProject, replaceConflicting, updateProject } from './actions.ts'
 import { setupConfirmDialog } from './confirm-dialog.ts'
 import { editProject, setupEditDialog } from './edit-dialog.ts'
+import { setupDialogFocus } from './dialog-focus.ts'
 import { page } from './dom.ts'
 import { loadProjects } from './list.ts'
 import { loadLogs, pollLogs, toggleLogs } from './logs.ts'
 import { pollProgress } from './progress.ts'
 import { dismissRegistration, loadRegistrations, pollRegistrations } from './registrations.ts'
+import { setupRegisterPanel } from './register-panel.ts'
 import { setupRegisterForm } from './register-form.ts'
 import { setupRemoveDialog } from './remove-dialog.ts'
 import { replaceZip } from './replace-zip.ts'
@@ -36,10 +38,12 @@ setRowHandlers({
   toggleLogs: (project) => void toggleLogs(project),
   loadLogs: (project) => void loadLogs(project),
 }, (registration) => void dismissRegistration(registration))
+setupDialogFocus()
 setupRemoveDialog()
 setupConfirmDialog()
 setupEditDialog()
 page.stopAll.addEventListener('click', () => void stopAll())
+setupRegisterPanel()
 setupRegisterForm()
 
 let searchTimer: ReturnType<typeof setTimeout> | undefined

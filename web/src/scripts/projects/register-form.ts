@@ -1,10 +1,17 @@
 // Formulario para registrar un proyecto desde GitHub o un ZIP.
+import { registrationSubmitted } from './register-panel.ts'
 import { api, messageOf } from './api.ts'
 import { hideGlobalMessage, page, showGlobalMessage } from './dom.ts'
 import { loadProjects } from './list.ts'
 import { loadRegistrations } from './registrations.ts'
 import { state } from './state.ts'
 import type { Project } from './types.ts'
+
+const submissions = new Map<symbol, string>()
+function showSubmissions(): void {
+  document.querySelector<HTMLElement>('#registration-status')!.textContent = submissions.size
+    ? `Registro en curso: ${[...submissions.values()].join(', ')}. Enviando y preparando los proyectos…` : ''
+}
 
 const form = document.querySelector<HTMLFormElement>('#register-form')!
 const formError = document.querySelector<HTMLElement>('#form-error')!
@@ -79,13 +86,22 @@ async function submit(event: SubmitEvent): Promise<void> {
   const source = selectedSource()
   const request = requestFor(formData)
   const name = String(formData.get('name') ?? '').trim()
+  const keepOpen = document.querySelector<HTMLInputElement>('#register-another')!.checked
   form.reset()
+  document.querySelector<HTMLInputElement>('#register-another')!.checked = keepOpen
   updateSourceFields()
   state.registering++
+  const feedback = document.querySelector<HTMLElement>('#register-feedback')!
+  feedback.textContent = `Enviando ${name}. Puedes registrar otro proyecto.`
+  const submission = Symbol(name)
+  submissions.set(submission, name)
+  showSubmissions()
+  registrationSubmitted()
   // Aparece en la lista en cuanto la API lo recibe (un ZIP, después de subirse).
   setTimeout(() => void loadRegistrations(), 300)
   try {
     const created = await api<Project>('/api/projects', request)
+    feedback.textContent = `${created.name} se registró. Puedes registrar otro proyecto.`
     page.searchInput.value = ''
     if (await loadProjects()) {
       if (created.warnings.length > 0) {
@@ -95,15 +111,20 @@ async function submit(event: SubmitEvent): Promise<void> {
       }
     }
   } catch (error) {
+    feedback.textContent = ''
     const message = messageOf(error, 'No se pudo registrar el proyecto.')
     if (restore(formData, source)) {
       formError.textContent = message
       formError.classList.remove('hidden')
+      showGlobalMessage(`No se registró ${name}: ${message}. Abre Registrar proyecto para corregir los datos.`, 'error')
     } else {
       showGlobalMessage(`No se registró ${name}: ${message}`, 'error')
     }
   } finally {
+    submissions.delete(submission)
+    showSubmissions()
     state.registering--
+    if (state.registering > 0) feedback.textContent = `Quedan ${state.registering} registros en curso.`
     await loadRegistrations()
   }
 }

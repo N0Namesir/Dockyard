@@ -28,7 +28,7 @@ export async function pollResources(): Promise<void> {
     state.resources = await api<Resources>('/api/projects/resources')
     const { total, memoryLimit } = state.resources
     page.resourcesTotal.textContent = total.memoryBytes > 0
-      ? `Los proyectos encendidos usan CPU ${cpuText(total.cpuPercent)} y ${bytesText(total.memoryBytes)} de ${bytesText(memoryLimit)} de memoria de la PC.`
+      ? `Consumo de proyectos: CPU ${cpuText(total.cpuPercent)} · RAM ${bytesText(total.memoryBytes)} / ${bytesText(memoryLimit)} de la PC.`
       : ''
     for (const target of page.projectsBody.querySelectorAll<HTMLElement>('[data-resources]')) {
       fillResources(target, Number(target.dataset.resources))

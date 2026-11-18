@@ -23,7 +23,7 @@ const links = [
             aria-current={link.id === current ? 'page' : undefined}
             class:list={[
               'rounded-md px-3 py-2',
-              link.id === current ? 'bg-marca text-marca-tinta' : 'text-slate-200 hover:bg-white/10',
+              link.id === current ? 'bg-white/10 text-marca underline decoration-2 underline-offset-8' : 'text-slate-200 hover:bg-white/10',
             ]}
           >
             {link.label}

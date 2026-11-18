@@ -15,20 +15,23 @@
   --color-marca-fuerte: #f29b00;
   --color-marca-suave: #fff4d1;
   --color-marca-texto: #7a4f00;
-  --color-marca-tinta: #101928;
+  --color-marca-tinta: #171717;
+  --color-marca-acento: #0e7490;
+  --color-marca-fondo: #f5f6f7;
+  --color-marca-secundario: #52525b;
   --font-sans: Barlow, ui-sans-serif, system-ui, sans-serif;
   --font-display: "Barlow Condensed", Barlow, ui-sans-serif, system-ui, sans-serif;
 }
 
 :root {
   color-scheme: light;
-  background: #f6f7f9;
+  background: var(--color-marca-fondo);
   color: var(--color-marca-tinta);
 }
 
 body {
   min-width: 320px;
-  background: #f6f7f9;
+  background: var(--color-marca-fondo);
 }
 
 :focus-visible {
@@ -42,12 +45,8 @@ body {
 
 /* La franja de seguridad de un muelle, en los colores del emblema. */
 .cinta-muelle {
-  height: 0.5rem;
-  background: repeating-linear-gradient(
-    -45deg,
-    var(--color-marca) 0 0.875rem,
-    var(--color-marca-tinta) 0.875rem 1.75rem
-  );
+  height: 0.1875rem;
+  background: var(--color-marca);
 }
 
 /* Evita que la página de atrás se desplace mientras un diálogo modal está abierto. */
@@ -177,4 +176,232 @@ dialog::backdrop {
   background: #f8fafc;
   color: #0f172a;
   font-weight: 700;
+}
+
+/* Consola del aula: controles cómodos y el listado como superficie principal. */
+.skip-link {
+  position: fixed;
+  top: .5rem;
+  left: .5rem;
+  transform: translateY(-200%);
+  z-index: 100;
+  background: var(--color-marca);
+  color: var(--color-marca-tinta);
+  padding: .75rem 1rem;
+}
+.skip-link:focus {
+  transform: none;
+}
+.page-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+}
+.ui-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: .5rem 1rem;
+  border: 1px solid #cbd5e1;
+  border-radius: .5rem;
+  background: white;
+  color: var(--color-marca-tinta);
+  font-size: .875rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.ui-button:hover {
+  border-color: var(--color-marca-tinta);
+  background: var(--color-marca-fondo);
+}
+.ui-button-primary {
+  background: var(--color-marca);
+  border-color: var(--color-marca);
+}
+.ui-button-primary:hover {
+  background: var(--color-marca-fuerte);
+}
+.ui-button:disabled {
+  cursor: wait;
+  opacity: .6;
+}
+.resource-summary:not(:empty) {
+  border-top: 1px solid #e2e8f0;
+  padding: 1rem 1.25rem;
+}
+.register-panel {
+  position: fixed;
+  inset: 0 0 0 auto;
+  margin: 0;
+  width: min(100%, 30rem);
+  max-width: 100%;
+  height: 100dvh;
+  max-height: 100dvh;
+  padding: 2rem;
+  border: 0;
+  border-left: 3px solid var(--color-marca);
+  background: white;
+  overflow-y: auto;
+}
+.register-panel::backdrop {
+  background: rgb(23 23 23 / .45);
+}
+body:has(dialog[open]) {
+  overflow: hidden;
+}
+.projects-table th {
+  white-space: nowrap;
+}
+.project-row > td {
+  vertical-align: top;
+}
+.project-row > td:first-child {
+  width: 28%;
+  overflow-wrap: anywhere;
+}
+.project-team {
+  white-space: nowrap;
+}
+.project-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: .5rem;
+}
+.project-actions .primary-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .5rem;
+}
+.project-menu {
+  min-width: 8rem;
+  text-align: left;
+}
+.project-menu > summary {
+  list-style: none;
+}
+.project-menu > summary::-webkit-details-marker {
+  display: none;
+}
+.project-menu[open] {
+  width: 100%;
+}
+.project-menu[open] > summary {
+  border-color: var(--color-marca-acento);
+}
+.project-menu-content {
+  display: flex;
+  flex-direction: column;
+  gap: .25rem;
+  padding: .5rem;
+  margin-top: .5rem;
+  border: 1px solid #e2e8f0;
+  border-radius: .5rem;
+  background: var(--color-marca-fondo);
+}
+.project-menu-content button {
+  min-height: 44px;
+  padding: .5rem .75rem;
+  text-align: left;
+  font-size: .875rem;
+  text-decoration: none;
+  border-radius: .25rem;
+}
+.project-menu-content button:hover:not(:disabled) {
+  background: white;
+}
+.project-menu-content button:disabled {
+  opacity: .65;
+  cursor: not-allowed;
+}
+.project-menu-content .action-danger {
+  border-top: 1px solid #cbd5e1;
+  margin-top: .25rem;
+  border-radius: 0;
+}
+.action-hint {
+  max-width: 24rem;
+  padding: .25rem .75rem;
+  font-size: .875rem;
+  color: var(--color-marca-secundario);
+}
+.project-diagnostics {
+  margin-top: .5rem;
+  color: var(--color-marca-secundario);
+  font-size: .875rem;
+}
+.project-diagnostics summary {
+  min-height: 32px;
+  padding-block: .25rem;
+  cursor: pointer;
+  color: var(--color-marca-acento);
+}
+.projects-table tbody > tr > td[colspan] {
+  overflow-wrap: anywhere;
+}
+.projects-table tbody summary, .projects-table tbody button, .projects-table tbody a {
+  scroll-margin-block: 1rem;
+}
+@media (max-width: 767px) {
+  .page-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .register-panel {
+    padding: 1.25rem;
+  }
+  .projects-table, .projects-table tbody, .projects-table tr, .projects-table td {
+    display: block;
+    width: 100%;
+    min-width: 0;
+  }
+  .projects-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+  .projects-table tbody > tr {
+    padding: .75rem 0;
+  }
+  .projects-table tbody > tr > td {
+    padding: .375rem 1.25rem;
+  }
+  .projects-table .project-row > td:first-child {
+    width: 100%;
+    font-size: 1rem;
+  }
+  .project-team {
+    white-space: normal;
+  }
+  .project-actions {
+    justify-content: flex-start;
+  }
+  .project-actions .primary-actions {
+    flex: 1;
+  }
+  .project-actions .primary-actions > * {
+    flex: 1;
+  }
+  .project-row > td:nth-child(4)::before {
+    content: 'Puertos: ';
+    font-family: var(--font-sans);
+  }
+  .project-row > td:last-child > div {
+    align-items: stretch;
+  }
+}
+.registration-status:not(:empty) {
+  overflow-wrap: anywhere;
+  margin-bottom: 1.5rem;
+  padding: .75rem 1rem;
+  border-left: 3px solid var(--color-marca-acento);
+  background: white;
+  color: var(--color-marca-acento);
 }

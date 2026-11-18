@@ -8,6 +8,7 @@ export function warningsRow(project: Project): HTMLTableRowElement {
   const cell = element('td', 'bg-amber-50 px-5 py-3 text-sm text-amber-900')
   cell.colSpan = 5
   const details = element('details')
+  details.dataset.disclosure = 'warnings'
   details.open = state.openWarnings.has(project.id)
   details.addEventListener('toggle', () => {
     if (details.open) state.openWarnings.add(project.id)
