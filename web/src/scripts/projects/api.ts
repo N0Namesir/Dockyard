@@ -12,6 +12,8 @@ export class ConnectionError extends Error {}
 export interface ApiErrorBody {
   message?: string
   conflict?: PortConflict
+  /** Nombre técnico libre que propone la API cuando el pedido ya existe, como «tienda-2026». */
+  suggestion?: string
 }
 
 /** La API respondió con un error. */

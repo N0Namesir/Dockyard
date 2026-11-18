@@ -1,0 +1,182 @@
+---
+import '../styles/global.css'
+import SiteHeader from '../components/SiteHeader.astro'
+import SiteFooter from '../components/SiteFooter.astro'
+import FaviconLinks from '../components/FaviconLinks.astro'
+
+const field = 'w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 placeholder:text-slate-500 focus:border-marca-tinta disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500'
+const label = 'mb-1.5 block text-sm font-semibold text-slate-700'
+const hint = 'mt-1 block text-xs leading-5 text-slate-500'
+---
+
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width" />
+    <meta name="description" content="Dockyard: ficha de un proyecto" />
+    <FaviconLinks />
+    <title>Dockyard · Proyecto</title>
+  </head>
+  <body class="flex min-h-screen flex-col">
+    <a class="skip-link" href="#contenido">Saltar a la ficha</a>
+    <SiteHeader current="projects" />
+
+    <main id="contenido" tabindex="-1" class="mx-auto w-full max-w-7xl px-5 py-8 sm:px-8 lg:py-12">
+      <a href="/" class="text-sm font-semibold text-marca-texto underline underline-offset-4 hover:text-marca-tinta">← Volver a Proyectos</a>
+
+      <p id="project-loading" role="status" class="mt-8 text-slate-600">Cargando el proyecto…</p>
+      <p id="project-error" role="alert" class="mt-8 hidden rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"></p>
+      <p id="project-message" role="status" class="mt-6 hidden rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800"></p>
+
+      <article id="project-view" hidden class="mt-6 grid grid-cols-12 items-start gap-7">
+        <div class="col-span-12 lg:col-span-4">
+          <div id="project-image" class="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm"></div>
+        </div>
+
+        <div class="col-span-12 flex min-w-0 flex-col gap-6 lg:col-span-8">
+          <header class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div class="min-w-0">
+              <h1 id="project-display-name" class="text-3xl font-bold break-words text-marca-tinta sm:text-4xl"></h1>
+              <p class="mt-1 text-sm text-slate-600">
+                <span id="project-team"></span> · <span id="project-year"></span>
+                · <span class="font-mono text-xs break-all" title="Nombre técnico: el de sus contenedores y su carpeta" id="project-name"></span>
+              </p>
+            </div>
+            <button id="project-edit" type="button" class="ui-button shrink-0">Editar ficha</button>
+          </header>
+
+          <section aria-label="Estado" class="flex flex-col gap-3 rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+            <div class="flex flex-wrap items-center gap-3">
+              <span id="project-state" class="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-bold"></span>
+              <button id="project-toggle" type="button" class="ui-button"></button>
+              <a id="project-open" hidden class="ui-button ui-button-primary" target="_blank" rel="noopener noreferrer">Abrir</a>
+            </div>
+            <p id="project-resources" class="text-sm text-slate-600"></p>
+            <p id="project-action-error" role="alert" class="hidden text-sm break-words whitespace-pre-wrap text-red-700"></p>
+          </section>
+
+          <section aria-labelledby="description-title">
+            <h2 id="description-title" class="text-lg font-bold text-slate-900">Descripción</h2>
+            <p id="project-description" class="mt-2 leading-7 break-words whitespace-pre-wrap text-slate-700"></p>
+          </section>
+
+          <section aria-labelledby="instructions-title">
+            <h2 id="instructions-title" class="text-lg font-bold text-slate-900">Indicaciones del equipo</h2>
+            <p class="text-sm text-slate-500">Cómo usarlo: usuarios de prueba, rutas importantes.</p>
+            <p id="project-instructions" class="mt-2 rounded-md bg-white p-4 font-mono text-sm leading-6 break-words whitespace-pre-wrap text-slate-800 shadow-sm"></p>
+          </section>
+
+          <section aria-labelledby="contacts-title">
+            <h2 id="contacts-title" class="text-lg font-bold text-slate-900">Contactos</h2>
+            <ul id="project-contacts" class="mt-2 grid grid-cols-12 gap-3"></ul>
+          </section>
+
+          <section aria-labelledby="notes-title">
+            <h2 id="notes-title" class="text-lg font-bold text-slate-900">Notas del docente</h2>
+            <p class="text-sm text-slate-500">Solo las ves tú y se guardan en esta PC.</p>
+            <p id="project-notes" class="mt-2 leading-7 break-words whitespace-pre-wrap text-slate-700"></p>
+          </section>
+
+          <section id="project-warnings-box" hidden aria-labelledby="warnings-title" class="rounded-lg border border-amber-300 bg-amber-50 p-5 text-amber-900">
+            <h2 id="warnings-title" class="font-bold">Revisar antes de encender</h2>
+            <ul id="project-warnings" class="mt-2 list-disc space-y-1 pl-5 text-sm"></ul>
+          </section>
+        </div>
+      </article>
+
+      <section id="edit-section" hidden aria-labelledby="edit-title" class="mt-6 rounded-lg border border-slate-200 bg-white p-5 shadow-sm sm:p-8">
+        <h1 id="edit-title" class="text-2xl font-bold text-marca-tinta">Editar ficha</h1>
+        <form id="edit-form" class="mt-6 grid grid-cols-12 gap-x-6 gap-y-5" novalidate>
+          <label class="col-span-12 md:col-span-6">
+            <span class={label}>Nombre para mostrar</span>
+            <input name="displayName" required maxlength="80" autocomplete="off" class={field} />
+          </label>
+          <label class="col-span-12 md:col-span-6">
+            <span class={label}>Nombre técnico</span>
+            <input name="name" required maxlength="120" autocomplete="off" autocapitalize="off" spellcheck="false" aria-describedby="edit-name-hint" class={`${field} font-mono`} />
+            <span id="edit-name-hint" class={hint}></span>
+          </label>
+          <label class="col-span-12 md:col-span-6">
+            <span class={label}>Equipo</span>
+            <input name="team" required maxlength="120" autocomplete="off" class={field} />
+          </label>
+          <label class="col-span-12 md:col-span-6">
+            <span class={label}>Año</span>
+            <input name="year" type="number" required min="2000" max="2100" step="1" class={field} />
+          </label>
+          <label class="col-span-12">
+            <span class={label}>Descripción <span class="font-normal text-slate-500">(opcional)</span></span>
+            <textarea name="description" rows="3" maxlength="2000" placeholder="Qué hace el proyecto, en palabras del equipo." class={`${field} resize-y`}></textarea>
+          </label>
+          <label class="col-span-12">
+            <span class={label}>Indicaciones del equipo <span class="font-normal text-slate-500">(opcional)</span></span>
+            <textarea name="instructions" rows="5" maxlength="4000" placeholder="Ej. Usuario de prueba: admin / admin123. El panel está en /admin." class={`${field} resize-y font-mono`}></textarea>
+          </label>
+          <label class="col-span-12">
+            <span class={label}>Notas del docente <span class="font-normal text-slate-500">(opcional)</span></span>
+            <textarea name="notes" rows="3" maxlength="2000" placeholder="Ej. Falta el inicio de sesión. Revisado el 12 de noviembre." class={`${field} resize-y`}></textarea>
+          </label>
+
+          <fieldset class="col-span-12">
+            <legend class={label}>Contactos de los estudiantes <span class="font-normal text-slate-500">(hasta 8)</span></legend>
+            <p class="mb-3 text-xs text-slate-500">Se guardan solo en esta PC y se borran al eliminar el proyecto.</p>
+            <ol id="contacts-list" class="flex flex-col gap-3"></ol>
+            <button id="add-contact" type="button" class="ui-button mt-3">+ Agregar contacto</button>
+          </fieldset>
+
+          <fieldset class="col-span-12">
+            <legend class={label}>Imagen <span class="font-normal text-slate-500">(opcional)</span></legend>
+            <div class="flex flex-col gap-4 sm:flex-row sm:items-center">
+              <div id="edit-image-preview" class="size-28 shrink-0 overflow-hidden rounded-lg border border-slate-200"></div>
+              <div class="flex flex-col gap-2">
+                <input
+                  name="image"
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  aria-describedby="edit-image-hint"
+                  class="block w-full cursor-pointer rounded-md border border-slate-300 text-sm text-slate-500 file:mr-3 file:border-0 file:bg-slate-100 file:px-3 file:py-2.5 file:font-semibold file:text-slate-700 hover:file:bg-slate-200"
+                />
+                <span id="edit-image-hint" class={hint}>PNG, JPEG o WebP de hasta 2 MB, como una captura de pantalla o el logo del proyecto.</span>
+                <button id="remove-image" type="button" class="ui-button self-start">Quitar imagen</button>
+              </div>
+            </div>
+          </fieldset>
+
+          <p id="edit-error" role="alert" class="col-span-12 hidden text-sm font-medium break-words whitespace-pre-wrap text-red-700"></p>
+          <div class="col-span-12 flex justify-end gap-3">
+            <button id="edit-cancel" type="button" class="ui-button">Cancelar</button>
+            <button id="edit-save" type="submit" class="ui-button ui-button-primary">Guardar</button>
+          </div>
+        </form>
+      </section>
+    </main>
+
+    <template id="contact-template">
+      <li class="contact-row grid grid-cols-12 gap-3 rounded-md border border-slate-200 p-3">
+        <label class="col-span-12 sm:col-span-4">
+          <span class="mb-1 block text-xs font-semibold text-slate-600">Nombre</span>
+          <input data-contact="name" maxlength="80" autocomplete="off" class={field} />
+        </label>
+        <label class="col-span-12 sm:col-span-4">
+          <span class="mb-1 block text-xs font-semibold text-slate-600">Correo</span>
+          <input data-contact="email" type="email" maxlength="254" autocomplete="off" class={field} />
+        </label>
+        <label class="col-span-9 sm:col-span-3">
+          <span class="mb-1 block text-xs font-semibold text-slate-600">Teléfono</span>
+          <input data-contact="phone" type="tel" maxlength="30" autocomplete="off" class={field} />
+        </label>
+        <div class="col-span-3 flex items-end sm:col-span-1">
+          <button data-contact="remove" type="button" class="ui-button w-full px-2" aria-label="Quitar contacto">✕</button>
+        </div>
+      </li>
+    </template>
+
+    <SiteFooter />
+
+    <script>
+      // La lógica de la página vive en src/scripts/project/, un módulo por tarea.
+      import '../scripts/project/main.ts'
+    </script>
+  </body>
+</html>

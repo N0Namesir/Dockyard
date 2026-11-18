@@ -1,6 +1,7 @@
-// Carga de la lista de proyectos, con búsqueda.
+// Carga de la lista de proyectos de la carpeta abierta, con búsqueda.
 import { api, CONNECTION_MESSAGE, messageOf } from './api.ts'
 import { hideGlobalMessage, page, showGlobalMessage } from './dom.ts'
+import { folderQuery } from './folders.ts'
 import { state } from './state.ts'
 import { render } from './table.ts'
 import type { Project } from './types.ts'
@@ -22,7 +23,9 @@ export async function loadProjects(silent = false): Promise<boolean> {
   let message = ''
   try {
     const query = page.searchInput.value.trim()
-    result = await api<Project[]>(`/api/projects${query ? `?q=${encodeURIComponent(query)}` : ''}`)
+    // La búsqueda mira dentro de la carpeta abierta.
+    const params = new URLSearchParams({ ...folderQuery(), ...(query ? { q: query } : {}) })
+    result = await api<Project[]>(`/api/projects${params.size > 0 ? `?${params}` : ''}`)
   } catch (error) {
     message = messageOf(error, CONNECTION_MESSAGE)
   }

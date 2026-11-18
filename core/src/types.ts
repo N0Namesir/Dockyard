@@ -9,6 +9,11 @@ export interface ProjectStatus {
   ports: number[]
   /** Servicios caídos o reiniciándose de un proyecto encendido. Solo aparece si hay alguno. */
   failedServices?: string[]
+  /**
+   * Puertos publicados solo en 127.0.0.1 (o ::1), como "127.0.0.1:8101:80": abren en el navegador
+   * de la PC, pero no desde un contenedor como el de Dockyard. Solo aparece si hay alguno.
+   */
+  loopbackPorts?: number[]
 }
 
 /** Avance de un encendido: una etapa para el docente y las últimas líneas de Docker. */
@@ -35,6 +40,28 @@ export interface ResourceUsage {
   memoryLimit: number
   /** Por nombre de proyecto de compose. Solo los encendidos. */
   projects: Record<string, ProjectResources>
+}
+
+/** Lo que ocupa en disco un proyecto de compose. */
+export interface ProjectDiskUsage {
+  /** Imágenes que construyó el proyecto y siguen en uso, o son su versión actual. */
+  imageBytes: number
+  /** Versiones viejas: imágenes del proyecto sin nombre que ningún contenedor usa. Se pueden liberar. */
+  unusedImageBytes: number
+  /** Volúmenes de Docker del proyecto: sus datos. */
+  volumeBytes: number
+}
+
+export interface DiskUsage {
+  /** Por nombre de proyecto de compose. Solo los que tienen imágenes construidas o volúmenes. */
+  projects: Record<string, ProjectDiskUsage>
+}
+
+export interface ImagesPruned {
+  /** Cuánto bajó lo que ocupan las imágenes de Docker. */
+  freedBytes: number
+  /** Imágenes borradas. */
+  removed: number
 }
 
 /** Opciones de startProject. */

@@ -1,21 +1,6 @@
-// Ayudantes del DOM y los elementos fijos de la página de proyectos (web/src/pages/index.astro).
-
-export function element<K extends keyof HTMLElementTagNameMap>(
-  tag: K,
-  classes?: string,
-  text?: string,
-): HTMLElementTagNameMap[K] {
-  const node = document.createElement(tag)
-  if (classes) node.className = classes
-  if (text !== undefined) node.textContent = text
-  return node
-}
-
-/** true si el docente tiene texto seleccionado dentro de target: no hay que reemplazarlo. */
-export function isSelectingIn(target: HTMLElement): boolean {
-  const selection = document.getSelection()
-  return selection !== null && !selection.isCollapsed && selection.containsNode(target, true)
-}
+// Elementos fijos de la página de proyectos (web/src/pages/index.astro) y su mensaje general.
+// Los ayudantes para crear elementos están en element.ts, que también usan otras páginas.
+export { element, isSelectingIn } from './element.ts'
 
 function required<T extends Element>(selector: string): T {
   const node = document.querySelector<T>(selector)
@@ -25,6 +10,13 @@ function required<T extends Element>(selector: string): T {
 
 export const page = {
   projectsBody: required<HTMLTableSectionElement>('#projects'),
+  /** Contiene la tabla y la cuadrícula: lo que se busca en la lista se busca aquí. */
+  projectsArea: required<HTMLElement>('#projects-area'),
+  projectsTable: required<HTMLElement>('#projects-table-wrap'),
+  projectsGrid: required<HTMLElement>('#projects-grid'),
+  projectsTitle: required<HTMLElement>('#projects-title'),
+  viewButtons: [...document.querySelectorAll<HTMLButtonElement>('[data-view]')],
+  folderList: required<HTMLUListElement>('#folder-list'),
   projectCount: required<HTMLElement>('#project-count'),
   resourcesTotal: required<HTMLElement>('#resources-total'),
   searchInput: required<HTMLInputElement>('#search'),

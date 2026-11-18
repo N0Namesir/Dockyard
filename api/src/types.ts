@@ -1,6 +1,9 @@
 import type {
+  DiskUsage,
+  ImagesPruned,
   PreparedProject,
   PrepareOptions,
+  ProjectDiskUsage,
   ProjectSource,
   ProjectResources,
   ProjectStatus,
@@ -28,6 +31,26 @@ export interface ProjectRow {
   keep_running: number
   /** Texto libre del docente sobre el proyecto. */
   notes: string
+  /** Nombre para mostrar; el técnico es name. */
+  display_name: string
+  year: number
+  /** Lo que cuenta el equipo de su proyecto. */
+  description: string
+  /** Cómo usarlo: usuarios de prueba, rutas importantes. */
+  instructions: string
+  /** Lista de Contact, como JSON. */
+  contacts: string
+  /** Archivo en data/imagenes, o null. */
+  image: string | null
+  /** Sube al cambiar la imagen: el navegador la vuelve a pedir. */
+  image_version: number
+}
+
+/** Un estudiante del equipo. */
+export interface Contact {
+  name: string
+  email?: string
+  phone?: string
 }
 
 export interface ProgressResponse extends StartProgress {
@@ -54,6 +77,20 @@ export interface ProjectResponse {
   pendingBuild: boolean
   /** Notas del docente; cadena vacía si no hay. */
   notes: string
+  displayName: string
+  year: number
+  description: string
+  instructions: string
+  contacts: Contact[]
+  /** Dirección de la imagen con su versión, o null si no tiene. */
+  imageUrl: string | null
+}
+
+export interface DiskResponse {
+  /** Suma de los proyectos registrados. */
+  total: ProjectDiskUsage
+  /** Todos los registrados, el que más ocupa primero. */
+  projects: ({ id: number; name: string } & ProjectDiskUsage)[]
 }
 
 export interface ResourcesResponse {
@@ -79,6 +116,14 @@ export interface RegistrationResponse {
   /** Motivo de la falla; null mientras sigue en curso. */
   error: string | null
   elapsedSeconds: number
+}
+
+/** Resultado de encolar una tanda de registros. */
+export interface BatchResponse {
+  /** Nombres técnicos encolados, en orden. */
+  queued: string[]
+  /** Los que no se encolaron, con su posición en la lista y el motivo. */
+  rejected: { index: number; name: string; message: string }[]
 }
 
 /** Lo que se volvió a encender al arrancar Dockyard. */
@@ -120,14 +165,21 @@ export interface CoreAdapter {
   getProjectStatuses(): Promise<Record<string, ProjectStatus>>
   getProjectLogs(name: string): Promise<string>
   getResources(): Promise<ResourceUsage>
+  getDiskUsage(): Promise<DiskUsage>
+  pruneProjectImages(names: string[]): Promise<ImagesPruned>
   removeProject(name: string): Promise<void>
   renameProject(name: string, newName: string): Promise<PreparedProject>
+  resetProjectData(dir: string, name: string): Promise<void>
   getSelfUpdateStatus(): Promise<{ supported: boolean; running: boolean }>
   startSelfUpdate(): Promise<void>
 }
 
 export interface NewProjectRow {
   name: string
+  /** Por defecto, name. */
+  displayName?: string
+  /** Por defecto, el año actual. */
+  year?: number
   team: string
   sourceType: ProjectRow['source_type']
   source: string

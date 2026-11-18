@@ -31,7 +31,7 @@ export async function loadRegistrations(): Promise<void> {
   if (changed) render()
   else {
     for (const registration of result) {
-      const row = page.projectsBody.querySelector<HTMLElement>(`[data-registration="${registration.key}"]`)
+      const row = page.projectsArea.querySelector<HTMLElement>(`[data-registration="${registration.key}"]`)
       if (row && registration.error === null) fillRegistration(row, registration)
     }
   }

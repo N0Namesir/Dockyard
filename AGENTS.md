@@ -18,7 +18,7 @@ npm install                                   # Node 24 o superior
 npm run build                                 # compila core, api y web
 npm run typecheck
 npm test                                      # pruebas del núcleo y de la API, sin Docker
-npm run test:docker -w core                   # pruebas con Docker real (usan los puertos 8081-8083, ~1-2 min)
+npm run test:docker -w core                   # pruebas con Docker real (usan los puertos 8081-8085, ~1-2 min)
 node --test --test-name-pattern="choque" core/test/docker.test.ts   # una sola prueba
 npm run try -w core -- ejemplos/prueba-estatico   # recorrido manual (url https, .zip o carpeta)
 npm version 1.1.0                             # publica una versión: prueba, crea commit y etiqueta, los sube y crea el release en GitHub
@@ -41,7 +41,7 @@ Monorepo con workspaces de npm (`core`, `api`, `web`) y un `tsconfig.base.json` 
 |---|---|---|---|
 | `core/` | 1: núcleo Docker y fuentes | 0V3R | Solo ejecuta `git`, `unzip` y `docker compose`. Nunca HTTP, SQLite ni UI |
 | `api/` | 2: API y datos | 0V3R (de Isaac) | Fastify 5 + TypeBox + SQLite (`node:sqlite`, con `better-sqlite3` como respaldo). Orquesta llamando a `core/`, nunca ejecuta Docker ni git |
-| `web/` | 3: interfaz | 0V3R (de Isaac) | Astro + Tailwind. Solo habla con la API, sin lógica de estados ni puertos. Publica `docs/*.md` en `/docs` al compilar. La lógica de cada página va en `web/src/scripts/<página>/` (`projects/`, `settings/`), un módulo por tarea; los `.astro` solo llevan HTML |
+| `web/` | 3: interfaz | 0V3R (de Isaac) | Astro + Tailwind. Solo habla con la API, sin lógica de estados ni puertos. Publica `docs/*.md` en `/docs` al compilar. La lógica de cada página va en `web/src/scripts/<página>/` (`projects/`, `project/` para la ficha, `settings/`), un módulo por tarea; los `.astro` solo llevan HTML |
 | `docs/`, `Dockerfile`, `docker-compose.yml`, `install.sh`, `update.sh`, `scripts/` | 4: infraestructura y documentación | 0V3R | No escribe lógica de otras áreas |
 | `projects/`, `data/` | — | — | Datos de ejecución, en `.gitignore` |
 
@@ -52,13 +52,16 @@ Respeta esas fronteras aunque el responsable sea el mismo: la API no ejecuta Doc
 ```ts
 normalizeProjectName(name: string): string
 prepareProject(source: ProjectSource, name: string, options?: PrepareOptions): Promise<PreparedProject>   // { dir, name }
-startProject(dir: string, name: string, options?: StartOptions): Promise<ProjectStatus>   // { state, ports, failedServices? }
+startProject(dir: string, name: string, options?: StartOptions): Promise<ProjectStatus>   // { state, ports, failedServices?, loopbackPorts? }
 stopProject(dir: string, name: string): Promise<ProjectStatus>
 getProjectStatus(name: string): Promise<ProjectStatus>
 getProjectStatuses(): Promise<Record<string, ProjectStatus>>                    // todos los proyectos de compose con un solo `docker ps -a`
 getProjectLogs(name: string): Promise<string>                                   // últimas 200 líneas
 getResources(): Promise<ResourceUsage>                                          // { memoryLimit, projects }: consumo por proyecto de compose
+getDiskUsage(): Promise<DiskUsage>                                              // { projects }: imageBytes, unusedImageBytes y volumeBytes por proyecto de compose
+pruneProjectImages(names: string[]): Promise<ImagesPruned>                      // { freedBytes, removed }: borra versiones viejas de esos proyectos
 removeProject(name: string): Promise<void>                                      // se puede repetir
+resetProjectData(dir: string, name: string): Promise<void>                      // down -v sin --rmi: borra volúmenes, conserva carpeta e imágenes
 getLatestVersion(repoUrl: string): Promise<string | null>                       // etiqueta vX.Y.Z más alta, sin descargar el repositorio
 isNewerVersion(candidate: string, current: string): boolean
 reviewProject(dir: string, name: string): Promise<string[]>                     // avisos para el docente, nunca lanza por el proyecto
@@ -83,7 +86,10 @@ startSelfUpdate(): Promise<void>                                                
 - `prepareProject` rechaza, antes de extraerlo, un ZIP con rutas que salen de su carpeta, con más de 100 000 archivos o que ocuparía más de 3 GB.
 - `reviewProject` solo lee: nada del proyecto se ejecuta. Sus avisos dicen dónde está el problema y nunca incluyen el valor de una clave. No impiden encender. La API los guarda al registrar y la interfaz solo los muestra.
 - La comprobación de que la web responde (`web` en la respuesta) la hace la API en `api/src/services/web-check.ts`, porque el núcleo no usa HTTP.
+- `loopbackPorts` (opcional, como `failedServices`) nombra los puertos publicados solo en `127.0.0.1` o `::1`. Con ellos, la API no intenta la comprobación de la web si Dockyard corre en contenedor y responde `web: { state: 'unchecked' }`. No se cambia la red del contenedor de Dockyard para esto.
+- Si `up -d` falla por un puerto ocupado, `portInUseMessage` (`core/src/docker.ts`) traduce la salida de Docker a «El puerto N ya lo usa otro programa de esta PC que no es un proyecto de Docker…» y `startProject` detiene lo que alcanzó a arrancar y borra el contenedor que no pudo publicar su puerto (Docker lo deja creado sin él y el siguiente encendido lo arrancaría sin puerto).
 - `failedServices` nombra los servicios caídos (salida distinta de 0) o reiniciándose de un proyecto encendido, y solo aparece si hay alguno.
+- `resetProjectData` usa `down -v --remove-orphans` sin `--rmi`: el siguiente encendido no reconstruye y crea la base de nuevo. No toca las carpetas montadas desde el proyecto. La API solo lo hace con el proyecto apagado y sin otra operación en curso (409), y no cambia `keep_running` ni `needs_build`.
 - `removeProject` usa `down -v` y borra la carpeta. Si quedan archivos de root, lanza el comando `sudo` a ejecutar.
 - Un contenedor en estado `restarting` cuenta como encendido para poder apagarlo. Si tras `up -d` ninguno queda `running`, `startProject` los detiene y lanza su registro.
 - Si `prepareProject` falla a mitad de camino, borra la carpeta que creó. El ZIP lo borra la API, no el núcleo.
@@ -91,6 +97,7 @@ startSelfUpdate(): Promise<void>                                                
 - El núcleo traduce la salida de Docker a etapas (`core/src/progress.ts`). La API guarda el avance solo en memoria y la interfaz solo lo muestra. Si Docker cambia su formato, deja de cambiar la etapa, pero encender sigue funcionando.
 - El repositorio de un proyecto de GitHub vive en `projects/.repos/<nombre>`, nunca dentro de su carpeta: los contenedores suelen montarla y un hook o una configuración plantados en `.git` se ejecutarían al actualizar. Git se llama siempre con `--git-dir` y `--work-tree`.
 - `getResources` expresa la CPU sobre toda la PC, no por núcleo, y tarda unos 2 s porque Docker toma una muestra. Devuelve todos los proyectos de compose; la API deja solo los registrados y comparte la muestra 5 s.
+- `getDiskUsage` une `docker system df -v` con `docker image inspect` de las imágenes etiquetadas `com.docker.compose.project` (compose etiqueta las que construye, y sus versiones viejas conservan la etiqueta). Devuelve todos los proyectos de compose; la API deja solo los registrados. `pruneProjectImages` borra solo las imágenes sin nombre de esos proyectos que ningún contenedor usa, con `docker image rm` sin `-f`. Nunca borra volúmenes ni usa `builder prune`, `image prune` o `system prune`, que son de toda la PC. La API se niega a limpiar (409) si `service.busy()`.
 - `getLatestVersion` usa `git ls-remote --tags` e ignora las etiquetas que no sean `vX.Y.Z`. La API decide cuándo consultar (`api/src/services/version.ts`): como máximo cada 6 horas y solo si la piden, nunca al arrancar. `UPDATE_CHECK=off` la apaga y `update.sh` conserva ese valor.
 - `updateProject` no enciende nada y no pisa archivos cambiados en la PC. La API solo actualiza proyectos apagados, repite la revisión y hace que el siguiente encendido use `--build`.
 - `replaceProjectZip` abre y revisa el ZIP nuevo en `projects/.reemplazos/<nombre>/nuevo` y solo entonces cambia la carpeta con `rename`: si el ZIP no sirve, el proyecto queda como estaba. Borra la versión anterior con lo que el proyecto guardó en su carpeta; los volúmenes de Docker no se tocan. Si la anterior tiene archivos de root, la deja en `.reemplazos/<nombre>/anterior` y la devuelve en `leftover`. La API solo reemplaza proyectos de ZIP apagados, repite la revisión y hace que el siguiente encendido use `--build`. En la interfaz pide escribir el nombre, como eliminar.
@@ -101,11 +108,15 @@ startSelfUpdate(): Promise<void>                                                
 
 ### Rutas de la API (contrato con `web/`)
 
-`GET /api/projects?q=`, `GET /api/projects/resources`, `POST /api/projects`, `GET /api/projects/:id`, `PATCH /api/projects/:id` (`team`, `name`, `notes`), `POST /api/projects/:id/start`, `POST /api/projects/:id/stop`, `POST /api/projects/stop-all`, `POST /api/projects/:id/update`, `POST /api/projects/:id/replace` (multipart, campo `file`), `GET /api/projects/:id/logs`, `GET /api/projects/:id/progress`, `DELETE /api/projects/:id`, `GET /api/registrations`, `DELETE /api/registrations/:key`, `GET /api/version`, `POST /api/version/check`, `GET /api/settings`, `PATCH /api/settings` (`updateCheck`), `GET /api/update`, `POST /api/update`.
+`GET /api/projects?q=&year=`, `GET /api/projects/years`, `GET /api/projects/resources`, `POST /api/projects` (también `displayName`, `year`), `POST /api/projects/batch` (`{ year?, items: [{ team, name, repoUrl }] }`, responde 202 `{ queued, rejected }`), `GET /api/projects/:id`, `PATCH /api/projects/:id` (`team`, `name`, `notes`, `displayName`, `year`, `description`, `instructions`, `contacts`), `PUT|GET|DELETE /api/projects/:id/image`, `POST /api/projects/:id/start`, `POST /api/projects/:id/stop`, `POST /api/projects/stop-all`, `POST /api/projects/:id/update`, `POST /api/projects/:id/replace` (multipart, campo `file`), `POST /api/projects/:id/reset-data`, `GET /api/projects/:id/logs`, `GET /api/projects/:id/progress`, `DELETE /api/projects/:id`, `GET /api/registrations`, `DELETE /api/registrations/:key`, `GET /api/disk`, `POST /api/disk/clean`, `GET /api/export`, `POST /api/import/preview`, `POST /api/import`, `GET /api/import/pending`, `POST|DELETE /api/import/pending/:name`, `GET /api/version`, `POST /api/version/check`, `GET /api/settings`, `PATCH /api/settings` (`updateCheck`), `GET /api/update`, `POST /api/update`.
 
-`POST /api/projects` sigue respondiendo al terminar, pero el registro no se corta si se cierra la pestaña. Mientras corre, figura en `GET /api/registrations` con su etapa (solo en memoria). Si falla sin nadie esperando la respuesta, queda ahí con el motivo hasta que se descarta con `DELETE /api/registrations/:key`.
+`POST /api/projects` sigue respondiendo al terminar, pero el registro no se corta si se cierra la pestaña. Mientras corre, figura en `GET /api/registrations` con su etapa (solo en memoria). Si falla sin nadie esperando la respuesta, queda ahí con el motivo hasta que se descarta con `DELETE /api/registrations/:key`. `POST /api/projects/batch` reserva los nombres válidos (etapa «En espera») y una cola los prepara de a uno; los ZIP de una tanda los sube la interfaz de a uno con `POST /api/projects`.
 
-Configuración guarda sus ajustes en la tabla `settings`; `UPDATE_CHECK` solo es el valor inicial de `updateCheck`. `POST /api/update` se niega (409) sin versión nueva o con operaciones en curso (`service.busy()`), porque Dockyard se reinicia al actualizar.
+Exportar e importar (`api/src/services/backup.ts`) solo mueven fichas: los de GitHub se registran con la cola de **Varios** y los de ZIP esperan su archivo en la tabla `pending_imports`. Importar nunca sobrescribe un proyecto. El archivo exportado lleva contactos de estudiantes: la interfaz lo avisa y `docs/privacidad.md` lo explica.
+
+La ficha (`/proyecto/?id=`) es el único lugar que edita un proyecto. `name` es el nombre técnico, único en toda la base (Docker y las carpetas no distinguen años); `display_name` es el que se muestra. Si un nombre se repite, el 409 trae `suggestion` (`<nombre>-<año>`). La imagen se guarda en `data/imagenes/<id>.<tipo>`: solo PNG, JPEG o WebP de hasta 2 MB, reconocidos por su firma de bytes; nunca SVG, que se serviría con scripts desde el origen de la API. Se sirve con `nosniff` y se borra al eliminar el proyecto. Los contactos de estudiantes son datos personales: no salen de la PC (ver `docs/privacidad.md`).
+
+Configuración guarda sus ajustes en la tabla `settings`; `UPDATE_CHECK` solo es el valor inicial de `updateCheck`. `projectsView` (`table` o `grid`) también va ahí y la cambia la página de Proyectos. La fila y la tarjeta de un proyecto se arman con las mismas piezas de `web/src/scripts/projects/parts/`: un botón nuevo va en `parts/controls.ts`, nunca copiado en las dos. La carpeta abierta va en la URL (`?año=`) y la búsqueda mira dentro de ella; **Apagar todos** apaga todos los años. `POST /api/update` se niega (409) sin versión nueva o con operaciones en curso (`service.busy()`), porque Dockyard se reinicia al actualizar.
 
 Al arrancar, `server.ts` llama a `service.resume()`: vuelve a encender los proyectos con `keep_running = 1` que estén apagados (el docente los dejó encendidos y la PC o Docker se reiniciaron). Encender marca la columna y apagar la desmarca; ninguna ruta la cambia directamente.
 
@@ -130,13 +141,13 @@ Al arrancar, `server.ts` llama a `service.resume()`: vuelve a encender los proye
 
 ## Pruebas
 
-Se usa `node:test`, sin dependencias. `api/test/projects.test.ts` cubre las rutas con un núcleo simulado. `core/test/unit.test.ts` cubre las funciones puras; `core/test/docker.test.ts` cubre los criterios de terminado de la ficha con Docker real, usando un `PROJECTS_DIR` temporal y nombres `dockyard-test-*` que elimina al terminar (`down -v`). Los proyectos de prueba están en `ejemplos/`: `prueba-estatico` (8081, monta `./html` con ruta relativa), `prueba-bd` (8082, con `.env.example`), `prueba-build` (8083) y `prueba-conflicto` (8081, para el choque de puertos).
+Se usa `node:test`, sin dependencias. `api/test/projects.test.ts` cubre las rutas con un núcleo simulado. `core/test/unit.test.ts` cubre las funciones puras; `core/test/docker.test.ts` cubre los criterios de terminado de la ficha con Docker real, usando un `PROJECTS_DIR` temporal y nombres `dockyard-test-*` que elimina al terminar (`down -v`). Las pruebas nuevas arman sus compose en una carpeta temporal y usan 8084 y 8085. Los proyectos de prueba están en `ejemplos/`: `prueba-estatico` (8081, monta `./html` con ruta relativa), `prueba-bd` (8082, con `.env.example`), `prueba-build` (8083) y `prueba-conflicto` (8081, para el choque de puertos).
 
 ## Convenciones
 
 - Código, mensajes de error y documentación en español.
 - Las acciones destructivas llevan doble verificación en la interfaz: el docente escribe el nombre exacto del proyecto para habilitar el botón. Las que se pueden deshacer, como apagar otro proyecto, piden una confirmación de un clic (`confirm-dialog.ts`).
-- Maquetación: las páginas se dividen en una rejilla de 12 columnas (`grid-cols-12` y `col-span-*`). En pantallas angostas cada bloque ocupa las 12. Proyectos usa las 12 columnas y registra desde un panel lateral nativo; la documentación, 3 + 9 desde `lg`.
+- Maquetación: las páginas se dividen en una rejilla de 12 columnas (`grid-cols-12` y `col-span-*`). En pantallas angostas cada bloque ocupa las 12. Proyectos usa 2 columnas para las carpetas por año y 10 para la lista desde `lg` (en pantallas angostas, las carpetas son una fila que se desplaza encima), y registra desde un panel lateral nativo; las tarjetas de la cuadrícula usan `col-span-12 sm:col-span-6 lg:col-span-4 xl:col-span-3`. La documentación, 3 + 9 desde `lg`. Una rejilla con `col-span-12` en pantallas angostas lleva separación horizontal solo desde `lg` (`gap-y-* lg:gap-x-*`): once separaciones no caben en 320 px.
 - Colores de la interfaz: usa los tokens `marca-*` de `web/src/styles/global.css`, no valores sueltos. El ámbar no se usa como texto sobre fondo claro; para eso está `marca-texto`.
 - `docs/privacidad.md` promete que Dockyard no recolecta datos. No agregues analítica, telemetría, cookies ni recursos de otros sitios (las fuentes van empaquetadas), y si cambia lo que se guarda, actualiza ese documento.
 - Flujo de git: una rama por persona y cambios pequeños. La rama principal es `main`.

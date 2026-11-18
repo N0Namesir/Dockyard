@@ -285,4 +285,124 @@ Al final:
 - el enlace del pull request;
 - un resumen de lo que conviene revisar primero.
 
-_(vacío)_
+Entorno de la sesión: Node 24.22 (`/opt/node24`), Docker 29.10 levantado dentro del contenedor de la sesión (`dockerd`, con el almacén de imágenes de containerd) y Chromium 1243 preinstalado. Para `test:ui` se apuntó `PLAYWRIGHT_BROWSERS_PATH` a una carpeta temporal con enlaces a ese Chromium, porque el proyecto pide la revisión 1255 y no hay red para descargarla; no se cambió nada del repositorio por esto. Antes de empezar, `test:docker` daba 29 bien, 2 omitidas (las de archivos de root, porque la sesión corre como root) y 1 falla ajena al código: Docker Hub respondió 429 (límite de descargas) a `postgres:16-alpine` en «prueba-bd».
+
+### 1. Reiniciar los datos de un proyecto
+
+- **Estado:** terminada.
+- **Commit:** ver la lista de commits al final.
+- **Decisiones que se apartaron del plan:** `resetProjectData` usa `down -v --remove-orphans` (sin `--rmi`, como pide el plan); `--remove-orphans` solo quita contenedores de servicios que el compose ya no tiene. La ayuda que bloquea la acción con el proyecto encendido quedó en un ayudante común de `rows/project-row.ts` (`blockedWhileRunning`), que ahora usan también Actualizar y Reemplazar ZIP. El id del globo pasó de `update-hint-<id>` a `<acción>-hint-<id>`.
+- **Pruebas:** `build`, `typecheck` y `npm test` bien (80 + 62). `test:ui` bien (8 de `ui.test.mjs`, con una nueva). `test:docker`: la prueba nueva de `resetProjectData` (borra volúmenes y contenedores, conserva carpeta, imagen y carpetas montadas, y el siguiente encendido empieza vacío) pasa con Docker real.
+- **Pendientes y riesgos:** ninguno conocido. Un proyecto que guarda su base en una carpeta montada no se reinicia con esto; quedó escrito en el manual y en los límites conocidos.
+
+### 2. Espacio en disco
+
+- **Estado:** terminada.
+- **Commit:** ver la lista de commits al final.
+- **Decisiones que se apartaron del plan:**
+  - Se comprobó con Docker real (29.10, Compose 5.7) en los dos almacenes de imágenes. En el clásico (overlay2), compose etiqueta las imágenes que construye y las versiones viejas quedan sin nombre pero **conservan** la etiqueta, así que se atribuyen con seguridad. En el de containerd (el que traen por defecto las instalaciones nuevas de Docker 29), la versión anterior desaparece sola al reconstruir: no hay versiones viejas que liberar y lo que ocupa queda en la caché de construcción. Quedó anotado en los límites conocidos.
+  - «Versión vieja» es una imagen etiquetada del proyecto, **sin nombre** y que ningún contenedor usa. El plan decía «que no use ningún contenedor»; se agregó «sin nombre» para no borrar la imagen actual de un proyecto que se quedó sin contenedores tras **Reiniciar datos** (la función 1 promete que el siguiente encendido no reconstruye).
+  - Las imágenes descargadas (`image: postgres`) no llevan la etiqueta de compose y no se atribuyen a ningún proyecto, ni se cuentan ni se borran.
+  - `freedBytes` es cuánto bajó el total de imágenes de `docker system df` antes y después; las versiones viejas de la tabla usan `UniqueSize`, así que la estimación de la confirmación puede diferir un poco de lo liberado.
+  - La API quedó en un servicio y unas rutas propias (`api/src/services/disk.ts`, `api/src/routes/disk.ts`) y la interfaz en `web/src/scripts/settings/disk.ts`.
+- **Pruebas:** `build`, `typecheck` y `npm test` bien (83 + 67, con 3 unitarias del núcleo y 5 de la API nuevas). `test:ui` de Configuración bien (6, con 2 nuevas). `test:docker`: la prueba nueva de `pruneProjectImages` (borra solo la versión vieja del proyecto pedido, no toca la del otro proyecto ni los volúmenes, y conserva la imagen actual tras reiniciar datos) pasa con el almacén clásico.
+- **Pendientes y riesgos:** no se libera la caché de construcción, que en la PC del usuario puede ser buena parte de los 15,5 GB recuperables; hacerlo exigiría `docker builder prune`, que es global. `docker system df -v` mide cada volumen y puede tardar con bases grandes (límite de 2 minutos).
+
+### 3. Ficha enriquecida del proyecto
+
+- **Estado:** terminada, sin el ícono automático (era opcional).
+- **Commit:** ver la lista de commits al final.
+- **Decisiones que se apartaron del plan:**
+  - Se agregó la columna `image_version` (entero que sube con cada cambio de imagen) para el parámetro de versión de `imageUrl`; el plan no la listaba. Así el archivo sigue siendo `data/imagenes/<id>.<ext>` y el navegador no muestra la imagen anterior.
+  - Al registrar, el nombre para mostrar por defecto es lo que escribió el docente en «Nombre del proyecto» («Tienda escolar»), no el nombre técnico normalizado («tienda-escolar»); en la migración sí es el nombre técnico, como pide el plan. El formulario de registro no tiene un campo aparte para el nombre para mostrar: se cambia después en la ficha.
+  - El formulario de registro ganó el campo **Año** (el actual por defecto, y se conserva entre registros seguidos). Al usar el nombre sugerido, lo escrito queda como nombre para mostrar.
+  - `PATCH /api/projects/:id` valida con `Value.Check`, que no quita claves desconocidas (no pasa por el esquema de Fastify), así que una clave desconocida ya responde 400; no hizo falta el truco de `PATCH /api/settings`.
+  - Un correo o teléfono vacío de un contacto se acepta y no se guarda, para que la interfaz pueda mandar filas a medio llenar.
+  - El teléfono de un contacto también es un enlace `tel:`.
+  - Para compartir el avatar entre páginas, los ayudantes `element` e `isSelectingIn` pasaron de `projects/dom.ts` a `projects/element.ts` (`dom.ts` los reexporta): `dom.ts` exige los elementos de la página de Proyectos al importarse.
+  - El encendido desde la ficha no muestra el avance de Docker línea por línea (eso sigue en la lista); muestra «Encendiendo…» y el error si falla.
+- **Pruebas:** `build`, `typecheck` y `npm test` bien (83 + 76; 9 pruebas nuevas de la API en `api/test/details.test.ts`: valores por defecto, sugerencia de nombre, validación de cada campo, búsqueda y años, firma de bytes, subir/servir/cambiar/borrar la imagen, rechazo de SVG y de más de 2 MB, borrado al eliminar y migración de una base anterior). `test:ui` bien (28 y 1 omitida; nuevas: `web/test/project.test.mjs` con 6 pruebas de la ficha, y 2 en `ui.test.mjs` para el enlace a la ficha y la sugerencia de nombre al registrar). No toca Docker.
+- **Pendientes y riesgos:** el ícono automático del proyecto (opcional) no se hizo. La ficha refresca su estado cada 15 s, no cada 2 s como la lista mientras enciende.
+
+### 4. Vista en cuadrícula o tabla y carpetas por año
+
+- **Estado:** terminada.
+- **Commit:** ver la lista de commits al final.
+- **Decisiones que se apartaron del plan:**
+  - `GET /api/projects/years` agrega `running` (cuántos encendidos tiene cada año). Sin eso, con la carpeta de un año abierta, «Apagar todos» no sabía si había algo encendido en otro año y podía quedar oculto. Usa la misma consulta única a Docker que la lista. Las carpetas también lo muestran («2 encendidos»).
+  - El valor por defecto de `projectsView` se decide y **se guarda** la primera vez que arranca esta versión (`table` si hay proyectos, `grid` si no). Si se calculara en cada lectura, una instalación nueva pasaría a tabla al registrar su primer proyecto.
+  - Las piezas comunes salieron de `rows/project-row.ts` a `parts/` (`identity.ts`, `status.ts`, `ports.ts`, `controls.ts`, este último con el menú popover) y los paneles de avance, avisos y registro a `progressPanel`, `warningsPanel` y `logsPanel`; la fila y la tarjeta (`cards/project-card.ts`) solo los acomodan. Los registros en curso también tienen tarjeta (`cards/registration-card.ts`).
+  - «Apagar todos» dice «Apagar todos (todos los años)» dentro de una carpeta y «Apagar todos» en «Todos»; la confirmación dice que incluye los de otros años.
+  - Al registrar un proyecto de otro año, se abre su carpeta para que se vea.
+  - Atrás y Adelante del navegador cambian de carpeta (`pushState` y `popstate`).
+  - Se corrigió de paso un desborde horizontal a 320 px: la rejilla de 12 columnas con `gap-7` suma 11 separaciones que no caben. Proyectos y Configuración usan ahora `gap-y-* lg:gap-x-*`, y quedó la regla en `AGENTS.md`.
+- **Pruebas:** `build`, `typecheck` y `npm test` bien (83 + 77, con una prueba nueva de la API para la vista por defecto y su guardado). `test:ui` bien (30 y 1 omitida; nuevas: cuadrícula con sus acciones, menú y foco tras refrescar, registro dentro de la tarjeta, sin desplazamiento horizontal de 320 a 1440 px y preferencia guardada; carpetas con el año más reciente por defecto, URL, buscar en todos, Atrás y recarga). Se revisaron capturas de la tabla y la cuadrícula a 1440 y 390 px.
+- **Pendientes y riesgos:** en tarjetas angostas, el botón ⋯ baja a una segunda línea junto a Encender/Apagar y Abrir; funciona, pero ocupa más alto.
+
+### 5. Registrar varios proyectos a la vez
+
+- **Estado:** terminada.
+- **Commit:** ver la lista de commits al final.
+- **Decisiones que se apartaron del plan:**
+  - El registro de la API se separó en `reserve` (reserva el nombre y lo pone en la lista) y `prepare` (descarga, revisa y guarda), que usan el registro de uno y la cola. La cola reserva todos los nombres al recibir la tanda, con la etapa «En espera»: así un nombre encolado no se puede registrar por otro lado y `busy()` cuenta la tanda entera (no deja actualizar Dockyard ni liberar espacio a mitad).
+  - Un registro de uno, desde el formulario de siempre, no espera a la cola: corre como antes, en paralelo.
+  - Límite de 60 proyectos por tanda.
+  - `POST /api/projects/batch` valida las URL una por una y devuelve las malas en `rejected` en vez de responder 400 a toda la tanda.
+  - La vista previa repite en la interfaz la normalización del nombre del núcleo, solo para avisar de repetidos antes de enviar; para saber qué nombres existen pide `GET /api/projects?year=todos` al abrir «Varios».
+  - El campo de año de «Varios» se aplica a los ZIP también.
+  - Mientras se suben los ZIP, la pestaña pide confirmar antes de cerrarse (`beforeunload`), además del aviso escrito.
+- **Pruebas:** `build`, `typecheck` y `npm test` bien (83 + 80; nuevas en `api/test/batch.test.ts`: una tanda con líneas válidas e inválidas registra solo las válidas, en orden y de a una, con el núcleo simulado y midiendo cuántas corren a la vez; reserva de nombres y `busy()`; tandas inválidas). `test:ui` bien (32 y 1 omitida; nuevas: vista previa con cada tipo de error y envío de solo las válidas; varios ZIP subidos de a uno con una falla).
+- **Pendientes y riesgos:** la cola vive en memoria, como los registros: si Dockyard se reinicia a mitad (por ejemplo con `update.sh`), los que estaban en espera se pierden sin aviso y hay que volver a enviarlos. Actualizar desde la página no lo permite mientras hay una tanda, pero `update.sh` desde la terminal sí.
+
+### 6. Mensajes claros sobre puertos
+
+- **Estado:** terminada.
+- **Commit:** ver la lista de commits al final.
+- **Decisiones que se apartaron del plan:**
+  - Se comprobó con Docker 29.10 real qué escribe con un programa que no es Docker en el puerto: `failed to bind host port 0.0.0.0:8094/tcp: address already in use` (distinto de las versiones anteriores, `listen tcp4 …: bind: address already in use`). `portInUseMessage` reconoce las tres formas. Para `port is already allocated`, que Docker usa cuando el puerto lo tiene **otro contenedor** (por ejemplo, uno que lo tomó entre la revisión y el encendido), el mensaje dice «otro contenedor de Docker de esta PC» en vez de «otro programa que no es un proyecto de Docker», que sería falso.
+  - Tras ese error, `startProject` detiene los servicios que alcanzaron a arrancar, para que el proyecto no quede encendido a medias.
+  - El campo opcional nuevo de `ProjectStatus` es `loopbackPorts` (puertos publicados solo en `127.0.0.1` o `::1`), y el estado nuevo de la web es `unchecked`. `createWebChecker` decide si puede alcanzarlos según su `PROJECTS_HOST`: fuera del contenedor (`localhost`) sí los comprueba.
+  - `PortInUse` (de `portsInUse`) ganó el campo `host`, para que la lista (`docker ps`) también sepa en qué dirección se publicó cada puerto.
+- **Pruebas:** `build`, `typecheck` y `npm test` bien (85 + 82; nuevas: las formas del mensaje de Docker con la salida real de Docker 29.10, qué puertos son solo de esta PC, el comprobador dentro y fuera del contenedor, y que la API le pasa esos puertos). `test:docker`: prueba nueva con un servidor de Node ocupando el puerto 8084 (mensaje en español, nada queda encendido) y, ya libre, `loopbackPorts: [8085]` igual por `getProjectStatus` y por `getProjectStatuses`. `test:ui` bien (33 y 1 omitida, con una nueva para el aviso).
+- **Pendientes y riesgos:** si Docker cambia el texto del error, vuelve a llegar el mensaje de Docker en inglés. La red del contenedor de Dockyard no se tocó, como pide el plan.
+
+### 7. Exportar e importar la lista de proyectos
+
+- **Estado:** terminada.
+- **Commit:** ver la lista de commits al final.
+- **Decisiones que se apartaron del plan:**
+  - La vista previa y la aplicación son dos rutas: `POST /api/import/preview` (no cambia nada) y `POST /api/import`, las dos con el mismo archivo. El plan nombraba solo `POST /api/import`.
+  - Para «se pueden registrar después con su archivo, conservando la ficha importada», las fichas de ZIP se guardan en una tabla nueva, `pending_imports`, y se registran con `POST /api/import/pending/:name` (multipart) o se descartan con `DELETE`. Así sobreviven a cerrar la pestaña y a reiniciar Dockyard. Están en Configuración > Respaldo, «Esperan su ZIP».
+  - El archivo lleva también `zipName` (el nombre del ZIP que se subió) como referencia para el docente.
+  - `POST /api/import*` acepta hasta 100 MB (`bodyLimit` por ruta), por las imágenes en base64; el resto de la API sigue con 1 MB.
+  - Además de los nombres que ya existen, se omiten los que se están registrando, los que ya esperan su ZIP y los repetidos dentro del archivo, para poder importar el mismo archivo dos veces sin duplicar nada.
+  - Una imagen que no es PNG, JPEG o WebP por su firma se descarta; el resto de la ficha sí se importa.
+  - Los esquemas compartidos de la ficha (año, nombre para mostrar, contactos y límites) pasaron a `api/src/routes/schemas.ts`.
+- **Pruebas:** `build`, `typecheck` y `npm test` bien (85 + 86; nuevas en `api/test/backup.test.ts`: exportar con cada campo y la imagen; vista previa sin cambios; aplicar con registro por la cola con toda la ficha, ZIP pendiente y omitidos; importar dos veces; registrar y descartar un pendiente; archivos inválidos; un cuerpo de más de 1 MB). `test:ui` bien (35 y 1 omitida; nuevas: exportar, vista previa, importar, registrar un pendiente eligiendo su ZIP, y un archivo que no es JSON).
+- **Pendientes y riesgos:** el archivo exportado lleva datos personales de estudiantes; la interfaz y `docs/privacidad.md` lo avisan, pero no se cifra.
+
+## Resumen final
+
+**Pull request:** https://github.com/N0Namesir/Dockyard/pull/2 (hacia `main`, sin fusionar).
+
+Las 7 funciones quedaron terminadas, cada una en su commit, en este orden:
+
+1. `1d6dd54` Reiniciar los datos de un proyecto sin eliminarlo
+2. `edb5964` Espacio en disco: ver lo que ocupa cada proyecto y liberar versiones viejas
+3. `a13f997` Ficha del proyecto: nombre para mostrar, año, descripción, contactos e imagen
+4. `1d93d51` Vista en cuadrícula o tabla y carpetas por año
+5. `601a296` Registrar varios proyectos a la vez
+6. `e74cce1` Mensajes claros sobre puertos
+7. `a9be4b6` Exportar e importar la lista de proyectos
+
+No se publicó ninguna versión ni se ejecutaron `npm version`, `install.sh`, `update.sh` ni `scripts/publicar-release.sh`.
+
+**Pruebas al final:** `npm run build`, `npm run typecheck` y `npm test` (85 del núcleo y 86 de la API) bien. `npm run test:ui -w web`: 35 bien y 1 omitida (la de capturas, que solo corre con `UI_SCREENSHOTS`), con Chromium 1243 en lugar del 1255 que pide el proyecto (ver «Entorno de la sesión» arriba). `npm run test:docker -w core` (completa, con el almacén de imágenes clásico de Docker): 32 bien, 2 omitidas (las de archivos de root, porque la sesión corre como root) y 1 falla ajena al código, la misma que antes de empezar: «prueba-bd» no pudo descargar `adminer` porque Docker Hub respondió `toomanyrequests` (límite de descargas sin sesión). Las pruebas nuevas con Docker (reiniciar datos, versiones viejas, puerto ocupado por otro programa y `loopbackPorts`) pasan. Conviene correr «prueba-bd» en la PC del usuario.
+
+**Conviene revisar primero:**
+
+1. **Ficha y migración de la base (función 3).** Agrega siete columnas a `projects` con migración; conviene probarla con la `data/app.db` real antes de publicar (respaldarla primero). También reemplaza el diálogo rápido de editar por la página `/proyecto/`.
+2. **Espacio en disco (función 2).** Revisar en la PC del usuario qué almacén de imágenes usa Docker (`docker info | grep -i storage`): con el de containerd no hay versiones viejas que liberar, y los 15,5 GB recuperables están sobre todo en la caché de construcción, que esta función no toca a propósito.
+3. **Cola de registros (funciones 5 y 7).** Vive en memoria: `update.sh` desde la terminal a mitad de una tanda pierde los que estaban en espera.
+4. **Carpetas por año (función 4).** Al abrir Proyectos ahora se ve el año más reciente, no todos; «Apagar todos» sigue apagando todo.
+5. **Privacidad.** Contactos de estudiantes en la base, imágenes en `data/imagenes/` y el archivo exportado: revisar el texto de `docs/privacidad.md`.

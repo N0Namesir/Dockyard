@@ -69,6 +69,12 @@ function fakeCore() {
     async getResources() {
       return { memoryLimit: 0, projects: {} }
     },
+    async getDiskUsage() {
+      return { projects: {} }
+    },
+    async pruneProjectImages() {
+      return { freedBytes: 0, removed: 0 }
+    },
     async removeProject(name) {
       statuses.delete(name)
     },
@@ -78,6 +84,7 @@ function fakeCore() {
       if (status) statuses.set(newName, status)
       return { dir: `/projects/${newName}`, name: newName }
     },
+    async resetProjectData() {},
     async getSelfUpdateStatus() {
       return { supported: false, running: false }
     },
@@ -265,6 +272,67 @@ test('no se actualiza un proyecto encendido, ni uno de ZIP, ni uno que no existe
   assert.match(zip.json().message, /GitHub/)
 })
 
+test('reiniciar datos borra los volúmenes con el proyecto apagado y conserva la ficha', async () => {
+  const { core } = fakeCore()
+  const resets: string[] = []
+  const builds: (boolean | undefined)[] = []
+  const app = await testApp({
+    ...core,
+    async resetProjectData(dir, name) {
+      resets.push(`${dir} ${name}`)
+    },
+    async startProject(dir, name, options) {
+      builds.push(options?.build)
+      return core.startProject(dir, name, options)
+    },
+  })
+  await app.inject({ method: 'POST', url: '/api/projects', payload: REPO })
+  await app.inject({ method: 'PATCH', url: '/api/projects/1', payload: { notes: 'Revisar login' } })
+  await app.inject({ method: 'POST', url: '/api/projects/1/start' })
+
+  const running = await app.inject({ method: 'POST', url: '/api/projects/1/reset-data' })
+  assert.equal(running.statusCode, 409)
+  assert.match(running.json().message, /Apaga el proyecto/)
+  assert.deepEqual(resets, [])
+
+  await app.inject({ method: 'POST', url: '/api/projects/1/stop' })
+  const reset = await app.inject({ method: 'POST', url: '/api/projects/1/reset-data' })
+  assert.equal(reset.statusCode, 200)
+  const body = reset.json()
+  assert.deepEqual([body.name, body.notes, body.state, body.pendingBuild], ['a', 'Revisar login', 'stopped', false])
+  assert.deepEqual(resets, ['/projects/a a'])
+
+  // No pide reconstruir: las imágenes se conservan.
+  await app.inject({ method: 'POST', url: '/api/projects/1/start' })
+  assert.deepEqual(builds, [false, false])
+  assert.equal((await app.inject({ method: 'POST', url: '/api/projects/99/reset-data' })).statusCode, 404)
+})
+
+test('reiniciar datos se niega mientras el proyecto se enciende', async () => {
+  let finish = () => {}
+  const { core } = fakeCore()
+  let resets = 0
+  const app = await testApp({
+    ...core,
+    async startProject(dir, name, options) {
+      await new Promise<void>((resolve) => { finish = resolve })
+      return core.startProject(dir, name, options)
+    },
+    async resetProjectData() {
+      resets++
+    },
+  })
+  await app.inject({ method: 'POST', url: '/api/projects', payload: REPO })
+  const starting = app.inject({ method: 'POST', url: '/api/projects/1/start' })
+  await new Promise((resolve) => setTimeout(resolve, 20))
+  const busy = await app.inject({ method: 'POST', url: '/api/projects/1/reset-data' })
+  assert.equal(busy.statusCode, 409)
+  assert.match(busy.json().message, /Espera a que termine/)
+  finish()
+  await starting
+  assert.equal(resets, 0)
+})
+
 test('el consumo solo incluye proyectos registrados, suma el total y comparte la muestra', async () => {
   const { core } = fakeCore()
   let samples = 0
@@ -353,6 +421,12 @@ test('registra por GitHub, consulta, busca, enciende y apaga', async () => {
     pendingBuild: false,
     sourceType: 'git',
     notes: '',
+    displayName: 'Tienda Escolar',
+    year: new Date().getFullYear(),
+    description: '',
+    instructions: '',
+    contacts: [],
+    imageUrl: null,
   })
 
   const found = await app.inject({
@@ -1378,6 +1452,38 @@ test('el comprobador distingue respuesta, error del servidor y falta de respuest
   server.closeAllConnections()
   await new Promise((resolve) => server.close(resolve))
   assert.deepEqual(await check(port), { state: 'no-response' })
+})
+
+test('un puerto solo de 127.0.0.1 no se comprueba desde el contenedor, pero sí fuera de él', async () => {
+  const server = createServer((_request, response) => response.end('hola'))
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+  const { port } = server.address() as AddressInfo
+  // En el contenedor, PROJECTS_HOST es host.docker.internal: no alcanza el 127.0.0.1 de la PC.
+  const inContainer = createWebChecker('host.docker.internal')
+  assert.deepEqual(await inContainer(port, { loopbackOnly: true }), { state: 'unchecked' })
+  // Sin contenedor (en desarrollo o con PM2), localhost sí es la PC.
+  assert.deepEqual(await createWebChecker('localhost')(port, { loopbackOnly: true }), { state: 'ok', httpStatus: 200 })
+  server.closeAllConnections()
+  await new Promise((resolve) => server.close(resolve))
+})
+
+test('la API le dice al comprobador qué puertos son solo de 127.0.0.1', async () => {
+  const { core } = fakeCore()
+  const seen: [number, boolean | undefined][] = []
+  const app = await testApp({
+    ...core,
+    async startProject() {
+      return { state: 'running', ports: [8101, 8102], loopbackPorts: [8101] }
+    },
+  }, async (port, options) => {
+    seen.push([port, options?.loopbackOnly])
+    return options?.loopbackOnly ? { state: 'unchecked' } : { state: 'ok', httpStatus: 200 }
+  })
+  await app.inject({ method: 'POST', url: '/api/projects', payload: REPO })
+  const started = (await app.inject({ method: 'POST', url: '/api/projects/1/start' })).json()
+  assert.deepEqual(started.web, { state: 'unchecked' })
+  assert.deepEqual(seen, [[8101, true]])
+  await app.close()
 })
 
 test('guarda los avisos de la revisión y los devuelve sin impedir encender', async () => {

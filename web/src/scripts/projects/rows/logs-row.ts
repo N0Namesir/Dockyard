@@ -1,14 +1,14 @@
-import { element } from '../dom.ts'
+import { element } from '../element.ts'
+import { panelRow } from './panel-row.ts'
 import { isStarting, state } from '../state.ts'
 import type { Project } from '../types.ts'
 
 export const EMPTY_LOGS = 'Este proyecto todavía no tiene registro.'
 
-export function logsRow(project: Project, loadLogs: (project: Project) => void): HTMLTableRowElement {
-  const row = element('tr')
-  row.dataset.logs = String(project.id)
-  const cell = element('td', 'bg-slate-50 px-5 py-4')
-  cell.colSpan = 5
+/** Últimas líneas del registro del proyecto. Lo usan la fila y la tarjeta. */
+export function logsPanel(project: Project, loadLogs: (project: Project) => void): HTMLElement {
+  const panel = element('div')
+  panel.dataset.logs = String(project.id)
   const header = element('div', 'mb-2 flex items-center justify-between gap-3')
   const title = element('div')
   title.append(element('p', 'text-xs font-bold text-slate-700', `Últimas líneas del registro de ${project.name}`))
@@ -38,9 +38,12 @@ export function logsRow(project: Project, loadLogs: (project: Project) => void):
     else state.logsScroll.set(project.id, output.scrollTop)
     showLive()
   })
-  cell.append(header, output)
-  row.append(cell)
+  panel.append(header, output)
   // Lo más reciente queda al final, salvo que el docente haya subido a leer.
   requestAnimationFrame(() => { output.scrollTop = state.logsScroll.get(project.id) ?? output.scrollHeight })
-  return row
+  return panel
+}
+
+export function logsRow(project: Project, loadLogs: (project: Project) => void): HTMLTableRowElement {
+  return panelRow(logsPanel(project, loadLogs), 'bg-slate-50 px-5 py-4')
 }

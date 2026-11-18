@@ -28,13 +28,23 @@ La aplicación sigue necesitando el servicio local para consultar o cambiar proy
 
 ## Registrar un proyecto
 
-Pulsa **+ Registrar proyecto** para abrir el panel lateral. Llena **Equipo** y **Nombre del proyecto**, elige el **Origen** y presiona **Registrar proyecto**. Cada proyecto se registra una vez. Dockyard ajusta el nombre a un formato válido: por ejemplo, `Tienda Equipo 3` queda como `tienda-equipo-3`.
+Pulsa **+ Registrar proyecto** para abrir el panel lateral. Llena **Equipo**, **Nombre del proyecto** y **Año** (el actual, si no lo cambias), elige el **Origen** y presiona **Registrar proyecto**. Cada proyecto se registra una vez. El nombre se muestra tal como lo escribiste, pero Docker y la carpeta del proyecto usan un **nombre técnico** en minúsculas y con guiones: por ejemplo, `Tienda Equipo 3` queda como `tienda-equipo-3`.
+
+El nombre técnico no se puede repetir, ni entre años. Si el año pasado ya registraste una «Tienda», Dockyard avisa y ofrece **Usar el nombre «tienda-2026»** con un clic: el proyecto se sigue mostrando como «Tienda», y el año lo distingue.
 
 **Origen GitHub.** Pega la **URL del repositorio**, que debe empezar con `https://` y ser pública (por ejemplo, `https://github.com/equipo3/tienda`). Dockyard descarga el código.
 
 **Origen Archivo ZIP.** Elige el ZIP que te entregó el equipo, de 200 MB como máximo. Dockyard lo descomprime.
 
 Al enviar, el panel se cierra y aparece un aviso inmediato mientras se envía y prepara el proyecto. Activa **Seguir registrando proyectos** para mantener el formulario abierto. Cuando la API recibe el proyecto, aparece arriba en la lista como **Registrando**, con lo que está haciendo y, al descargar de GitHub, el porcentaje. Puedes registrar otro mientras tanto, seguir usando Dockyard o cerrar la pestaña una vez recibido el proyecto: la preparación sigue en segundo plano. No cierres la pestaña mientras se está subiendo un ZIP. Cuando termina, aparece como un proyecto más. Si falla, aparece un aviso; abre **Registrar proyecto** para corregir los datos recuperados (si no habías empezado otro registro); si ya habías cerrado la pestaña, la fila dice **No se registró** con el motivo, y **Descartar** la quita.
+
+### Registrar varios a la vez
+
+El día de la entrega puedes registrar todos los proyectos juntos. En el panel de registro, abre la pestaña **Varios** y elige el **Año de todos**.
+
+**Desde GitHub.** Escribe o pega un proyecto por línea, con el equipo, el nombre y la URL separados por punto y coma: `Equipo 1; Tienda escolar; https://github.com/equipo1/tienda`. También sirven comas o tabuladores, así que puedes copiar tres columnas de una hoja de cálculo. Debajo aparece una vista previa con cada línea y, en rojo, lo que hay que corregir: una línea incompleta, una URL que no es de GitHub con `https://`, un nombre que se repite en la lista o que ya está registrado. Al presionar **Registrar N proyectos** se envían solo las líneas válidas; las que tenían errores quedan en el cuadro para corregirlas. Dockyard los descarga **de a uno**, para no saturar la red ni el disco, y cada uno aparece arriba en la lista con su avance (**En espera** mientras le toca). Puedes cerrar el panel o la pestaña: siguen igual. Si alguno falla, queda con su motivo hasta que lo descartes.
+
+**Desde ZIP.** Elige varios ZIP a la vez. Aparece una fila por archivo, con el **Nombre** sacado del archivo y el **Equipo** para llenar. Al presionar **Subir y registrar** se suben de a uno desde la pestaña, y cada fila dice si se registró o por qué no. **No cierres la pestaña hasta que termine**: los ZIP están en tu PC y los que no se alcanzaron a subir no se registran (el navegador pregunta antes de cerrar). Los que fallen se pueden corregir y volver a enviar.
 
 En los dos casos, el proyecto debe traer su archivo compose. Reparte entre los equipos la [Guía para estudiantes](guia-estudiantes.md) para evitar problemas. Toda la documentación se puede leer dentro de Dockyard, en la sección **Documentación**.
 
@@ -46,32 +56,82 @@ Los avisos no impiden encender: tú decides. Si no entiendes uno, pregúntale al
 
 Que no aparezcan avisos no garantiza que el proyecto sea seguro, así que registra solo proyectos que conozcas.
 
+## Tabla o cuadrícula, y carpetas por año
+
+Arriba de la lista, **Tabla | Cuadrícula** cambia cómo se ven los proyectos. La **cuadrícula** muestra una tarjeta por proyecto, con su imagen grande, el equipo, el estado y los mismos botones que la tabla. La **tabla** es más compacta. Dockyard recuerda tu elección, también en otro navegador de esta PC. En una instalación nueva empieza en cuadrícula; si ya tenías proyectos, sigue en tabla.
+
+A la izquierda (arriba en pantallas pequeñas) están las **carpetas por año**: una por cada año con proyectos, con cuántos tiene y cuántos están encendidos, y **Todos**. Al abrir Dockyard se abre el año más reciente. La carpeta abierta queda en la dirección de la página (por ejemplo `?año=2026`): al recargar o guardar el enlace, vuelve a la misma. Al registrar un proyecto de otro año, se abre su carpeta.
+
+La búsqueda mira dentro de la carpeta abierta. Si no encuentra nada, ofrece **Buscar en todos los años**.
+
 ## Buscar, encender, apagar y abrir
 
-**Abrir** y **Encender/Apagar** están siempre a mano. En el botón de tres puntos (**⋯**, Más acciones) están **Actualizar**, **Reemplazar ZIP**, **Editar**, **Ver registro** y **Eliminar**, según el origen del proyecto. El menú se abre sobre la tabla sin mover los demás botones. Si una acción no se puede usar en ese momento, como Actualizar con el proyecto encendido, al pasar el puntero o intentar usarla aparece el motivo. En pantallas pequeñas cada proyecto se presenta en una fila apilada.
+**Abrir** y **Encender/Apagar** están siempre a mano. El nombre de cada proyecto lleva a su ficha. En el botón de tres puntos (**⋯**, Más acciones) están **Actualizar**, **Reemplazar ZIP**, **Editar ficha** y **Ver registro**, según el origen del proyecto, y al final, separadas, las que borran datos: **Reiniciar datos** y **Eliminar**. El menú se abre sobre la tabla sin mover los demás botones. Si una acción no se puede usar en ese momento, como Actualizar con el proyecto encendido, al pasar el puntero o intentar usarla aparece el motivo. En pantallas pequeñas cada proyecto se presenta en una fila apilada.
 
-- **Buscar:** escribe parte del nombre del proyecto o del equipo en **Buscar nombre o equipo**. No importan las mayúsculas ni las tildes.
+- **Buscar:** escribe parte del nombre del proyecto, del equipo o de su descripción en **Buscar nombre o equipo**. No importan las mayúsculas ni las tildes.
 - **Encender:** la primera vez puede tardar varios minutos, porque Docker descarga y construye las imágenes del proyecto. Mientras tanto, el botón dice **Encendiendo…** y debajo del proyecto se ve qué está haciendo Docker, cuánto lleva y sus últimas líneas. Puedes recargar la página sin interrumpirlo, pero si falla mientras tanto no verás el motivo: usa **Ver registro**. Las siguientes veces es rápido.
 - **Abrir:** cuando el proyecto está **Encendido**, este botón abre en otra pestaña la dirección donde funciona (por ejemplo, http://localhost:8081). Si no abre la página correcta, prueba con los números de la columna **Puertos**: cada uno es un enlace.
 - **Actualizar:** solo en proyectos de GitHub y con el proyecto apagado. Trae la última versión del repositorio y la revisa de nuevo, sin encenderla. Lee los avisos, si los hay, y usa **Encender**: esa vez reconstruye el proyecto con el código nuevo. Sus datos se conservan, así que una base de datos sigue con lo que tenía. Para los proyectos registrados desde un ZIP está **Reemplazar ZIP**.
 - **Reemplazar ZIP:** solo en proyectos registrados desde un ZIP y con el proyecto apagado. Sirve cuando el equipo entrega una versión corregida: eliges el ZIP nuevo, escribes el nombre del proyecto para confirmar, y su código se cambia por el del ZIP sin perder el nombre ni el equipo. Se revisa de nuevo y la siguiente vez que lo enciendas se reconstruye. Los datos que el proyecto guarda en volúmenes de Docker, como la mayoría de las bases de datos, se conservan; lo que guardó dentro de su propia carpeta se borra. Si el ZIP nuevo está dañado o no trae compose, el proyecto queda como estaba.
 - **Apagar:** detiene el proyecto sin borrar nada. Sus datos se conservan para la próxima vez.
-- **Apagar todos:** aparece sobre la lista cuando hay proyectos encendidos. Apaga todos los proyectos de Dockyard, también los que la búsqueda no muestra, sin borrar nada. Sirve al terminar la clase o cuando la PC se pone lenta. Pide confirmar, y al final dice cuántos apagó y si alguno falló. Los que se están encendiendo, actualizando o eliminando no se tocan.
-- **Editar:** corrige el equipo o el nombre sin eliminar el proyecto, y guarda **Notas**, por ejemplo qué falta revisar o una calificación. Las notas se ven debajo del nombre; si son largas, deja el cursor encima para leerlas completas. Para borrarlas, deja el campo vacío. El equipo se cambia siempre. El nombre solo con el proyecto apagado, y se ajusta a minúsculas y guiones como al registrar; la siguiente vez que lo enciendas se reconstruye. Si el proyecto ya guarda datos en volúmenes de Docker, como una base de datos que ya se encendió, el nombre no se puede cambiar, porque con otro nombre empezaría sin esos datos.
+- **Apagar todos:** aparece sobre la lista cuando hay proyectos encendidos. Apaga todos los proyectos de Dockyard, también los que la búsqueda no muestra y los de otros años; por eso, dentro de una carpeta, dice **Apagar todos (todos los años)**. No borra nada. Sirve al terminar la clase o cuando la PC se pone lenta. Pide confirmar, y al final dice cuántos apagó y si alguno falló. Los que se están encendiendo, actualizando o eliminando no se tocan.
+- **Editar ficha:** abre la ficha del proyecto lista para editar (ver [La ficha del proyecto](#la-ficha-del-proyecto)).
 - **Ver registro:** muestra las últimas líneas que escribió el proyecto. Sirve para saber por qué falla y compartirlo con el equipo. Si el proyecto está encendido, se actualiza solo cada pocos segundos. Si subes a leer o seleccionas texto, se detiene para no moverte; baja hasta el final para que siga.
+- **Reiniciar datos:** solo con el proyecto apagado. Borra sus bases de datos y lo demás que guardó en volúmenes de Docker, pero conserva su código, su ficha y sus notas. Úsalo cuando el equipo corrige el `.sql` de su base (por ejemplo en `db/init/`) y quieres que se vuelva a cargar, o para empezar una revisión desde cero: al encenderlo, la base se crea de nuevo y carga su `.sql`. Es más rápido que eliminar y registrar de nuevo, porque no reconstruye las imágenes. Lo que el proyecto guarda en carpetas propias (como `./data`) no se toca, porque es parte de su código. Para confirmar hay que escribir el nombre del proyecto, porque no se puede deshacer.
 - **Eliminar:** borra el proyecto, su código y sus datos, y libera su nombre. Para confirmar hay que escribir el nombre del proyecto, porque no se puede deshacer.
 
 La tabla se actualiza sola cada 15 segundos. Si un proyecto aparece **Encendido** con el aviso **Con fallas**, uno de sus servicios se cayó; usa **Ver registro** para ver el motivo.
 
-Despliega **Recursos** debajo de **Encendido** para ver cuánta CPU y memoria usa el proyecto. Al pie de la lista aparece el consumo total de los proyectos encendidos. La CPU es sobre toda la PC. Si un proyecto tiene varios servicios, deja el cursor sobre esos datos para ver el detalle. Sirve para saber cuál apagar si la PC se pone lenta.
+En la tabla, despliega **Recursos** debajo de **Encendido** (en la cuadrícula, dentro de la tarjeta) para ver cuánta CPU y memoria usa el proyecto. Al pie de la lista aparece el consumo total de los proyectos encendidos. La CPU es sobre toda la PC. Si un proyecto tiene varios servicios, deja el cursor sobre esos datos para ver el detalle. Sirve para saber cuál apagar si la PC se pone lenta.
 
 Debajo de **Encendido** también se indica si la página del proyecto contesta:
 
 - **Web disponible:** Dockyard recibió una respuesta. No revisa si cada función sirve, pero la página está arriba.
 - **La web aún no responde:** es normal unos segundos o minutos después de encender, mientras arranca. Si no cambia, usa **Ver registro**.
 - **La web responde con error:** el servidor contesta, pero falla. Suele ser un problema del proyecto, como una base de datos que no conecta.
+- **No se puede comprobar desde Dockyard; ábrelo para verlo:** el proyecto publica su puerto solo para esta PC (en su compose dice `127.0.0.1:` antes del puerto), y Dockyard, que corre en su propio contenedor, no alcanza a verlo. No es una falla: usa **Abrir**.
 
 Se comprueba solo el puerto que usa **Abrir**.
+
+## La ficha del proyecto
+
+Cada proyecto tiene una ficha: pulsa su nombre en la lista. Muestra su imagen, su nombre para mostrar, el nombre técnico (en pequeño), el equipo y el año, su estado con **Encender/Apagar** y **Abrir**, y lo que cuenta el equipo:
+
+- **Descripción:** qué hace el proyecto.
+- **Indicaciones del equipo:** cómo usarlo, por ejemplo los usuarios de prueba o las rutas importantes.
+- **Contactos:** hasta 8 estudiantes, con nombre y, si quieres, correo y teléfono. Pulsar el correo abre tu programa de correo.
+- **Notas del docente:** tus notas, por ejemplo qué falta revisar o una calificación. También se ven, cortas, debajo del nombre en la lista.
+- Los avisos de la revisión, si los hay, y el consumo de CPU y memoria si está encendido.
+
+**Editar ficha** abre un formulario en la misma página con todos los campos. Para borrar un texto, deja el campo vacío. Para la imagen, elige un PNG, JPEG o WebP de hasta 2 MB, como una captura de pantalla o el logo del proyecto, o pulsa **Quitar imagen**. Si no tiene imagen, se muestra la inicial de su nombre sobre un color.
+
+El **nombre técnico** solo cambia con el proyecto apagado, y se ajusta a minúsculas y guiones como al registrar; la siguiente vez que lo enciendas se reconstruye. Si el proyecto ya guarda datos en volúmenes de Docker, como una base de datos que ya se encendió, no se puede cambiar, porque con otro nombre empezaría sin esos datos. El nombre para mostrar, el equipo y lo demás se cambian siempre.
+
+Los contactos son datos personales de los estudiantes: se guardan solo en esta PC y se borran al eliminar el proyecto (ver [Privacidad](privacidad.md)).
+
+## Espacio en disco
+
+Cada vez que un proyecto se actualiza y se enciende, Docker construye sus imágenes de nuevo y la versión anterior queda guardada. Con el tiempo eso ocupa varios GB.
+
+En **Configuración**, la sección **Espacio en disco** muestra cuánto ocupan los proyectos registrados en total y, en una tabla, cada uno: **Imágenes** (lo que construyó y usa), **Versiones viejas** (lo que se puede liberar) y **Datos** (sus volúmenes de Docker, como una base de datos). El que más ocupa aparece primero.
+
+**Liberar espacio** borra las versiones viejas de todos los proyectos registrados, después de confirmar cuánto se recuperará, y al final dice cuánto se liberó. No apaga ni reconstruye nada, y no toca los datos: esos se borran con **Reiniciar datos** o **Eliminar**, en Proyectos. Tampoco toca las imágenes, volúmenes ni nada más de Docker que no sea de un proyecto registrado. Si algún proyecto se está encendiendo, actualizando o registrando, pide esperar a que termine.
+
+Las imágenes que un proyecto descarga ya hechas (como `postgres` o `nginx`) no cuentan: pueden ser de varios proyectos o de otros programas de la PC.
+
+## Respaldo: pasar los proyectos a otra PC
+
+En **Configuración**, la sección **Respaldo** sirve para llevar la lista de proyectos a otra PC o recuperarla tras reinstalar Dockyard.
+
+**Exportar lista** descarga un archivo `dockyard-proyectos-<fecha>.json` con la ficha de cada proyecto: nombre, nombre para mostrar, equipo, año, origen (la URL de GitHub o el nombre del ZIP), descripción, indicaciones, contactos, tus notas y la imagen. No lleva el código ni los datos de Docker (como una base de datos), ni los avisos de la revisión, que se calculan de nuevo. **El archivo lleva los datos de contacto de los estudiantes**: guárdalo en un lugar seguro, no lo compartas y bórralo cuando ya no lo necesites.
+
+**Importar lista**: elige ese archivo. Antes de cambiar nada, Dockyard muestra qué pasará con cada proyecto:
+
+- **Se registra desde GitHub, con su ficha:** se descarga de nuevo, de a uno, como en **Varios**, y su avance se ve en Proyectos.
+- **Necesita su ZIP:** el código de un ZIP no viaja en la lista. Queda en **Esperan su ZIP**, debajo, con su ficha guardada; pulsa **Elegir ZIP y registrar** cuando tengas el archivo. **Descartar** borra la ficha importada (sigue en el archivo).
+- **Se omite:** ya hay un proyecto con ese nombre. Dockyard nunca sobrescribe un proyecto.
+
+Presiona **Importar** para aplicarlo. Puedes importar el mismo archivo otra vez sin que se repita nada.
 
 ## Instalar una versión nueva de Dockyard
 
@@ -97,6 +157,7 @@ Sin internet simplemente no aparece el aviso. Para que Dockyard no consulte vers
 |---|---|---|
 | El puerto 8081 ya lo usa el proyecto … | Otro proyecto registrado y encendido usa el mismo puerto | Pulsa **Apagar … y encender este**: Dockyard pide confirmar, apaga el otro sin borrar nada y enciende este. O pide al equipo que cambie el puerto en su compose |
 | El puerto 8081 ya está en uso por el contenedor … | Algo que no está en Dockyard usa ese puerto | Apágalo fuera de Dockyard, o pide al equipo que cambie el puerto en su compose |
+| El puerto 8081 ya lo usa otro programa de esta PC que no es un proyecto de Docker | Un programa de la PC, como un servidor de desarrollo que dejaste abierto, ocupa ese puerto | Ciérralo, o pide al equipo que cambie el puerto en su compose |
 | El nombre de contenedor … ya lo usa … | Dos proyectos fijan el mismo `container_name` en su compose | Pide al equipo que lo quite de su compose |
 | El nombre … ya lo usa otro proyecto de Docker | Hay contenedores con ese nombre fuera de Dockyard | Usa otro nombre al registrar |
 | Dockyard solo acepta peticiones desde su propia página | Se intentó usar desde otra página o dirección | Abre http://localhost:4300 en esta PC |
@@ -110,4 +171,4 @@ Sin internet simplemente no aparece el aviso. Para que Dockyard no consulte vers
 | Hay archivos de Dockyard modificados en esta PC | Alguien cambió archivos de Dockyard, así que `update.sh` no actualiza para no perderlos | Guárdalos aparte con `git stash` y vuelve a ejecutar `./update.sh` |
 | No se pudo descomprimir el archivo | El ZIP está dañado o no es un ZIP | Pide al equipo que lo vuelva a generar |
 | La actualización pisaría un archivo que cambió en esta PC | El proyecto escribe en su propia carpeta y la versión nueva cambia ese archivo | Elimina el proyecto y regístralo de nuevo. Se borran sus datos |
-| Ya existe un proyecto con ese nombre | Ya registraste un proyecto con ese nombre, o quedó su carpeta | Usa otro nombre, por ejemplo agregando el número de equipo |
+| Ya existe un proyecto con el nombre … | Ya registraste un proyecto con ese nombre técnico, quizá en otro año, o quedó su carpeta | Pulsa **Usar el nombre «…»** para usar el que propone Dockyard (con el año), o escribe otro |

@@ -8,10 +8,14 @@ import { Type, type Static } from '@sinclair/typebox'
 import { Value } from '@sinclair/typebox/value'
 import type { FastifyPluginAsync, FastifyRequest } from 'fastify'
 import { HttpError } from '../errors.ts'
-import type { ProjectService } from '../services/projects.ts'
+import { IMAGE_MAX_BYTES } from '../services/images.ts'
+import { DISPLAY_NAME_MAX_LENGTH, type ProjectService } from '../services/projects.ts'
+import { CONTACTS_MAX, contactSchema, DESCRIPTION_MAX_LENGTH, displayNameSchema, INSTRUCTIONS_MAX_LENGTH, NOTES_MAX_LENGTH, YEAR, yearSchema } from './schemas.ts'
 
 const listQuerySchema = Type.Object({
   q: Type.Optional(Type.String({ maxLength: 200 })),
+  /** Carpeta: un año o «todos». */
+  year: Type.Optional(Type.String({ pattern: '^(\\d{4}|todos)$' })),
 })
 
 const idParamsSchema = Type.Object({
@@ -23,11 +27,32 @@ const repositoryBodySchema = Type.Object(
     team: Type.String({ minLength: 1, maxLength: 120 }),
     name: Type.String({ minLength: 1, maxLength: 120 }),
     repoUrl: Type.String({ minLength: 1, maxLength: 2048 }),
+    displayName: Type.Optional(displayNameSchema),
+    year: Type.Optional(yearSchema),
   },
   { additionalProperties: false },
 )
 
-const NOTES_MAX_LENGTH = 2000
+/** Una tanda es un curso: de sobra para 10 a 20 equipos. */
+const BATCH_MAX = 60
+
+const batchBodySchema = Type.Object(
+  {
+    year: Type.Optional(yearSchema),
+    items: Type.Array(
+      Type.Object(
+        {
+          team: Type.String({ minLength: 1, maxLength: 120 }),
+          name: Type.String({ minLength: 1, maxLength: 120 }),
+          repoUrl: Type.String({ minLength: 1, maxLength: 2048 }),
+        },
+        { additionalProperties: false },
+      ),
+      { minItems: 1, maxItems: BATCH_MAX },
+    ),
+  },
+  { additionalProperties: false },
+)
 
 const editBodySchema = Type.Object(
   {
@@ -35,7 +60,13 @@ const editBodySchema = Type.Object(
     name: Type.Optional(Type.String({ minLength: 1, maxLength: 120 })),
     /** Puede quedar vacía: así se borran. */
     notes: Type.Optional(Type.String({ maxLength: NOTES_MAX_LENGTH })),
+    displayName: Type.Optional(displayNameSchema),
+    year: Type.Optional(yearSchema),
+    description: Type.Optional(Type.String({ maxLength: DESCRIPTION_MAX_LENGTH })),
+    instructions: Type.Optional(Type.String({ maxLength: INSTRUCTIONS_MAX_LENGTH })),
+    contacts: Type.Optional(Type.Array(contactSchema, { maxItems: CONTACTS_MAX })),
   },
+  // Value.Check no quita las claves desconocidas, como hace Fastify: con ellas, la petición no es válida.
   { additionalProperties: false, minProperties: 1 },
 )
 
@@ -48,22 +79,25 @@ type RegistrationParams = Static<typeof registrationParamsSchema>
 type EditBody = Static<typeof editBodySchema>
 type IdParams = Static<typeof idParamsSchema>
 type RepositoryBody = Static<typeof repositoryBodySchema>
+type BatchBody = Static<typeof batchBodySchema>
 
 interface MultipartProject {
   team: string
   name: string
+  displayName?: string
+  year?: number
   filePath: string
   originalFilename: string
 }
 
-function requiredText(value: unknown, label: string): string {
+export function requiredText(value: unknown, label: string): string {
   if (typeof value !== 'string' || !value.trim()) {
     throw new HttpError(400, `Falta ${label}.`)
   }
   return value.trim()
 }
 
-function validateRepositoryUrl(value: string): string {
+export function validateRepositoryUrl(value: string): string {
   let url: URL
   try {
     url = new URL(value)
@@ -94,7 +128,7 @@ interface MultipartZip {
 }
 
 /** Lee un formulario con un archivo ZIP en el campo "file" y lo guarda en temporaryDir. */
-async function readMultipartZip(
+export async function readMultipartZip(
   request: FastifyRequest,
   temporaryDir: string,
 ): Promise<MultipartZip> {
@@ -140,12 +174,48 @@ async function readMultipartProject(
   temporaryDir: string,
 ): Promise<MultipartProject> {
   const { fields, filePath, originalFilename } = await readMultipartZip(request, temporaryDir)
+  const displayName = fields.get('displayName')?.trim()
+  if (displayName !== undefined && !Value.Check(displayNameSchema, displayName)) {
+    throw new HttpError(400, `El nombre para mostrar debe tener entre 1 y ${DISPLAY_NAME_MAX_LENGTH} caracteres.`)
+  }
+  const yearText = fields.get('year')
+  const year = yearText === undefined || yearText === '' ? undefined : Number(yearText)
+  if (year !== undefined && !Value.Check(yearSchema, year)) {
+    throw new HttpError(400, `El año debe estar entre ${YEAR.minimum} y ${YEAR.maximum}.`)
+  }
   return {
     team: requiredText(fields.get('team'), 'el nombre del equipo'),
     name: requiredText(fields.get('name'), 'el nombre del proyecto'),
+    displayName: displayName || undefined,
+    year,
     filePath,
     originalFilename,
   }
+}
+
+/** Lee la imagen del campo "file" de un formulario, con su límite de tamaño. */
+async function readMultipartImage(request: FastifyRequest): Promise<Buffer> {
+  for await (const part of request.parts()) {
+    if (part.type === 'field') continue
+    if (part.fieldname !== 'file') {
+      part.file.resume()
+      continue
+    }
+    const chunks: Buffer[] = []
+    let size = 0
+    for await (const chunk of part.file) {
+      size += chunk.length
+      if (size > IMAGE_MAX_BYTES) {
+        // Se sigue leyendo sin guardar: así la petición termina y el docente recibe el motivo.
+        part.file.resume()
+        await new Promise((done) => part.file.on('end', done))
+        throw new HttpError(400, 'La imagen supera el límite de 2 MB. Usa una más pequeña.')
+      }
+      chunks.push(chunk)
+    }
+    return Buffer.concat(chunks)
+  }
+  throw new HttpError(400, 'Falta el archivo de la imagen.')
 }
 
 export function projectRoutes(service: ProjectService): FastifyPluginAsync {
@@ -155,8 +225,13 @@ export function projectRoutes(service: ProjectService): FastifyPluginAsync {
     app.get<{ Querystring: ListQuery }>(
       '/projects',
       { schema: { querystring: listQuerySchema } },
-      async (request) => service.list(request.query.q),
+      async (request) => {
+        const { q, year } = request.query
+        return service.list(q, year === undefined || year === 'todos' ? undefined : Number(year))
+      },
     )
+
+    app.get('/projects/years', async () => service.years())
 
     app.get('/projects/resources', async () => service.resources())
 
@@ -190,6 +265,8 @@ export function projectRoutes(service: ProjectService): FastifyPluginAsync {
           project = await service.register({
             team: input.team,
             name: input.name,
+            displayName: input.displayName,
+            year: input.year,
             source: { type: 'zip', filePath: input.filePath },
             sourceLabel: input.originalFilename,
             abandoned,
@@ -203,7 +280,7 @@ export function projectRoutes(service: ProjectService): FastifyPluginAsync {
       if (!Value.Check(repositoryBodySchema, request.body)) {
         throw new HttpError(
           400,
-          'Debes indicar equipo, nombre del proyecto y URL del repositorio.',
+          `Debes indicar equipo, nombre del proyecto y URL del repositorio. El nombre para mostrar tiene hasta ${DISPLAY_NAME_MAX_LENGTH} caracteres y el año va de ${YEAR.minimum} a ${YEAR.maximum}.`,
         )
       }
 
@@ -214,11 +291,37 @@ export function projectRoutes(service: ProjectService): FastifyPluginAsync {
       const project = await service.register({
         team,
         name,
+        displayName: body.displayName?.trim() || undefined,
+        year: body.year,
         source: { type: 'git', url: repoUrl },
         sourceLabel: repoUrl,
         abandoned,
       })
       return reply.code(201).send(project)
+    })
+
+    app.post('/projects/batch', async (request, reply) => {
+      if (!Value.Check(batchBodySchema, request.body)) {
+        throw new HttpError(400, `La lista debe tener entre 1 y ${BATCH_MAX} proyectos, cada uno con equipo, nombre y URL del repositorio, y el año va de ${YEAR.minimum} a ${YEAR.maximum}.`)
+      }
+      const { year, items } = request.body as BatchBody
+      // Las URL que no sirven se rechazan aquí, una por una, sin frenar al resto de la tanda.
+      const rejected: { index: number; name: string; message: string }[] = []
+      const accepted: { index: number; input: Parameters<ProjectService['enqueue']>[0][number] }[] = []
+      items.forEach((item, index) => {
+        try {
+          const repoUrl = validateRepositoryUrl(item.repoUrl.trim())
+          const team = requiredText(item.team, 'el nombre del equipo')
+          const name = requiredText(item.name, 'el nombre del proyecto')
+          accepted.push({ index, input: { team, name, year, source: { type: 'git', url: repoUrl }, sourceLabel: repoUrl } })
+        } catch (error) {
+          rejected.push({ index, name: item.name, message: error instanceof Error ? error.message : 'Línea no válida.' })
+        }
+      })
+      const result = service.enqueue(accepted.map((item) => item.input))
+      for (const failure of result.rejected) rejected.push({ ...failure, index: accepted[failure.index]!.index })
+      rejected.sort((a, b) => a.index - b.index)
+      return reply.code(202).send({ queued: result.queued, rejected })
     })
 
     app.get<{ Params: IdParams }>(
@@ -247,15 +350,54 @@ export function projectRoutes(service: ProjectService): FastifyPluginAsync {
       { schema: { params: idParamsSchema } },
       async (request) => {
         if (!Value.Check(editBodySchema, request.body)) {
-          throw new HttpError(400, `Solo se pueden cambiar el equipo, el nombre y las notas. El equipo y el nombre no pueden quedar vacíos, y las notas tienen hasta ${NOTES_MAX_LENGTH} caracteres.`)
+          throw new HttpError(400, `Revisa los datos de la ficha: el equipo, el nombre y el nombre para mostrar no pueden quedar vacíos; el año va de ${YEAR.minimum} a ${YEAR.maximum}; las notas y la descripción tienen hasta ${NOTES_MAX_LENGTH} caracteres y las indicaciones hasta ${INSTRUCTIONS_MAX_LENGTH}; hay hasta ${CONTACTS_MAX} contactos, cada uno con nombre y, si tiene, un correo válido.`)
         }
         const body = request.body as EditBody
         return service.edit(Number(request.params.id), {
           team: body.team === undefined ? undefined : requiredText(body.team, 'el nombre del equipo'),
           name: body.name === undefined ? undefined : requiredText(body.name, 'el nombre del proyecto'),
           notes: body.notes?.trim(),
+          displayName: body.displayName === undefined ? undefined : requiredText(body.displayName, 'el nombre para mostrar'),
+          year: body.year,
+          description: body.description?.trim(),
+          instructions: body.instructions?.trim(),
+          contacts: body.contacts?.map((contact) => ({
+            name: requiredText(contact.name, 'el nombre del contacto'),
+            ...(contact.email?.trim() ? { email: contact.email.trim() } : {}),
+            ...(contact.phone?.trim() ? { phone: contact.phone.trim() } : {}),
+          })),
         })
       },
+    )
+
+    app.get<{ Params: IdParams }>(
+      '/projects/:id/image',
+      { schema: { params: idParamsSchema } },
+      async (request, reply) => {
+        const { bytes, contentType } = await service.image(Number(request.params.id))
+        return reply
+          .header('Content-Type', contentType)
+          // El tipo sale de los bytes del archivo: el navegador no debe adivinar otro.
+          .header('X-Content-Type-Options', 'nosniff')
+          .header('Cache-Control', 'no-cache')
+          .send(bytes)
+      },
+    )
+
+    app.put<{ Params: IdParams }>(
+      '/projects/:id/image',
+      { schema: { params: idParamsSchema } },
+      async (request) => {
+        if (!request.isMultipart()) throw new HttpError(400, 'Falta el archivo de la imagen.')
+        const id = Number(request.params.id)
+        return service.setImage(id, await readMultipartImage(request))
+      },
+    )
+
+    app.delete<{ Params: IdParams }>(
+      '/projects/:id/image',
+      { schema: { params: idParamsSchema } },
+      async (request) => service.removeImage(Number(request.params.id)),
     )
 
     app.post<{ Params: IdParams }>(
@@ -268,6 +410,12 @@ export function projectRoutes(service: ProjectService): FastifyPluginAsync {
       '/projects/:id/update',
       { schema: { params: idParamsSchema } },
       async (request) => service.update(Number(request.params.id)),
+    )
+
+    app.post<{ Params: IdParams }>(
+      '/projects/:id/reset-data',
+      { schema: { params: idParamsSchema } },
+      async (request) => service.resetData(Number(request.params.id)),
     )
 
     app.post<{ Params: IdParams }>(

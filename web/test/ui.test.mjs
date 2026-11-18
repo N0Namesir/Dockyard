@@ -8,7 +8,7 @@ import { chromium } from 'playwright'
 // Solo se sirve el frontend compilado. Todas las rutas API están interceptadas.
 let browser, server, base
 const root = resolve(import.meta.dirname, '../dist')
-const project = (id, running = false) => ({ id, name: id === 1 ? 'epl-aetheris-blueprint' : 'biblioteca-escolar', team: `Equipo ${id}`, state: running ? 'running' : 'stopped', ports: running ? [8401] : [], url: running ? 'http://localhost:8401' : null, urls: running ? ['http://localhost:8401'] : [], failedServices: [], web: running ? {state:'ok'} : null, warnings: [], progress: null, sourceType:'git', pendingBuild:false, notes:'' })
+const project = (id, running = false) => ({ id, name: id === 1 ? 'epl-aetheris-blueprint' : 'biblioteca-escolar', team: `Equipo ${id}`, state: running ? 'running' : 'stopped', ports: running ? [8401] : [], url: running ? 'http://localhost:8401' : null, urls: running ? ['http://localhost:8401'] : [], failedServices: [], web: running ? {state:'ok'} : null, warnings: [], progress: null, sourceType:'git', pendingBuild:false, notes:'', displayName: id === 1 ? 'Aetheris Blueprint' : 'Biblioteca escolar', year: 2026, description:'', instructions:'', contacts:[], imageUrl:null })
 before(async () => {
   server = createServer(async (req, res) => {
     try {
@@ -29,7 +29,7 @@ async function fixture(t, viewport={width:1440,height:1000}) {
   t.after(() => page.close())
   const errors=[]; page.on('pageerror',e=>errors.push(e.message))
   t.after(()=>assert.deepEqual(errors, []))
-  const data = { projects:[project(1,true),project(2)], fail:false, post:null, calls:[] }
+  const data = { projects:[project(1,true),project(2)], fail:false, post:null, calls:[], settings:{updateCheck:true,projectsView:'table'}, patches:[] }
   await page.route('**/api/**', async route => {
     const req=route.request(), url=new URL(req.url()), path=url.pathname
     const json=(body,status=200)=>route.fulfill({status,json:body})
@@ -41,8 +41,15 @@ async function fixture(t, viewport={width:1440,height:1000}) {
     if(path==='/api/projects') {
       if(data.fail) return json({message:'No se pudo conectar.'},500)
       const q=url.searchParams.get('q')?.toLowerCase() ?? ''
-      return json(data.projects.filter(p=>(p.name+' '+p.team).toLowerCase().includes(q)))
+      const year=url.searchParams.get('year')
+      return json(data.projects.filter(p=>(p.name+' '+p.team).toLowerCase().includes(q) && (!year || year==='todos' || p.year===Number(year))))
     }
+    if(path==='/api/projects/years') {
+      const years=[...new Set(data.projects.map(p=>p.year))].sort((a,b)=>b-a)
+      return json(years.map(year=>({year,count:data.projects.filter(p=>p.year===year).length,running:data.projects.filter(p=>p.year===year&&p.state==='running').length})))
+    }
+    if(path==='/api/settings' && req.method()==='GET') return json(data.settings)
+    if(path==='/api/settings') { data.patches.push(req.postDataJSON()); Object.assign(data.settings,req.postDataJSON()); return json(data.settings) }
     if(path==='/api/registrations') return json([])
     if(path==='/api/projects/resources') return json({memoryLimit:24481313587,total:{cpuPercent:.5,memoryBytes:112197632},projects:{1:{cpuPercent:.5,memoryBytes:112197632,services:[]}}})
     if(path==='/api/version') return json({current:'1.2.0',latest:null,updateAvailable:false})
@@ -64,6 +71,8 @@ test('panel, borrador, Escape, foco de origen y envío en segundo plano',async t
   assert.equal(await page.locator('#register-form [name=team]').inputValue(),'Equipo 3')
   await page.locator('#register-form [name=name]').fill('tienda')
   await page.locator('#register-form [name=name]').press('Tab')
+  assert.equal(await page.locator('#register-form [name=year]').evaluate(e=>e===document.activeElement),true)
+  await page.keyboard.press('Tab')
   assert.equal(await page.locator('[name=source][value=git]').evaluate(e=>e===document.activeElement),true)
   const outline=await page.locator('[name=source][value=git] + span').evaluate(e=>getComputedStyle(e).outlineStyle)
   assert.notEqual(outline,'none')
@@ -91,31 +100,59 @@ test('menú, motivo de bloqueo y foco conservado tras refresco automático', asy
   // El menú flota: Abrir no se mueve, así un doble clic en ⋯ no termina abriendo el proyecto.
   assert.deepEqual(await row.locator('[data-action=open]').boundingBox(),openBefore)
   const update=row.locator('[data-action=update]')
+  const hint=row.locator('#update-hint-1')
   assert.equal(await update.getAttribute('aria-disabled'),'true')
-  assert.equal(await row.locator('.action-hint').isVisible(),false,'el motivo no se muestra hasta que se busca')
+  assert.equal(await hint.isVisible(),false,'el motivo no se muestra hasta que se busca')
   await update.hover()
-  assert.match(await row.locator('.action-hint').innerText(),/Apaga el proyecto/)
-  await row.locator('[data-action=edit]').hover()
-  assert.equal(await row.locator('.action-hint').isVisible(),false)
+  assert.match(await hint.innerText(),/Apaga el proyecto/)
+  await row.locator('[data-action=logs]').hover()
+  assert.equal(await hint.isVisible(),false)
   await update.click({force:true})
-  assert.equal(await row.locator('.action-hint').isVisible(),true,'al intentar usarlo, explica por qué no se puede')
+  assert.equal(await hint.isVisible(),true,'al intentar usarlo, explica por qué no se puede')
   assert.equal(await row.locator('.project-menu-content').evaluate(e=>e.matches(':popover-open')),true)
   assert.ok(!data.calls.some(c=>c.endsWith('/update')),'no llama a la API')
-  await row.locator('[data-action=edit]').focus()
+  await row.locator('[data-action=logs]').focus()
   data.projects[0].notes='Revisado'
   // visibilitychange usa el mismo refresco que el temporizador, sin esperar 15 segundos.
   await page.evaluate(()=>document.dispatchEvent(new Event('visibilitychange')))
   await row.getByText('Revisado',{exact:true}).waitFor()
-  assert.equal(await row.locator('[data-action=edit]').evaluate(e=>e===document.activeElement),true)
+  assert.equal(await row.locator('[data-action=logs]').evaluate(e=>e===document.activeElement),true)
   assert.equal(await row.locator('.project-menu-content').evaluate(e=>e.matches(':popover-open')),true)
   await page.keyboard.press('Escape')
   assert.equal(await row.locator('[data-action=menu]').evaluate(e=>e===document.activeElement),true)
   await row.locator('[data-action=menu]').click()
-  await row.locator('[data-action=edit]').click()
-  await page.locator('#edit-dialog').waitFor({state:'visible'})
-  await page.locator('#edit-dialog-cancel').click()
+  await row.locator('[data-action=remove]').click()
+  await page.locator('#remove-dialog').waitFor({state:'visible'})
+  await page.locator('#remove-dialog-cancel').click()
   await page.waitForFunction(() => document.activeElement?.getAttribute('data-action') === 'menu', null, {timeout:2000})
   assert.equal(await row.locator('[data-action=menu]').evaluate(e=>e===document.activeElement),true)
+})
+
+test('reiniciar datos: bloqueado si está encendido y pide escribir el nombre',async t=>{
+  const {page,data}=await fixture(t)
+  const reset=[]
+  await page.route('**/api/projects/*/reset-data', route => { reset.push(route.request().url()); return route.fulfill({status:200,json:data.projects[1]}) })
+  const running=page.locator('.project-row').first()
+  await running.locator('[data-action=menu]').click()
+  const blocked=running.locator('[data-action=reset]')
+  assert.equal(await blocked.getAttribute('aria-disabled'),'true')
+  await blocked.click({force:true})
+  assert.match(await running.locator('#reset-hint-1').innerText(),/Apaga el proyecto/)
+  await page.keyboard.press('Escape')
+
+  const row=page.locator('.project-row').last()
+  await row.locator('[data-action=menu]').click()
+  // Separado de las acciones normales, junto a Eliminar.
+  assert.equal(await row.locator('.menu-danger [data-action=reset] + [data-action=remove]').count(),1)
+  await row.locator('[data-action=reset]').click()
+  await page.locator('#remove-dialog').waitFor({state:'visible'})
+  assert.match(await page.locator('#remove-dialog-text').innerText(),/volúmenes de Docker.*código y su ficha/s)
+  assert.equal(await page.locator('#remove-dialog-confirm').isDisabled(),true)
+  await page.locator('#remove-dialog-input').fill('biblioteca-escolar')
+  await page.locator('#remove-dialog-confirm').click()
+  await page.locator('#global-message').filter({hasText:'Se reiniciaron los datos de biblioteca-escolar'}).waitFor()
+  assert.equal(reset.length,1)
+  assert.match(reset[0],/\/api\/projects\/2\/reset-data$/)
 })
 
 test('el menú de acciones se abre hacia arriba si no cabe debajo',async t=>{
@@ -135,7 +172,8 @@ test('el menú de acciones se abre hacia arriba si no cabe debajo',async t=>{
 test('búsqueda, vacío, fallo y recuperación de la lista',async t=>{
   const {page,data}=await fixture(t)
   await page.locator('#search').fill('no-existe')
-  await page.getByText('No se encontraron proyectos con esa búsqueda.').waitFor()
+  // La búsqueda mira dentro de la carpeta abierta, la del año más reciente.
+  await page.getByText('No se encontraron proyectos de 2026 con esa búsqueda.').waitFor()
   await page.locator('#search').fill('Equipo 2')
   await page.locator('#project-count').filter({hasText:'1 proyecto'}).waitFor()
   assert.equal(await page.locator('.project-row').count(),1)
@@ -180,11 +218,11 @@ test('un diálogo devuelve el foco aunque su fila cambie mientras está abierto'
   const {page,data}=await fixture(t)
   const row=page.locator('.project-row').first()
   await row.locator('[data-action=menu]').click()
-  await row.locator('[data-action=edit]').click()
+  await row.locator('[data-action=remove]').click()
   data.projects[0].notes='Cambio desde otra pestaña'
   await page.evaluate(()=>document.dispatchEvent(new Event('visibilitychange')))
   await row.getByText('Cambio desde otra pestaña',{exact:true}).waitFor()
-  await page.locator('#edit-dialog-cancel').click()
+  await page.locator('#remove-dialog-cancel').click()
   await page.waitForFunction(() => document.activeElement?.getAttribute('data-action') === 'menu', null, {timeout:2000})
   assert.equal(await row.locator('[data-action=menu]').evaluate(e=>e===document.activeElement),true)
 })
@@ -207,4 +245,207 @@ test('registro continuo conserva el panel y devuelve el foco al equipo',async t=
   assert.equal(await page.locator('#register-form [name=team]').evaluate(e=>e===document.activeElement),true)
   assert.equal(await page.locator('#register-another').isChecked(),true)
   assert.equal(await page.locator('.project-row').count(),3)
+})
+
+test('el nombre para mostrar enlaza a la ficha y Editar ficha abre su edición',async t=>{
+  const {page}=await fixture(t)
+  const row=page.locator('.project-row').first()
+  const link=row.locator('[data-action=details]')
+  assert.equal(await link.innerText(),'Aetheris Blueprint')
+  assert.equal(await link.getAttribute('href'),'/proyecto/?id=1')
+  assert.ok(await row.getByText('epl-aetheris-blueprint',{exact:true}).isVisible(),'el nombre técnico se ve pequeño')
+  // Sin imagen, la inicial del nombre para mostrar.
+  assert.equal(await row.locator('span[aria-hidden=true]').first().innerText(),'A')
+  await row.locator('[data-action=menu]').click()
+  assert.equal(await row.locator('[data-action=edit]').getAttribute('href'),'/proyecto/?id=1#editar')
+})
+
+test('registrar: envía el año y, si el nombre existe, ofrece el sugerido con un clic',async t=>{
+  const {page,data}=await fixture(t)
+  const bodies=[]
+  data.post=async route=>{
+    const body=route.request().postDataJSON()
+    bodies.push(body)
+    if(bodies.length===1) return route.fulfill({status:409,json:{message:'Ya existe un proyecto con el nombre “tienda”. Usa otro nombre, por ejemplo “tienda-2026”.',suggestion:'tienda-2026'}})
+    return route.fulfill({status:201,json:{...project(3),...body}})
+  }
+  await page.locator('#open-register').click()
+  assert.equal(await page.locator('#register-form [name=year]').inputValue(),String(new Date().getFullYear()))
+  await page.locator('#register-form [name=team]').fill('Equipo 3')
+  await page.locator('#register-form [name=name]').fill('Tienda')
+  await page.locator('#register-form [name=year]').fill('2026')
+  await page.locator('[name=repoUrl]').fill('https://github.com/equipo/tienda')
+  await page.locator('#register-button').click()
+  await page.locator('#global-message').filter({hasText:'tienda-2026'}).waitFor()
+  await page.locator('#open-register').click()
+  const suggestion=page.locator('#use-suggestion')
+  assert.equal(await suggestion.innerText(),'Usar el nombre «tienda-2026»')
+  await suggestion.click()
+  assert.equal(await page.locator('#register-form [name=name]').inputValue(),'tienda-2026')
+  assert.equal(await suggestion.isHidden(),true)
+  await page.locator('#register-button').click()
+  await page.locator('#global-message').filter({hasText:'se registró'}).waitFor()
+  assert.deepEqual(bodies[0],{team:'Equipo 3',name:'Tienda',repoUrl:'https://github.com/equipo/tienda',year:2026})
+  assert.deepEqual(bodies[1],{team:'Equipo 3',name:'tienda-2026',repoUrl:'https://github.com/equipo/tienda',displayName:'Tienda',year:2026})
+})
+
+test('cuadrícula: tarjetas con las mismas acciones, sin desplazamiento horizontal, y la preferencia se guarda',async t=>{
+  const {page,data}=await fixture(t)
+  data.projects[1].warnings=['Servicio web: usa privileged.']
+  await page.locator('#view-grid').click()
+  assert.equal(await page.locator('#view-grid').getAttribute('aria-pressed'),'true')
+  assert.equal(await page.locator('#view-table').getAttribute('aria-pressed'),'false')
+  assert.deepEqual(data.patches,[{projectsView:'grid'}])
+  await page.evaluate(()=>document.dispatchEvent(new Event('visibilitychange')))
+  const card=page.locator('.project-card').first()
+  await card.waitFor()
+  assert.equal(await page.locator('#projects-table-wrap').isHidden(),true)
+  assert.equal(await page.locator('.project-card').count(),2)
+  assert.equal(await card.locator('[data-action=details]').getAttribute('href'),'/proyecto/?id=1')
+  for(const action of ['toggle','open','menu']) assert.equal(await card.locator(`[data-action=${action}]`).count(),1,action)
+  assert.match(await page.locator('.project-card').last().innerText(),/Revisar antes de encender: 1 aviso/)
+  // El menú y el foco sobreviven al refresco automático, como en la tabla.
+  await card.locator('[data-action=menu]').click()
+  await card.locator('[data-action=logs]').focus()
+  data.projects[0].notes='Desde la cuadrícula'
+  await page.evaluate(()=>document.dispatchEvent(new Event('visibilitychange')))
+  await card.getByText('Desde la cuadrícula',{exact:true}).waitFor()
+  assert.equal(await card.locator('[data-action=logs]').evaluate(e=>e===document.activeElement),true)
+  assert.equal(await card.locator('.project-menu-content').evaluate(e=>e.matches(':popover-open')),true)
+  await card.locator('[data-action=logs]').click()
+  await card.locator('[data-logs] pre').filter({hasText:'Servidor iniciado'}).waitFor()
+  for(const width of [320,375,768,1024,1440]) {
+    await page.setViewportSize({width,height:900})
+    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,`Ancho ${width}`)
+  }
+  // Recargar conserva la vista elegida: viene de la API.
+  await page.reload()
+  await page.locator('.project-card').first().waitFor()
+})
+
+test('carpetas por año: abre el más reciente, va en la URL y la búsqueda ofrece buscar en todos',async t=>{
+  const {page,data}=await fixture(t)
+  data.projects.push({...project(3),name:'huerto',displayName:'Huerto',team:'Equipo 9',year:2025,state:'running',ports:[8402],url:'http://localhost:8402',urls:['http://localhost:8402']})
+  data.projects[0].state='stopped'
+  await page.reload()
+  await page.locator('#project-count').filter({hasText:'2 proyectos'}).waitFor()
+  assert.equal(await page.locator('#projects-title').innerText(),'Proyectos de 2026')
+  assert.deepEqual(await page.locator('.folder-link').evaluateAll(links=>links.map(l=>[l.getAttribute('href'),l.getAttribute('aria-current')])),
+    [['?año=2026','page'],['?año=2025',null],['?año=todos',null]])
+  assert.match(await page.locator('.folder-link').nth(1).innerText(),/2025 · 1\s+1 encendido/)
+  // Lo encendido está en otra carpeta: Apagar todos se ofrece y dice que apaga todos los años.
+  assert.equal(await page.locator('#stop-all').innerText(),'Apagar todos (todos los años)')
+
+  await page.locator('.folder-link').nth(1).click()
+  await page.locator('#projects-title').filter({hasText:'Proyectos de 2025'}).waitFor()
+  assert.equal(new URL(page.url()).searchParams.get('año'),'2025')
+  await page.locator('#project-count').filter({hasText:'1 proyecto'}).waitFor()
+  assert.deepEqual(await page.locator('.project-row [data-action=details]').allInnerTexts(),['Huerto'])
+
+  await page.locator('#search').fill('biblioteca')
+  const all=page.locator('[data-action=search-all]')
+  await all.waitFor()
+  assert.match(await page.locator('#projects').innerText(),/No se encontraron proyectos de 2025 con esa búsqueda/)
+  await all.click()
+  await page.locator('#projects-title').filter({hasText:'Proyectos registrados'}).waitFor()
+  assert.equal(new URL(page.url()).searchParams.get('año'),'todos')
+  await page.locator('.project-row').first().waitFor()
+  assert.deepEqual(await page.locator('.project-row [data-action=details]').allInnerTexts(),['Biblioteca escolar'])
+  assert.equal(await page.locator('#stop-all').innerText(),'Apagar todos')
+
+  await page.goBack()
+  await page.locator('#projects-title').filter({hasText:'Proyectos de 2025'}).waitFor()
+  await page.goto(page.url())
+  await page.locator('#projects-title').filter({hasText:'Proyectos de 2025'}).waitFor()
+})
+
+test('varios desde GitHub: vista previa con errores y solo se envían las líneas válidas',async t=>{
+  const {page}=await fixture(t)
+  const sent=[]
+  await page.route('**/api/projects/batch',route=>{
+    const body=route.request().postDataJSON()
+    sent.push(body)
+    return route.fulfill({status:202,json:{queued:['tienda','huerto'],rejected:[{index:2,name:'Agenda',message:'Ya se está registrando un proyecto con el nombre “agenda”.'}]}})
+  })
+  await page.locator('#open-register').click()
+  await page.locator('#tab-many').click()
+  assert.equal(await page.locator('#register-form').isHidden(),true)
+  assert.equal(await page.locator('#tab-many').getAttribute('aria-selected'),'true')
+  assert.equal(await page.locator('#batch-year').inputValue(),String(new Date().getFullYear()))
+  await page.locator('#batch-year').fill('2026')
+  await page.locator('#batch-lines').fill([
+    'Equipo 1; Tienda; https://github.com/e1/tienda',
+    'Equipo 2, Huerto, https://github.com/e2/huerto',
+    'Equipo 3\tAgenda\thttps://github.com/e3/agenda',
+    'Equipo 4; tienda; https://github.com/e4/otra',
+    'Equipo 5; Biblioteca Escolar; https://github.com/e5/b',
+    'Equipo 6; Sin URL',
+    '',
+    'Equipo 7; Gitlab; https://gitlab.com/e7/p',
+  ].join('\n'))
+  // Los nombres ya registrados llegan de la API al abrir Varios; la vista previa se actualiza sola.
+  await page.locator('#batch-preview').getByText('Ya hay un proyecto llamado biblioteca-escolar.').waitFor()
+  const statuses=await page.locator('#batch-preview tr td:last-child').allInnerTexts()
+  assert.deepEqual(statuses,[
+    'Lista para registrar','Lista para registrar','Lista para registrar',
+    'El nombre se repite en la línea 1.',
+    'Ya hay un proyecto llamado biblioteca-escolar.',
+    'Línea incompleta: faltan el equipo, el nombre o la URL.',
+    'La URL debe ser de GitHub y empezar con https://.',
+  ])
+  assert.equal(await page.locator('#batch-git-submit').innerText(),'Registrar 3 proyectos')
+  await page.locator('#batch-git-submit').click()
+  await page.locator('#batch-git-status').filter({hasText:'Se encolaron 2 proyectos'}).waitFor()
+  assert.deepEqual(sent,[{year:2026,items:[
+    {team:'Equipo 1',name:'Tienda',repoUrl:'https://github.com/e1/tienda'},
+    {team:'Equipo 2',name:'Huerto',repoUrl:'https://github.com/e2/huerto'},
+    {team:'Equipo 3',name:'Agenda',repoUrl:'https://github.com/e3/agenda'},
+  ]}])
+  assert.match(await page.locator('#batch-git-status').innerText(),/No se registró Agenda/)
+  // Quedan para corregir las que tenían error y la que rechazó la API.
+  assert.equal((await page.locator('#batch-lines').inputValue()).split('\n').length,5)
+  assert.match(await page.locator('#batch-lines').inputValue(),/^Equipo 3\tAgenda/)
+})
+
+test('varios desde ZIP: una fila por archivo y se suben de a uno',async t=>{
+  const {page,data}=await fixture(t)
+  const uploads=[]
+  let release
+  data.post=async route=>{
+    const body=route.request().postData() ?? ''
+    uploads.push(body.match(/name="name"\r\n\r\n([^\r]*)/)[1])
+    if(uploads.length===1) await new Promise(r=>release=r)
+    if(uploads.length===2) return route.fulfill({status:409,json:{message:'Ya existe un proyecto con el nombre “agenda”.'}})
+    return route.fulfill({status:201,json:{...project(3),name:'tienda-escolar'}})
+  }
+  await page.locator('#open-register').click()
+  await page.locator('#tab-many').click()
+  await page.locator('#batch-files').setInputFiles([
+    {name:'Tienda Escolar.zip',mimeType:'application/zip',buffer:Buffer.from('a')},
+    {name:'agenda.zip',mimeType:'application/zip',buffer:Buffer.from('b')},
+  ])
+  const rows=page.locator('#batch-zip-rows li')
+  assert.equal(await rows.count(),2)
+  assert.equal(await rows.first().locator('input').nth(1).inputValue(),'tienda-escolar')
+  await page.locator('#batch-zip-submit').click()
+  assert.equal(await page.locator('#batch-zip-status').innerText(),'Cada ZIP necesita su equipo y su nombre.')
+  await rows.first().locator('input').first().fill('Equipo 1')
+  await rows.last().locator('input').first().fill('Equipo 2')
+  await page.locator('#batch-zip-submit').click()
+  await page.locator('#batch-zip-status').filter({hasText:'Subiendo 1 de 2'}).waitFor()
+  assert.deepEqual(uploads,['tienda-escolar'],'el segundo espera a que termine el primero')
+  release()
+  await page.locator('#batch-zip-status').filter({hasText:'Se registraron 1 de 2'}).waitFor()
+  assert.deepEqual(uploads,['tienda-escolar','agenda'])
+  assert.equal(await rows.first().locator('p').last().innerText(),'Registrado')
+  assert.match(await rows.last().locator('p').last().innerText(),/Ya existe/)
+})
+
+test('un puerto solo de 127.0.0.1 dice que no se puede comprobar, no que no responde',async t=>{
+  const {page,data}=await fixture(t)
+  data.projects[0].web={state:'unchecked'}
+  await page.evaluate(()=>document.dispatchEvent(new Event('visibilitychange')))
+  const row=page.locator('.project-row').first()
+  await row.getByText('No se puede comprobar desde Dockyard; ábrelo para verlo').waitFor()
+  assert.equal(await row.getByText('La web aún no responde').count(),0)
 })

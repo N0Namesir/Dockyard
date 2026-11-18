@@ -4,11 +4,14 @@ export {
   getProjectStatus,
   getProjectStatuses,
   getResources,
+  getDiskUsage,
+  pruneProjectImages,
   isNewerVersion,
   normalizeProjectName,
   prepareProject,
   removeProject,
   renameProject,
+  resetProjectData,
   getSelfUpdateStatus,
   startSelfUpdate,
   SELF_UPDATE_EXIT_CODE,
@@ -21,6 +24,9 @@ export {
 } from '@dockyard/core'
 
 export type {
+  DiskUsage,
+  ImagesPruned,
+  ProjectDiskUsage,
   PreparedProject,
   PrepareOptions,
   PrepareProgress,

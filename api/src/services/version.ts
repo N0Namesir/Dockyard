@@ -33,7 +33,7 @@ export interface VersionCheckerOptions {
 }
 
 /** La versión instalada es la del package.json de la raíz, que también está dentro de la imagen. */
-function installedVersion(): string {
+export function installedVersion(): string {
   const path = resolve(import.meta.dirname, '../../../package.json')
   return String(JSON.parse(readFileSync(path, 'utf8')).version)
 }

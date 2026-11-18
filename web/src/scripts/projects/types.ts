@@ -15,13 +15,43 @@ export interface Project {
   url: string | null
   urls: string[]
   failedServices: string[]
-  web: { state: 'ok' | 'error' | 'no-response'; httpStatus?: number } | null
+  /** `unchecked`: el puerto es solo de 127.0.0.1 y Dockyard corre en contenedor, así que no lo alcanza. */
+  web: { state: 'ok' | 'error' | 'no-response' | 'unchecked'; httpStatus?: number } | null
   warnings: string[]
   progress: Progress | null
   sourceType: 'git' | 'zip'
   pendingBuild: boolean
   /** Notas del docente; cadena vacía si no hay. */
   notes: string
+  /** Nombre para mostrar; el técnico (Docker y carpetas) es name. */
+  displayName: string
+  year: number
+  /** Lo que cuenta el equipo de su proyecto. */
+  description: string
+  /** Cómo usarlo: usuarios de prueba, rutas importantes. */
+  instructions: string
+  contacts: Contact[]
+  /** Dirección de la imagen con su versión, o null. */
+  imageUrl: string | null
+}
+
+/** Un estudiante del equipo. */
+export interface Contact {
+  name: string
+  email?: string
+  phone?: string
+}
+
+export type ProjectsView = 'table' | 'grid'
+
+/** Un año o todos los proyectos. */
+export type Folder = number | 'todos'
+
+/** Una carpeta: un año con proyectos, cuántos tiene y cuántos están encendidos. */
+export interface YearFolder {
+  year: number
+  count: number
+  running: number
 }
 
 /** Un registro en curso, o uno que falló sin una pestaña esperando la respuesta. */
@@ -75,7 +105,7 @@ export interface ReplaceResult {
   leftover: string | null
 }
 
-export type ProjectAction = 'start' | 'stop' | 'remove' | 'update' | 'replace' | 'edit'
+export type ProjectAction = 'start' | 'stop' | 'remove' | 'update' | 'replace' | 'reset'
 
 /** Otro proyecto registrado que ocupa un puerto de este; la API lo manda al fallar el encendido. */
 export interface PortConflict {
@@ -89,8 +119,9 @@ export interface RowHandlers {
   changeState(project: Project): void
   updateProject(project: Project): void
   replaceZip(project: Project): void
-  editProject(project: Project): void
   removeProject(project: Project): void
+  /** Borra sus volúmenes de Docker y conserva el código y la ficha. */
+  resetData(project: Project): void
   /** Apaga el proyecto que ocupa su puerto y lo enciende. */
   replaceConflicting(project: Project): void
   toggleLogs(project: Project): void

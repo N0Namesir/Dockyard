@@ -51,21 +51,33 @@ export function parsePs(out: string): any[] {
   return text.split('\n').filter(Boolean).map((line) => JSON.parse(line))
 }
 
+/** Direcciones de la propia PC: un puerto publicado solo en ellas no se alcanza desde otro equipo ni contenedor. */
+const LOOPBACK = new Set(['127.0.0.1', '::1', '[::1]'])
+
 /** Calcula el estado de un proyecto a partir de sus contenedores. */
 export function statusFromContainers(containers: any[]): ProjectStatus {
   // Un contenedor que se reinicia sigue activo: debe poder apagarse.
   const active = containers.filter((c) => c.State === 'running' || c.State === 'restarting')
   const running = containers.filter((c) => c.State === 'running')
-  const ports = new Set<number>()
+  // Por puerto, en qué direcciones de la PC se publicó (0.0.0.0, [::], 127.0.0.1…).
+  const hosts = new Map<number, Set<string>>()
   for (const c of running) {
     for (const p of c.Publishers ?? []) {
-      if (p.PublishedPort > 0) ports.add(p.PublishedPort)
+      if (!(p.PublishedPort > 0)) continue
+      const set = hosts.get(p.PublishedPort) ?? new Set<string>()
+      set.add(String(p.URL ?? ''))
+      hosts.set(p.PublishedPort, set)
     }
   }
   const status: ProjectStatus = {
     state: active.length > 0 ? 'running' : 'stopped',
-    ports: [...ports].sort((a, b) => a - b),
+    ports: [...hosts.keys()].sort((a, b) => a - b),
   }
+  const loopback = [...hosts]
+    .filter(([, set]) => [...set].every((host) => LOOPBACK.has(host)))
+    .map(([port]) => port)
+    .sort((a, b) => a - b)
+  if (loopback.length > 0) status.loopbackPorts = loopback
   // Salir con 0 es normal (una migración que termina); apagado por completo no es una falla.
   const failed = containers.filter(
     (c) => c.State === 'restarting' || c.State === 'dead' || (c.State === 'exited' && (c.ExitCode ?? 0) !== 0),
@@ -93,7 +105,7 @@ export async function getProjectStatus(name: string): Promise<ProjectStatus> {
  */
 export function composeRowOf(container: any): any {
   const exit = /^(?:Exited|Restarting) \((-?\d+)\)/.exec(String(container.Status ?? ''))
-  const publishers = portsInUse([container]).map((p) => ({ PublishedPort: p.port, Protocol: p.protocol }))
+  const publishers = portsInUse([container]).map((p) => ({ URL: p.host, PublishedPort: p.port, Protocol: p.protocol }))
   return {
     Service: composeServiceOf(container) ?? containerName(container),
     State: container.State,
@@ -204,6 +216,8 @@ export function requestedPorts(config: any): PortRequest[] {
 }
 
 export interface PortInUse {
+  /** Dirección de la PC donde se publicó: 0.0.0.0, [::], 127.0.0.1… */
+  host: string
   port: number
   protocol: string
   container: string
@@ -217,15 +231,54 @@ export function portsInUse(containers: any[]): PortInUse[] {
     const project = composeProjectOf(c)
     const container = containerName(c)
     // Ports es un texto como "0.0.0.0:8080->80/tcp, [::]:8080->80/tcp" o "0.0.0.0:8000-8002->8000-8002/tcp".
-    for (const m of String(c.Ports ?? '').matchAll(/:(\d+)(?:-(\d+))?->[\d-]+\/(\w+)/g)) {
-      const from = Number(m[1])
-      const to = m[2] ? Number(m[2]) : from
+    for (const m of String(c.Ports ?? '').matchAll(/([\d.]+|\[[\da-f:]*\]|::)?:(\d+)(?:-(\d+))?->[\d-]+\/(\w+)/gi)) {
+      const from = Number(m[2])
+      const to = m[3] ? Number(m[3]) : from
       for (let port = from; port <= to; port++) {
-        result.push({ port, protocol: m[3]!, container, project })
+        result.push({ host: m[1] ?? '', port, protocol: m[4]!, container, project })
       }
     }
   }
   return result
+}
+
+/**
+ * Mensaje para el docente si `up -d` falló porque un puerto ya está ocupado. La revisión previa solo
+ * ve contenedores: esto cubre un programa de la PC que no es de Docker (o un contenedor que tomó el
+ * puerto entre la revisión y el encendido). Docker lo escribe en inglés, de varias formas:
+ *   failed to bind host port 0.0.0.0:8081/tcp: address already in use        (Docker 28 y 29)
+ *   listen tcp4 0.0.0.0:8081: bind: address already in use                   (versiones anteriores)
+ *   Bind for 0.0.0.0:8081 failed: port is already allocated                  (otro contenedor)
+ */
+export function portInUseMessage(stderr: string): string | null {
+  const line = stderr.split('\n').find((text) => /address already in use|port is already allocated/i.test(text))
+  if (!line) return null
+  const port = /(?:\d{1,3}(?:\.\d{1,3}){3}|\[[\da-f:]*\]|::):(\d{1,5})\b/i.exec(line)?.[1]
+  const which = port ? `El puerto ${port}` : 'Un puerto del proyecto'
+  if (/port is already allocated/i.test(line)) {
+    return `${which} ya lo usa otro contenedor de Docker de esta PC. Apágalo o cambia el puerto en el compose del proyecto.`
+  }
+  return `${which} ya lo usa otro programa de esta PC que no es un proyecto de Docker. Ciérralo o cambia el puerto en el compose del proyecto.`
+}
+
+/**
+ * Contenedor que Docker no pudo conectar a su puerto, según el error de `up -d`:
+ *   driver failed programming external connectivity on endpoint tienda-web-1 (…): …
+ */
+export function failedEndpointOf(stderr: string): string | null {
+  return /on endpoint ([\w.-]+)/.exec(stderr)?.[1] ?? null
+}
+
+/**
+ * Tras un puerto ocupado, Docker deja creado el contenedor que falló, pero sin su puerto: el
+ * siguiente `up -d` lo arrancaría sin publicarlo y el proyecto se vería encendido sin puerto.
+ * Se borra solo ese contenedor (sin -v: los volúmenes no se tocan) para que se cree de nuevo.
+ */
+async function removeFailedEndpoint(prefix: string[], name: string, stderr: string): Promise<void> {
+  const endpoint = failedEndpointOf(stderr)
+  if (!endpoint) return
+  const service = (await listContainers(name)).find((c) => c.Name === endpoint)?.Service
+  if (service) await docker([...prefix, 'rm', '-f', String(service)], { timeoutMs: STOP_TIMEOUT })
 }
 
 /** Lanza un error si un puerto fijo o un container_name del proyecto ya lo tiene otro proyecto. */
@@ -285,6 +338,13 @@ export async function startProject(
     if (err instanceof CommandError) {
       if (err.timedOut) {
         throw new Error('El proyecto tardó más de 10 minutos en encender y se canceló. Revisa su compose o intenta de nuevo: la primera vez Docker descarga y construye imágenes.')
+      }
+      const inUse = portInUseMessage(err.stderr)
+      if (inUse) {
+        // Los servicios que sí alcanzaron a arrancar se detienen: el proyecto no queda a medias.
+        await docker([...prefix, 'stop'], { timeoutMs: STOP_TIMEOUT }).catch(() => {})
+        await removeFailedEndpoint(prefix, name, err.stderr).catch(() => {})
+        throw new Error(inUse)
       }
       throw new Error(`No se pudo encender el proyecto. Docker respondió:\n${lastLines(err.stderr, 10)}`)
     }
@@ -355,6 +415,23 @@ export async function removeProject(name: string): Promise<void> {
     if (err.code === 'EACCES' || err.code === 'EPERM') {
       // Los contenedores del proyecto pueden haber creado archivos de root en sus carpetas montadas.
       throw new Error(`Los contenedores se borraron, pero el proyecto dejó archivos sin permiso de borrado. Ejecuta en una terminal: sudo rm -rf ${target} y vuelve a eliminarlo.`)
+    }
+    throw err
+  }
+}
+
+/**
+ * Borra los contenedores, la red y los volúmenes del proyecto, y conserva su carpeta y sus imágenes:
+ * el siguiente encendido crea la base de nuevo, vuelve a cargar su `.sql` y no reconstruye. Las
+ * carpetas montadas desde el proyecto (`./data:/var/lib/mysql`) no se tocan: son código del equipo.
+ */
+export async function resetProjectData(dir: string, name: string): Promise<void> {
+  const prefix = await composePrefix(dir, name)
+  try {
+    await docker([...prefix, 'down', '-v', '--remove-orphans'], { timeoutMs: STOP_TIMEOUT })
+  } catch (err) {
+    if (err instanceof CommandError) {
+      throw new Error(`No se pudieron borrar los datos del proyecto. Docker respondió:\n${lastLines(err.stderr, 10)}`)
     }
     throw err
   }

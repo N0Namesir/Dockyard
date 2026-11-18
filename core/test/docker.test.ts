@@ -2,7 +2,7 @@
 //
 //   npm run test:docker -w core
 //
-// Usan una carpeta temporal como PROJECTS_DIR, publican los puertos 8081 a 8083 y al terminar
+// Usan una carpeta temporal como PROJECTS_DIR, publican los puertos 8081 a 8085 y al terminar
 // eliminan los contenedores y volúmenes que crearon. La primera vez descargan imágenes.
 
 import assert from 'node:assert/strict'
@@ -13,7 +13,7 @@ import { basename, join } from 'node:path'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { after, before, describe, test } from 'node:test'
 import { buildZip, createTestZips, entriesFrom } from '../../ejemplos/crear-zips.ts'
-import { getProjectLogs, getProjectStatus, getProjectStatuses, getResources, normalizeProjectName, PortConflictError, prepareProject, removeProject, renameProject, replaceProjectZip, startProject, stopProject } from '../src/index.ts'
+import { getDiskUsage, getProjectLogs, getProjectStatus, getProjectStatuses, getResources, normalizeProjectName, PortConflictError, prepareProject, pruneProjectImages, removeProject, renameProject, replaceProjectZip, resetProjectData, startProject, stopProject } from '../src/index.ts'
 import { run } from '../src/run.ts'
 import type { StartProgress } from '../src/types.ts'
 
@@ -157,6 +157,32 @@ describe('encender, consultar y apagar', () => {
     }
   })
 
+  test('un puerto ocupado por un programa que no es Docker da un mensaje en español y no deja nada encendido', async () => {
+    const name = uniqueName('puerto-ocupado')
+    const dir = join(base, name)
+    await mkdir(dir)
+    await writeFile(
+      join(dir, 'compose.yaml'),
+      'services:\n  web:\n    image: busybox\n    command: ["sleep", "600"]\n    ports: ["8084:80"]\n  local:\n    image: busybox\n    command: ["sleep", "600"]\n    ports: ["127.0.0.1:8085:80"]\n',
+    )
+    const { createServer } = await import('node:net')
+    const program = createServer().listen(8084, '0.0.0.0')
+    await new Promise((resolve) => program.once('listening', resolve))
+    try {
+      await assert.rejects(startProject(dir, name), {
+        message: 'El puerto 8084 ya lo usa otro programa de esta PC que no es un proyecto de Docker. Ciérralo o cambia el puerto en el compose del proyecto.',
+      })
+      assert.equal((await getProjectStatus(name)).state, 'stopped')
+    } finally {
+      await new Promise((resolve) => program.close(resolve))
+    }
+    // Libre el puerto, enciende; el que se publica solo en 127.0.0.1 queda marcado.
+    const status = await startProject(dir, name)
+    assert.deepEqual(status, { state: 'running', ports: [8084, 8085], loopbackPorts: [8085] })
+    assert.deepEqual((await getProjectStatuses())[name], status)
+    await stopProject(dir, name)
+  })
+
   test('prueba-build: construye su imagen desde cero y responde', { timeout: 600_000 }, async () => {
     const name = uniqueName('build')
     const dir = join(EJEMPLOS, 'prueba-build')
@@ -284,6 +310,72 @@ describe('encender, consultar y apagar', () => {
     assert.equal(await run('docker', ['volume', 'ls', '-q', '--filter', `name=${name}_datos`]), '')
     assert.equal(await run('docker', ['images', '-q', `${name}-app`]), '')
     await removeProject(name)
+  })
+
+  test('resetProjectData borra contenedores y volúmenes, y conserva la carpeta, la imagen y las carpetas montadas', { timeout: 300_000 }, async () => {
+    const name = uniqueName('reiniciar')
+    const dir = join(process.env.PROJECTS_DIR!, name)
+    await mkdir(join(dir, 'montada'), { recursive: true })
+    await writeFile(join(dir, 'montada', 'del-equipo.txt'), 'no se toca\n')
+    await writeFile(join(dir, 'Dockerfile'), 'FROM busybox\n')
+    await writeFile(
+      join(dir, 'compose.yaml'),
+      'services:\n  app:\n    build: .\n    command: ["sleep", "600"]\n    volumes: ["datos:/datos", "./montada:/montada"]\nvolumes:\n  datos:\n',
+    )
+    const prefix = ['compose', '-p', name, '--project-directory', dir, '-f', join(dir, 'compose.yaml')]
+    assert.equal((await startProject(dir, name, { build: true })).state, 'running')
+    await run('docker', [...prefix, 'exec', '-T', 'app', 'touch', '/datos/marca'])
+    await stopProject(dir, name)
+
+    await resetProjectData(dir, name)
+    assert.equal(await run('docker', ['volume', 'ls', '-q', '--filter', `label=com.docker.compose.project=${name}`]), '')
+    assert.equal((await run('docker', ['ps', '-aq', '--filter', `label=com.docker.compose.project=${name}`])).trim(), '')
+    assert.notEqual((await run('docker', ['images', '-q', `${name}-app`])).trim(), '', 'la imagen se conserva')
+    assert.equal(await readFile(join(dir, 'montada', 'del-equipo.txt'), 'utf8'), 'no se toca\n')
+
+    // El siguiente encendido crea el volumen de nuevo, vacío, sin reconstruir.
+    assert.equal((await startProject(dir, name)).state, 'running')
+    await assert.rejects(run('docker', [...prefix, 'exec', '-T', 'app', 'test', '-f', '/datos/marca']))
+    await stopProject(dir, name)
+    await assert.rejects(resetProjectData(dir, 'Sin Normalizar'), /no es válido/)
+  })
+
+  test('pruneProjectImages borra solo las versiones viejas de los proyectos pedidos', { timeout: 300_000 }, async () => {
+    const name = uniqueName('disco')
+    const other = uniqueName('disco-otro')
+    const dirs: Record<string, string> = {}
+    for (const project of [name, other]) {
+      const dir = dirs[project] = join(process.env.PROJECTS_DIR!, project)
+      await mkdir(dir)
+      await writeFile(join(dir, 'compose.yaml'), 'services:\n  app:\n    build: .\n    command: ["sleep", "600"]\n    volumes: ["datos:/datos"]\nvolumes:\n  datos:\n')
+      // Dos versiones: la primera queda sin nombre al reconstruir (en el almacén clásico de Docker).
+      for (const version of ['uno', 'dos']) {
+        await writeFile(join(dir, 'Dockerfile'), `FROM busybox\nRUN echo ${version}-${project} > /version\n`)
+        await startProject(dir, project, { build: true })
+      }
+      await stopProject(dir, project)
+    }
+    const images = async (project: string) => (await run('docker', ['image', 'ls', '-aq', '--filter', `label=com.docker.compose.project=${project}`])).split('\n').filter(Boolean)
+    const otherBefore = await images(other)
+
+    const usage = await getDiskUsage()
+    assert.ok(usage.projects[name]!.imageBytes > 0)
+    assert.ok(usage.projects[name]!.volumeBytes >= 0)
+    assert.ok(name in usage.projects && other in usage.projects)
+
+    const before = (await images(name)).length
+    const result = await pruneProjectImages([name])
+    const after = await getDiskUsage()
+    assert.equal(after.projects[name]!.unusedImageBytes, 0)
+    assert.equal((await images(name)).length, 1, 'queda solo la imagen actual')
+    assert.equal(result.removed, before - 1)
+    assert.deepEqual(await images(other), otherBefore, 'no toca otros proyectos')
+    assert.equal(await run('docker', ['volume', 'ls', '-q', '--filter', `name=${name}_datos`]), `${name}_datos\n`, 'no borra volúmenes')
+    // La imagen actual se conserva aunque el proyecto ya no tenga contenedores.
+    await resetProjectData(dirs[name]!, name)
+    await pruneProjectImages([name])
+    assert.equal((await images(name)).length, 1)
+    await assert.rejects(pruneProjectImages(['Sin Normalizar']), /no es válido/)
   })
 
   test('removeProject funciona aunque el compose ya no sea válido', async () => {
