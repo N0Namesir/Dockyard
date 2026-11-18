@@ -391,11 +391,11 @@ Las 7 funciones quedaron terminadas, cada una en su commit, en este orden:
 4. `1d93d51` Vista en cuadrícula o tabla y carpetas por año
 5. `601a296` Registrar varios proyectos a la vez
 6. `e74cce1` Mensajes claros sobre puertos
-7. El commit «Exportar e importar la lista de proyectos», el último de la rama (incluye este resumen).
+7. `a9be4b6` Exportar e importar la lista de proyectos
 
 No se publicó ninguna versión ni se ejecutaron `npm version`, `install.sh`, `update.sh` ni `scripts/publicar-release.sh`.
 
-**Pruebas al final:** `npm run build`, `npm run typecheck` y `npm test` (85 del núcleo y 86 de la API) bien. `npm run test:ui -w web`: 35 bien y 1 omitida (la de capturas, que solo corre con `UI_SCREENSHOTS`), con Chromium 1243 en lugar del 1255 que pide el proyecto (ver «Entorno de la sesión» arriba). `npm run test:docker -w core`: ver la línea siguiente.
+**Pruebas al final:** `npm run build`, `npm run typecheck` y `npm test` (85 del núcleo y 86 de la API) bien. `npm run test:ui -w web`: 35 bien y 1 omitida (la de capturas, que solo corre con `UI_SCREENSHOTS`), con Chromium 1243 en lugar del 1255 que pide el proyecto (ver «Entorno de la sesión» arriba). `npm run test:docker -w core` (completa, con el almacén de imágenes clásico de Docker): 32 bien, 2 omitidas (las de archivos de root, porque la sesión corre como root) y 1 falla ajena al código, la misma que antes de empezar: «prueba-bd» no pudo descargar `adminer` porque Docker Hub respondió `toomanyrequests` (límite de descargas sin sesión). Las pruebas nuevas con Docker (reiniciar datos, versiones viejas, puerto ocupado por otro programa y `loopbackPorts`) pasan. Conviene correr «prueba-bd» en la PC del usuario.
 
 **Conviene revisar primero:**
 
