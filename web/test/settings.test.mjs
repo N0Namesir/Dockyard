@@ -44,6 +44,8 @@ async function fixture(t, state) {
     if (path === '/api/settings') { state.settings = { ...state.settings, ...req.postDataJSON() }; return json(state.settings) }
     if (path === '/api/update' && req.method() === 'GET') return json(state.update)
     if (path === '/api/update') { state.update = { ...state.update, running: true }; state.onStart?.(); return json(state.update, 202) }
+    if (path === '/api/disk' && req.method() === 'GET') return json(state.disk ?? { total: { imageBytes: 0, unusedImageBytes: 0, volumeBytes: 0 }, projects: [] })
+    if (path === '/api/disk/clean') return state.onClean ? state.onClean(route) : json({ freedBytes: 0, removed: 0 })
     return json({ message: 'Ruta no prevista en prueba' }, 404)
   })
   await page.goto(base + '/configuracion/')
@@ -136,4 +138,54 @@ test('sin instalación con install.sh, explica cómo actualizar desde la termina
   assert.equal(await page.locator('#update-now').isHidden(), true)
   assert.match(await page.locator('#update-unsupported').innerText(), /\.\/update\.sh/)
   assert.equal(await page.locator('#update-check').isChecked(), false)
+})
+
+test('espacio en disco: muestra cada proyecto y libera con una confirmación', async (t) => {
+  const GB = 1024 ** 3
+  const state = {
+    version: VERSION,
+    settings: { updateCheck: true },
+    update: { supported: true, running: false, last: null },
+    disk: {
+      total: { imageBytes: 2 * GB, unusedImageBytes: 1.5 * GB, volumeBytes: 300 * 1024 ** 2 },
+      projects: [
+        { id: 2, name: 'tienda', imageBytes: 2 * GB, unusedImageBytes: 1.5 * GB, volumeBytes: 300 * 1024 ** 2 },
+        { id: 1, name: 'biblioteca', imageBytes: 0, unusedImageBytes: 0, volumeBytes: 0 },
+      ],
+    },
+  }
+  state.onClean = (route) => {
+    state.disk = { ...state.disk, total: { ...state.disk.total, unusedImageBytes: 0 }, projects: state.disk.projects.map((p) => ({ ...p, unusedImageBytes: 0 })) }
+    return route.fulfill({ status: 200, json: { freedBytes: 1.4 * GB, removed: 3 } })
+  }
+  const { page, calls } = await fixture(t, state)
+  await page.locator('#disk-total').filter({ hasText: 'ocupan 3.8 GB' }).waitFor()
+  assert.deepEqual(await page.locator('#disk-rows tr').first().locator('td').allInnerTexts(), ['tienda', '2.0 GB', '1.5 GB', '300 MB'])
+  assert.equal(await page.locator('#disk-rows tr').count(), 2)
+
+  await page.locator('#disk-clean').click()
+  await page.locator('#confirm-dialog').waitFor()
+  assert.match(await page.locator('#confirm-dialog-text').innerText(), /unos 1.5 GB/)
+  await page.locator('#confirm-dialog-cancel').click()
+  assert.ok(!calls.includes('POST /api/disk/clean'), 'cancelar no libera nada')
+
+  await page.locator('#disk-clean').click()
+  await page.locator('#confirm-dialog-confirm').click()
+  await page.locator('#disk-message').filter({ hasText: 'Se liberaron 1.4 GB (3 imágenes).' }).waitFor()
+  await page.waitForFunction(() => document.querySelector('#disk-clean').disabled)
+  assert.ok(calls.includes('POST /api/disk/clean'))
+})
+
+test('espacio en disco: si la API se niega, muestra el motivo', async (t) => {
+  const state = {
+    version: VERSION,
+    settings: { updateCheck: true },
+    update: { supported: true, running: false, last: null },
+    disk: { total: { imageBytes: 0, unusedImageBytes: 5e8, volumeBytes: 0 }, projects: [{ id: 1, name: 'tienda', imageBytes: 0, unusedImageBytes: 5e8, volumeBytes: 0 }] },
+    onClean: (route) => route.fulfill({ status: 409, json: { message: 'Hay proyectos encendiéndose, actualizándose o registrándose. Espera a que terminen para liberar espacio.' } }),
+  }
+  const { page } = await fixture(t, state)
+  await page.locator('#disk-clean:enabled').click()
+  await page.locator('#confirm-dialog-confirm').click()
+  await page.locator('#disk-message').filter({ hasText: 'Espera a que terminen' }).waitFor()
 })

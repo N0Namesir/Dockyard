@@ -4,6 +4,8 @@ export {
   getProjectStatus,
   getProjectStatuses,
   getResources,
+  getDiskUsage,
+  pruneProjectImages,
   isNewerVersion,
   normalizeProjectName,
   prepareProject,
@@ -22,6 +24,9 @@ export {
 } from '@dockyard/core'
 
 export type {
+  DiskUsage,
+  ImagesPruned,
+  ProjectDiskUsage,
   PreparedProject,
   PrepareOptions,
   PrepareProgress,

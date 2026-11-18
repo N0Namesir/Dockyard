@@ -5,6 +5,7 @@ import { access, mkdir, mkdtemp, readFile, rm, symlink, unlink, writeFile } from
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { after, describe, test } from 'node:test'
+import { diskUsageFrom, isOldVersion, projectImagesFrom } from '../src/disk.ts'
 import { parsePs, portsInUse, requestedContainerNames, requestedPorts, statusFromContainers, statusesFromContainers } from '../src/docker.ts'
 import { assertNormalizedName, normalizeProjectName } from '../src/name.ts'
 import { findComposeFile, projectRepoDir, projectsDir } from '../src/paths.ts'
@@ -686,5 +687,55 @@ describe('versiones', () => {
 
   test('si no se puede consultar, lo dice en español', async () => {
     await assert.rejects(getLatestVersion('file:///no/existe/dockyard'), /No se pudo consultar la última versión/)
+  })
+})
+
+describe('espacio en disco', () => {
+  // Salida real de `docker system df -v --format json` (almacén clásico, Docker 29.10), recortada.
+  const df = {
+    Images: [
+      { Containers: '1', ID: 'sha256:actual', Repository: 'tienda-app', Tag: 'latest', Size: '245MB', UniqueSize: '230.7MB' },
+      { Containers: '0', ID: 'sha256:vieja', Repository: '<none>', Tag: '<none>', Size: '244MB', UniqueSize: '12.5MB' },
+      { Containers: '0', ID: 'sha256:tras-reiniciar', Repository: 'biblioteca-web', Tag: 'latest', Size: '1.2GB', UniqueSize: 'N/A' },
+      { Containers: '0', ID: 'sha256:ajena', Repository: '<none>', Tag: '<none>', Size: '3GB', UniqueSize: '3GB' },
+      { Containers: '2', ID: 'sha256:postgres', Repository: 'postgres', Tag: '16-alpine', Size: '400MB', UniqueSize: '400MB' },
+    ],
+    Volumes: [
+      { Name: 'tienda_datos', Labels: 'com.docker.compose.project=tienda,com.docker.compose.version=5.7.1,com.docker.compose.volume=datos', Size: '48.2MB' },
+      { Name: 'suelto', Labels: '', Size: '9GB' },
+    ],
+  }
+  const projectById = new Map([
+    ['sha256:actual', 'tienda'],
+    ['sha256:vieja', 'tienda'],
+    ['sha256:tras-reiniciar', 'biblioteca'],
+    ['sha256:ajena', 'otro-de-la-pc'],
+  ])
+
+  test('solo cuenta las imágenes con etiqueta de compose y distingue las versiones viejas', () => {
+    const images = projectImagesFrom(df, projectById)
+    assert.deepEqual(images.map((image) => [image.id, image.project, isOldVersion(image)]), [
+      ['sha256:actual', 'tienda', false],
+      ['sha256:vieja', 'tienda', true],
+      ['sha256:tras-reiniciar', 'biblioteca', false],
+      ['sha256:ajena', 'otro-de-la-pc', true],
+    ])
+    // Sin UniqueSize, lo que se recupera es todo su tamaño.
+    assert.equal(images[2]!.uniqueBytes, 1_200_000_000)
+  })
+
+  test('suma imágenes, versiones viejas y volúmenes por proyecto', () => {
+    const usage = diskUsageFrom(projectImagesFrom(df, projectById), df.Volumes)
+    assert.deepEqual(usage.projects.tienda, { imageBytes: 245_000_000, unusedImageBytes: 12_500_000, volumeBytes: 48_200_000 })
+    assert.deepEqual(usage.projects.biblioteca, { imageBytes: 1_200_000_000, unusedImageBytes: 0, volumeBytes: 0 })
+    assert.equal(Object.keys(usage.projects).length, 3, 'el volumen sin proyecto y postgres no son de nadie')
+  })
+
+  test('una imagen sin nombre que usa un contenedor apagado no es una versión vieja', () => {
+    const [image] = projectImagesFrom(
+      { Images: [{ Containers: '1', ID: 'x', Repository: '<none>', Tag: '<none>', Size: '1MB', UniqueSize: '1MB' }] },
+      new Map([['x', 'tienda']]),
+    )
+    assert.equal(isOldVersion(image!), false)
   })
 })

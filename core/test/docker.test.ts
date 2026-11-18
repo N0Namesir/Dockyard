@@ -13,7 +13,7 @@ import { basename, join } from 'node:path'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { after, before, describe, test } from 'node:test'
 import { buildZip, createTestZips, entriesFrom } from '../../ejemplos/crear-zips.ts'
-import { getProjectLogs, getProjectStatus, getProjectStatuses, getResources, normalizeProjectName, PortConflictError, prepareProject, removeProject, renameProject, replaceProjectZip, resetProjectData, startProject, stopProject } from '../src/index.ts'
+import { getDiskUsage, getProjectLogs, getProjectStatus, getProjectStatuses, getResources, normalizeProjectName, PortConflictError, prepareProject, pruneProjectImages, removeProject, renameProject, replaceProjectZip, resetProjectData, startProject, stopProject } from '../src/index.ts'
 import { run } from '../src/run.ts'
 import type { StartProgress } from '../src/types.ts'
 
@@ -312,6 +312,44 @@ describe('encender, consultar y apagar', () => {
     await assert.rejects(run('docker', [...prefix, 'exec', '-T', 'app', 'test', '-f', '/datos/marca']))
     await stopProject(dir, name)
     await assert.rejects(resetProjectData(dir, 'Sin Normalizar'), /no es válido/)
+  })
+
+  test('pruneProjectImages borra solo las versiones viejas de los proyectos pedidos', { timeout: 300_000 }, async () => {
+    const name = uniqueName('disco')
+    const other = uniqueName('disco-otro')
+    const dirs: Record<string, string> = {}
+    for (const project of [name, other]) {
+      const dir = dirs[project] = join(process.env.PROJECTS_DIR!, project)
+      await mkdir(dir)
+      await writeFile(join(dir, 'compose.yaml'), 'services:\n  app:\n    build: .\n    command: ["sleep", "600"]\n    volumes: ["datos:/datos"]\nvolumes:\n  datos:\n')
+      // Dos versiones: la primera queda sin nombre al reconstruir (en el almacén clásico de Docker).
+      for (const version of ['uno', 'dos']) {
+        await writeFile(join(dir, 'Dockerfile'), `FROM busybox\nRUN echo ${version}-${project} > /version\n`)
+        await startProject(dir, project, { build: true })
+      }
+      await stopProject(dir, project)
+    }
+    const images = async (project: string) => (await run('docker', ['image', 'ls', '-aq', '--filter', `label=com.docker.compose.project=${project}`])).split('\n').filter(Boolean)
+    const otherBefore = await images(other)
+
+    const usage = await getDiskUsage()
+    assert.ok(usage.projects[name]!.imageBytes > 0)
+    assert.ok(usage.projects[name]!.volumeBytes >= 0)
+    assert.ok(name in usage.projects && other in usage.projects)
+
+    const before = (await images(name)).length
+    const result = await pruneProjectImages([name])
+    const after = await getDiskUsage()
+    assert.equal(after.projects[name]!.unusedImageBytes, 0)
+    assert.equal((await images(name)).length, 1, 'queda solo la imagen actual')
+    assert.equal(result.removed, before - 1)
+    assert.deepEqual(await images(other), otherBefore, 'no toca otros proyectos')
+    assert.equal(await run('docker', ['volume', 'ls', '-q', '--filter', `name=${name}_datos`]), `${name}_datos\n`, 'no borra volúmenes')
+    // La imagen actual se conserva aunque el proyecto ya no tenga contenedores.
+    await resetProjectData(dirs[name]!, name)
+    await pruneProjectImages([name])
+    assert.equal((await images(name)).length, 1)
+    await assert.rejects(pruneProjectImages(['Sin Normalizar']), /no es válido/)
   })
 
   test('removeProject funciona aunque el compose ya no sea válido', async () => {

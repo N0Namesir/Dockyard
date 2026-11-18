@@ -1,6 +1,9 @@
 import type {
+  DiskUsage,
+  ImagesPruned,
   PreparedProject,
   PrepareOptions,
+  ProjectDiskUsage,
   ProjectSource,
   ProjectResources,
   ProjectStatus,
@@ -54,6 +57,13 @@ export interface ProjectResponse {
   pendingBuild: boolean
   /** Notas del docente; cadena vacía si no hay. */
   notes: string
+}
+
+export interface DiskResponse {
+  /** Suma de los proyectos registrados. */
+  total: ProjectDiskUsage
+  /** Todos los registrados, el que más ocupa primero. */
+  projects: ({ id: number; name: string } & ProjectDiskUsage)[]
 }
 
 export interface ResourcesResponse {
@@ -120,6 +130,8 @@ export interface CoreAdapter {
   getProjectStatuses(): Promise<Record<string, ProjectStatus>>
   getProjectLogs(name: string): Promise<string>
   getResources(): Promise<ResourceUsage>
+  getDiskUsage(): Promise<DiskUsage>
+  pruneProjectImages(names: string[]): Promise<ImagesPruned>
   removeProject(name: string): Promise<void>
   renameProject(name: string, newName: string): Promise<PreparedProject>
   resetProjectData(dir: string, name: string): Promise<void>

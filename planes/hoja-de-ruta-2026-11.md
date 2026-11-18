@@ -294,3 +294,16 @@ Entorno de la sesión: Node 24.22 (`/opt/node24`), Docker 29.10 levantado dentro
 - **Decisiones que se apartaron del plan:** `resetProjectData` usa `down -v --remove-orphans` (sin `--rmi`, como pide el plan); `--remove-orphans` solo quita contenedores de servicios que el compose ya no tiene. La ayuda que bloquea la acción con el proyecto encendido quedó en un ayudante común de `rows/project-row.ts` (`blockedWhileRunning`), que ahora usan también Actualizar y Reemplazar ZIP. El id del globo pasó de `update-hint-<id>` a `<acción>-hint-<id>`.
 - **Pruebas:** `build`, `typecheck` y `npm test` bien (80 + 62). `test:ui` bien (8 de `ui.test.mjs`, con una nueva). `test:docker`: la prueba nueva de `resetProjectData` (borra volúmenes y contenedores, conserva carpeta, imagen y carpetas montadas, y el siguiente encendido empieza vacío) pasa con Docker real.
 - **Pendientes y riesgos:** ninguno conocido. Un proyecto que guarda su base en una carpeta montada no se reinicia con esto; quedó escrito en el manual y en los límites conocidos.
+
+### 2. Espacio en disco
+
+- **Estado:** terminada.
+- **Commit:** ver la lista de commits al final.
+- **Decisiones que se apartaron del plan:**
+  - Se comprobó con Docker real (29.10, Compose 5.7) en los dos almacenes de imágenes. En el clásico (overlay2), compose etiqueta las imágenes que construye y las versiones viejas quedan sin nombre pero **conservan** la etiqueta, así que se atribuyen con seguridad. En el de containerd (el que traen por defecto las instalaciones nuevas de Docker 29), la versión anterior desaparece sola al reconstruir: no hay versiones viejas que liberar y lo que ocupa queda en la caché de construcción. Quedó anotado en los límites conocidos.
+  - «Versión vieja» es una imagen etiquetada del proyecto, **sin nombre** y que ningún contenedor usa. El plan decía «que no use ningún contenedor»; se agregó «sin nombre» para no borrar la imagen actual de un proyecto que se quedó sin contenedores tras **Reiniciar datos** (la función 1 promete que el siguiente encendido no reconstruye).
+  - Las imágenes descargadas (`image: postgres`) no llevan la etiqueta de compose y no se atribuyen a ningún proyecto, ni se cuentan ni se borran.
+  - `freedBytes` es cuánto bajó el total de imágenes de `docker system df` antes y después; las versiones viejas de la tabla usan `UniqueSize`, así que la estimación de la confirmación puede diferir un poco de lo liberado.
+  - La API quedó en un servicio y unas rutas propias (`api/src/services/disk.ts`, `api/src/routes/disk.ts`) y la interfaz en `web/src/scripts/settings/disk.ts`.
+- **Pruebas:** `build`, `typecheck` y `npm test` bien (83 + 67, con 3 unitarias del núcleo y 5 de la API nuevas). `test:ui` de Configuración bien (6, con 2 nuevas). `test:docker`: la prueba nueva de `pruneProjectImages` (borra solo la versión vieja del proyecto pedido, no toca la del otro proyecto ni los volúmenes, y conserva la imagen actual tras reiniciar datos) pasa con el almacén clásico.
+- **Pendientes y riesgos:** no se libera la caché de construcción, que en la PC del usuario puede ser buena parte de los 15,5 GB recuperables; hacerlo exigiría `docker builder prune`, que es global. `docker system df -v` mide cada volumen y puede tardar con bases grandes (límite de 2 minutos).

@@ -69,6 +69,12 @@ function fakeCore() {
     async getResources() {
       return { memoryLimit: 0, projects: {} }
     },
+    async getDiskUsage() {
+      return { projects: {} }
+    },
+    async pruneProjectImages() {
+      return { freedBytes: 0, removed: 0 }
+    },
     async removeProject(name) {
       statuses.delete(name)
     },

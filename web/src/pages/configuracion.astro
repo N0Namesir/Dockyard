@@ -94,6 +94,39 @@ import ConfirmDialog from '../components/ConfirmDialog.astro'
             <p id="settings-error" role="alert" class="hidden text-sm text-red-700"></p>
           </div>
         </section>
+
+        <section
+          id="disk"
+          aria-labelledby="disk-title"
+          class="col-span-12 min-w-0 rounded-lg border border-slate-200 bg-white shadow-sm lg:col-span-8"
+        >
+          <div class="border-b border-slate-200 p-5">
+            <h2 id="disk-title" class="text-lg font-bold text-slate-900">Espacio en disco</h2>
+            <p class="mt-1 text-sm text-slate-600">Lo que ocupan en Docker los proyectos registrados. Lo demás que haya en Docker en esta PC no se muestra ni se toca.</p>
+          </div>
+
+          <div class="flex flex-col gap-5 p-5">
+            <p id="disk-total" class="text-sm text-slate-700">Midiendo…</p>
+            <div class="overflow-x-auto">
+              <table aria-label="Espacio en disco por proyecto" class="w-full border-collapse text-left text-sm">
+                <thead class="bg-slate-50 text-slate-600">
+                  <tr>
+                    <th class="px-3 py-2 font-semibold">Proyecto</th>
+                    <th class="px-3 py-2 text-right font-semibold">Imágenes</th>
+                    <th class="px-3 py-2 text-right font-semibold">Versiones viejas</th>
+                    <th class="px-3 py-2 text-right font-semibold">Datos</th>
+                  </tr>
+                </thead>
+                <tbody id="disk-rows" class="divide-y divide-slate-100"></tbody>
+              </table>
+            </div>
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
+              <button id="disk-clean" type="button" class="ui-button ui-button-primary" disabled>Liberar espacio</button>
+              <p id="disk-message" role="status" class="text-sm text-slate-700"></p>
+            </div>
+            <p class="text-sm text-slate-600">Liberar espacio borra solo las versiones viejas de las imágenes, que quedan al actualizar y reconstruir. Los datos (volúmenes de Docker) no se borran desde aquí: se borran con <strong>Reiniciar datos</strong> o <strong>Eliminar</strong>, en Proyectos.</p>
+          </div>
+        </section>
       </div>
     </main>
 
@@ -102,6 +135,7 @@ import ConfirmDialog from '../components/ConfirmDialog.astro'
 
     <script>
       import '../scripts/settings/main.ts'
+      import '../scripts/settings/disk.ts'
     </script>
   </body>
 </html>

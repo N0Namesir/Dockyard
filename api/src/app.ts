@@ -10,9 +10,11 @@ import {
   type ProjectRepository,
 } from './db/projects.ts'
 import { errorMessage, HttpError } from './errors.ts'
+import { diskRoutes } from './routes/disk.ts'
 import { projectRoutes } from './routes/projects.ts'
 import { settingsRoutes } from './routes/settings.ts'
 import { versionRoutes } from './routes/version.ts'
+import { createDiskService } from './services/disk.ts'
 import { createProjectService } from './services/projects.ts'
 import { createSelfUpdate } from './services/self-update.ts'
 import { createSettingsStore } from './services/settings.ts'
@@ -143,6 +145,7 @@ export async function buildApp(options: AppOptions = {}): Promise<FastifyInstanc
 
   const service = createProjectService(repository, core, options.checkWeb ?? createWebChecker())
   await app.register(projectRoutes(service), { prefix: '/api' })
+  await app.register(diskRoutes(createDiskService(repository, core, () => service.busy())), { prefix: '/api' })
   const settings = createSettingsStore(repository)
   const checkVersion = options.checkVersion ?? createVersionChecker({
     enabled: () => settings.get().updateCheck,

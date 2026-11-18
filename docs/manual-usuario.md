@@ -74,6 +74,16 @@ Debajo de **Encendido** también se indica si la página del proyecto contesta:
 
 Se comprueba solo el puerto que usa **Abrir**.
 
+## Espacio en disco
+
+Cada vez que un proyecto se actualiza y se enciende, Docker construye sus imágenes de nuevo y la versión anterior queda guardada. Con el tiempo eso ocupa varios GB.
+
+En **Configuración**, la sección **Espacio en disco** muestra cuánto ocupan los proyectos registrados en total y, en una tabla, cada uno: **Imágenes** (lo que construyó y usa), **Versiones viejas** (lo que se puede liberar) y **Datos** (sus volúmenes de Docker, como una base de datos). El que más ocupa aparece primero.
+
+**Liberar espacio** borra las versiones viejas de todos los proyectos registrados, después de confirmar cuánto se recuperará, y al final dice cuánto se liberó. No apaga ni reconstruye nada, y no toca los datos: esos se borran con **Reiniciar datos** o **Eliminar**, en Proyectos. Tampoco toca las imágenes, volúmenes ni nada más de Docker que no sea de un proyecto registrado. Si algún proyecto se está encendiendo, actualizando o registrando, pide esperar a que termine.
+
+Las imágenes que un proyecto descarga ya hechas (como `postgres` o `nginx`) no cuentan: pueden ser de varios proyectos o de otros programas de la PC.
+
 ## Instalar una versión nueva de Dockyard
 
 Cuando hay una versión nueva, aparece un aviso sobre la lista de proyectos. Solo avisa: Dockyard no cambia nada por su cuenta.
