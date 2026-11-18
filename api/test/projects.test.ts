@@ -879,6 +879,84 @@ test('las notas se guardan, se borran con texto vacío y tienen un límite', asy
   await app.close()
 })
 
+test('mientras registra, figura en /registrations con su etapa y reserva el nombre', async () => {
+  const { core } = fakeCore()
+  let finish: () => void = () => {}
+  const gate = new Promise<void>((resolve) => { finish = resolve })
+  const app = await testApp({
+    ...core,
+    async prepareProject(source, name, options) {
+      options?.onProgress?.({ stage: 'Descargando el repositorio', percent: 40 })
+      await gate
+      return core.prepareProject(source, name, options)
+    },
+  })
+  const payload = { team: 'E', name: 'Grande', repoUrl: 'https://github.com/e/grande' }
+  const pending = app.inject({ method: 'POST', url: '/api/projects', payload })
+  let list: { key: string; name: string; team: string; sourceType: string; stage: string; percent: number | null; error: string | null }[] = []
+  for (let i = 0; i < 50 && list.length === 0; i++) {
+    list = (await app.inject({ method: 'GET', url: '/api/registrations' })).json()
+    await new Promise((resolve) => setTimeout(resolve, 5))
+  }
+  assert.equal(list.length, 1)
+  const { key, ...rest } = list[0]!
+  assert.match(key, /^[0-9a-f-]{36}$/)
+  assert.deepEqual({ ...rest, elapsedSeconds: 0 }, { name: 'grande', team: 'E', sourceType: 'git', stage: 'Descargando el repositorio', percent: 40, error: null, elapsedSeconds: 0 })
+
+  const repeated = await app.inject({ method: 'POST', url: '/api/projects', payload: { ...payload, name: 'GRANDE' } })
+  assert.equal(repeated.statusCode, 409)
+  assert.match(repeated.json().message, /Ya se está registrando/)
+  assert.equal((await app.inject({ method: 'DELETE', url: `/api/registrations/${key}` })).statusCode, 409)
+
+  finish()
+  assert.equal((await pending).statusCode, 201)
+  assert.deepEqual((await app.inject({ method: 'GET', url: '/api/registrations' })).json(), [])
+  await app.close()
+})
+
+test('una falla sin nadie esperando queda en la lista hasta descartarla', async () => {
+  const { core } = fakeCore()
+  let fail = true
+  const repository = createProjectRepository(':memory:')
+  const service = createProjectService(repository, {
+    ...core,
+    async prepareProject(source, name, options) {
+      if (fail) throw new Error('No se pudo clonar el repositorio.')
+      return core.prepareProject(source, name, options)
+    },
+  }, async () => ({ state: 'ok', httpStatus: 200 }))
+  const input = { team: 'E', name: 'tienda', source: { type: 'git' as const, url: 'https://github.com/e/t' }, sourceLabel: 't' }
+
+  // Con la pestaña abierta, el error va en la respuesta y no queda en la lista.
+  await assert.rejects(service.register({ ...input, abandoned: () => false }), /No se pudo clonar/)
+  assert.deepEqual(service.registrations(), [])
+
+  await assert.rejects(service.register({ ...input, abandoned: () => true }), /No se pudo clonar/)
+  const [failed] = service.registrations()
+  assert.equal(failed?.error, 'No se pudo clonar el repositorio.')
+  assert.equal(failed?.percent, null)
+
+  // Reintentar con el mismo nombre reemplaza la falla.
+  fail = false
+  await service.register({ ...input, abandoned: () => true })
+  assert.deepEqual(service.registrations(), [])
+
+  fail = true
+  await assert.rejects(service.register({ ...input, name: 'otra', abandoned: () => true }))
+  const key = service.registrations()[0]!.key
+  service.dismissRegistration(key)
+  assert.deepEqual(service.registrations(), [])
+  assert.throws(() => service.dismissRegistration(key), /ya no está en la lista/)
+  repository.close()
+})
+
+test('descartar un registro valida la clave', async () => {
+  const app = await testApp()
+  assert.equal((await app.inject({ method: 'DELETE', url: '/api/registrations/no-es-clave' })).statusCode, 400)
+  assert.equal((await app.inject({ method: 'DELETE', url: '/api/registrations/00000000-0000-0000-0000-000000000000' })).statusCode, 404)
+  await app.close()
+})
+
 test('una petición repetida se une a la operación en curso', async () => {
   const fake = fakeCore()
   let calls = 0

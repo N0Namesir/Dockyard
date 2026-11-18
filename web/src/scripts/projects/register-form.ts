@@ -2,10 +2,11 @@
 import { api, messageOf } from './api.ts'
 import { hideGlobalMessage, page, showGlobalMessage } from './dom.ts'
 import { loadProjects } from './list.ts'
+import { loadRegistrations } from './registrations.ts'
+import { state } from './state.ts'
 import type { Project } from './types.ts'
 
 const form = document.querySelector<HTMLFormElement>('#register-form')!
-const button = document.querySelector<HTMLButtonElement>('#register-button')!
 const formError = document.querySelector<HTMLElement>('#form-error')!
 const gitField = document.querySelector<HTMLElement>('#git-field')!
 const zipField = document.querySelector<HTMLElement>('#zip-field')!
@@ -45,6 +46,29 @@ function requestFor(formData: FormData): RequestInit {
   return { method: 'POST', body: upload }
 }
 
+/** Vuelve a poner lo enviado si el registro falla y el docente no empezó a llenar otro. */
+function restore(formData: FormData, source: 'git' | 'zip'): boolean {
+  const untouched = ['team', 'name', 'repoUrl'].every((field) => !(form.elements.namedItem(field) as HTMLInputElement).value)
+    && !fileInput.files?.length
+  if (!untouched) return false
+  for (const field of ['team', 'name', 'repoUrl']) {
+    (form.elements.namedItem(field) as HTMLInputElement).value = String(formData.get(field) ?? '')
+  }
+  form.querySelector<HTMLInputElement>(`input[name="source"][value="${source}"]`)!.checked = true
+  const file = formData.get('file')
+  if (file instanceof File && file.size > 0) {
+    const transfer = new DataTransfer()
+    transfer.items.add(file)
+    fileInput.files = transfer.files
+  }
+  updateSourceFields()
+  return true
+}
+
+/**
+ * Envía el registro y deja el formulario libre enseguida: la descarga sigue en la API y su avance
+ * se ve en la lista. Se pueden registrar varios a la vez.
+ */
 async function submit(event: SubmitEvent): Promise<void> {
   event.preventDefault()
   formError.classList.add('hidden')
@@ -52,26 +76,35 @@ async function submit(event: SubmitEvent): Promise<void> {
   if (!form.reportValidity()) return
 
   const formData = new FormData(form)
-  button.disabled = true
-  button.textContent = 'Registrando…'
+  const source = selectedSource()
+  const request = requestFor(formData)
+  const name = String(formData.get('name') ?? '').trim()
+  form.reset()
+  updateSourceFields()
+  state.registering++
+  // Aparece en la lista en cuanto la API lo recibe (un ZIP, después de subirse).
+  setTimeout(() => void loadRegistrations(), 300)
   try {
-    const created = await api<Project>('/api/projects', requestFor(formData))
-    form.reset()
-    updateSourceFields()
+    const created = await api<Project>('/api/projects', request)
     page.searchInput.value = ''
     if (await loadProjects()) {
       if (created.warnings.length > 0) {
-        showGlobalMessage('El proyecto se registró, pero la revisión encontró avisos. Léelos en su fila antes de encenderlo.', 'warning')
+        showGlobalMessage(`${created.name} se registró, pero la revisión encontró avisos. Léelos en su fila antes de encenderlo.`, 'warning')
       } else {
-        showGlobalMessage('El proyecto se registró correctamente.', 'success')
+        showGlobalMessage(`${created.name} se registró correctamente.`, 'success')
       }
     }
   } catch (error) {
-    formError.textContent = messageOf(error, 'No se pudo registrar el proyecto.')
-    formError.classList.remove('hidden')
+    const message = messageOf(error, 'No se pudo registrar el proyecto.')
+    if (restore(formData, source)) {
+      formError.textContent = message
+      formError.classList.remove('hidden')
+    } else {
+      showGlobalMessage(`No se registró ${name}: ${message}`, 'error')
+    }
   } finally {
-    button.disabled = false
-    button.textContent = 'Registrar proyecto'
+    state.registering--
+    await loadRegistrations()
   }
 }
 

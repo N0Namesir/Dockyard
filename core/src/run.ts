@@ -49,7 +49,8 @@ export async function run(cmd: string, args: string[], opts: RunOptions = {}): P
       cwd: opts.cwd,
       timeout: timeoutMs,
       maxBuffer: 10 * 1024 * 1024,
-      env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
+      // git en inglés, sea cual sea el idioma de la PC: sus mensajes y su avance se reconocen por el texto.
+      env: { ...process.env, GIT_TERMINAL_PROMPT: '0', ...(cmd === 'git' ? { LC_ALL: 'C' } : {}) },
     })
     if (opts.onLine) {
       followLines(running.child.stdout, opts.onLine)

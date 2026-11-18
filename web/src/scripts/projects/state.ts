@@ -1,12 +1,16 @@
 // Estado de la página. Es una copia de lo que respondió la API más lo que el docente tiene
 // abierto; la fuente de verdad sigue siendo la API.
-import type { PortConflict, Project, ProjectAction, Resources } from './types.ts'
+import type { PortConflict, Project, ProjectAction, Registration, Resources } from './types.ts'
 
 export const state = {
   projects: [] as Project[],
   loading: true,
   loadFailed: false,
   resources: null as Resources | null,
+  /** Registros en curso y fallidos, según la API. */
+  registrations: [] as Registration[],
+  /** Registros que esta pestaña envió y aún no responden. */
+  registering: 0,
   /** Acción que el docente lanzó desde esta pestaña y aún no termina. */
   pendingActions: new Map<number, ProjectAction>(),
   /** Error de la última acción, por proyecto. */

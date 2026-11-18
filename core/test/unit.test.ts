@@ -12,7 +12,7 @@ import { cleanLine, createProgressTracker, stageOf } from '../src/progress.ts'
 import { composeWarnings, fileWarnings, secretsIn, sensitiveFileName, suspiciousEnvVars } from '../src/review.ts'
 import { parseBytes, resourcesFrom } from '../src/resources.ts'
 import { run } from '../src/run.ts'
-import { cloneRepo, updateProject, zipProblem } from '../src/sources.ts'
+import { cloneProgressOf, cloneRepo, updateProject, zipProblem } from '../src/sources.ts'
 import { getLatestVersion, isNewerVersion, latestVersionTag } from '../src/version.ts'
 import type { StartProgress } from '../src/types.ts'
 
@@ -399,6 +399,16 @@ describe('avance del encendido', () => {
   })
 })
 
+describe('avance del clonado', () => {
+  test('traduce las líneas de git y descarta las demás', () => {
+    assert.deepEqual(cloneProgressOf('Receiving objects:  45% (450/1000), 1.20 MiB | 2.00 MiB/s'), { stage: 'Descargando el repositorio', percent: 45 })
+    assert.deepEqual(cloneProgressOf('Resolving deltas: 100% (12/12), done.'), { stage: 'Procesando el repositorio', percent: 100 })
+    assert.deepEqual(cloneProgressOf('Updating files:   7% (3/40)'), { stage: 'Copiando los archivos', percent: 7 })
+    assert.equal(cloneProgressOf('remote: Counting objects: 100% (5/5), done.'), null)
+    assert.equal(cloneProgressOf("Cloning into '/projects/tienda'..."), null)
+  })
+})
+
 describe('actualizar desde el repositorio', () => {
   const COMPOSE = 'services:\n  web:\n    image: nginx:alpine\n'
   const IDENTITY = ['-c', 'user.name=Prueba', '-c', 'user.email=prueba@example.invalid']
@@ -439,6 +449,22 @@ describe('actualizar desde el repositorio', () => {
   after(() => {
     if (previousDir === undefined) delete process.env.PROJECTS_DIR
     else process.env.PROJECTS_DIR = previousDir
+  })
+
+  test('el clonado informa su avance línea por línea', async () => {
+    base = await mkdtemp(join(tmpdir(), 'dockyard-actualizar-'))
+    process.env.PROJECTS_DIR = join(base, 'projects')
+    origin = join(base, 'origen')
+    await mkdir(origin)
+    await inOrigin('init', '-q')
+    await commit('Primera', { 'compose.yaml': COMPOSE })
+    const stages = new Set<string>()
+    await cloneRepo(`file://${origin}`, join(projectsDir(), 'avance'), projectRepoDir('avance'), (line) => {
+      const progress = cloneProgressOf(line)
+      if (progress) stages.add(progress.stage)
+    })
+    assert.ok(stages.has('Descargando el repositorio'), [...stages].join(', '))
+    await rm(base, { recursive: true, force: true })
   })
 
   test('el repositorio queda fuera de la carpeta que ven los contenedores', async () => {

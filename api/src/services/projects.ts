@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import type { ProjectResources, ProjectSource, ProjectStatus, ResourceUsage, StartProgress } from '../core.ts'
 import type { ProjectRepository } from '../db/projects.ts'
 import { errorMessage, HttpError } from '../errors.ts'
@@ -6,6 +7,7 @@ import type {
   ProgressResponse,
   ProjectResponse,
   ProjectRow,
+  RegistrationResponse,
   ReplaceResponse,
   ResourcesResponse,
   ResumeResult,
@@ -19,6 +21,19 @@ export interface RegisterProjectInput {
   name: string
   source: ProjectSource
   sourceLabel: string
+  /** true si quien pidió el registro ya no espera la respuesta: una falla queda en la lista. */
+  abandoned?: () => boolean
+}
+
+interface Registration {
+  key: string
+  name: string
+  team: string
+  sourceType: ProjectSource['type']
+  stage: string
+  percent: number | null
+  error: string | null
+  startedAt: number
 }
 
 /** Puertos habituales de servicios que no son páginas: bases de datos, colas y cachés. */
@@ -97,6 +112,14 @@ export function createProjectService(
     const start = starts.get(id)
     if (!start) return null
     return { ...start.current, elapsedSeconds: Math.floor((Date.now() - start.startedAt) / 1000) }
+  }
+
+  // Registros en curso y los que fallaron sin nadie esperando, por clave. Solo en memoria.
+  const registrations = new Map<string, Registration>()
+
+  function registrationResponse(registration: Registration): RegistrationResponse {
+    const { startedAt, ...rest } = registration
+    return { ...rest, elapsedSeconds: Math.floor((Date.now() - startedAt) / 1000) }
   }
 
   let resourcesSample: { at: number; usage: Promise<ResourceUsage> } | null = null
@@ -245,6 +268,10 @@ export function createProjectService(
       return hydrate(requireProject(id))
     },
 
+    /**
+     * Descarga o descomprime el proyecto, lo revisa y lo guarda. Mientras tanto figura en
+     * registrations() con su etapa, para que la página lo muestre aunque se recargue.
+     */
     async register(input: RegisterProjectInput): Promise<ProjectResponse> {
       const normalizedName = core.normalizeProjectName(input.name)
       if (repository.findByName(normalizedName)) {
@@ -253,18 +280,72 @@ export function createProjectService(
           `Ya existe un proyecto con el nombre “${normalizedName}”. Usa otro nombre.`,
         )
       }
+      for (const [key, other] of registrations) {
+        if (other.name !== normalizedName) continue
+        if (other.error === null) {
+          throw new HttpError(409, `Ya se está registrando un proyecto con el nombre “${normalizedName}”. Espera a que termine.`)
+        }
+        // Volver a intentarlo reemplaza la falla anterior.
+        registrations.delete(key)
+      }
 
-      const prepared = await core.prepareProject(input.source, input.name)
-      const warnings = await core.reviewProject(prepared.dir, prepared.name)
-      const row = repository.insert({
-        name: prepared.name,
+      const registration: Registration = {
+        key: randomUUID(),
+        name: normalizedName,
         team: input.team,
         sourceType: input.source.type,
-        source: input.sourceLabel,
-        dir: prepared.dir,
-        warnings,
-      })
+        stage: 'Preparando',
+        percent: null,
+        error: null,
+        startedAt: Date.now(),
+      }
+      registrations.set(registration.key, registration)
+      let row: ProjectRow
+      try {
+        const prepared = await core.prepareProject(input.source, input.name, {
+          onProgress: ({ stage, percent }) => {
+            registration.stage = stage
+            registration.percent = percent
+          },
+        })
+        registration.stage = 'Revisando el proyecto'
+        registration.percent = null
+        const warnings = await core.reviewProject(prepared.dir, prepared.name)
+        row = repository.insert({
+          name: prepared.name,
+          team: input.team,
+          sourceType: input.source.type,
+          source: input.sourceLabel,
+          dir: prepared.dir,
+          warnings,
+        })
+      } catch (error) {
+        // Si la pestaña sigue abierta, ella muestra el error; si no, queda en la lista.
+        if (input.abandoned?.()) {
+          registration.error = errorMessage(error)
+          registration.percent = null
+        } else {
+          registrations.delete(registration.key)
+        }
+        throw error
+      }
+      registrations.delete(registration.key)
       return hydrate(row)
+    },
+
+    /** Registros en curso y fallidos sin descartar, el más reciente primero. */
+    registrations(): RegistrationResponse[] {
+      return [...registrations.values()]
+        .sort((a, b) => b.startedAt - a.startedAt)
+        .map(registrationResponse)
+    },
+
+    /** Quita de la lista un registro que falló. Uno en curso no se puede quitar. */
+    dismissRegistration(key: string): void {
+      const registration = registrations.get(key)
+      if (!registration) throw new HttpError(404, 'Ese registro ya no está en la lista.')
+      if (registration.error === null) throw new HttpError(409, 'El registro sigue en curso. Espera a que termine.')
+      registrations.delete(key)
     },
 
     /** Solo de los proyectos registrados: lo demás que corra en la PC no es asunto de Dockyard. */

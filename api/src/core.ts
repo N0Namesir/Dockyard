@@ -18,6 +18,8 @@ export {
 
 export type {
   PreparedProject,
+  PrepareOptions,
+  PrepareProgress,
   ProjectSource,
   ProjectState,
   ProjectStatus,

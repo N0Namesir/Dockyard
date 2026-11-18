@@ -420,7 +420,7 @@ describe('renameProject', () => {
 
   test('se niega si el proyecto guarda datos en volúmenes o el nombre nuevo ya existe', async () => {
     const name = uniqueName('con-volumen')
-    const other = uniqueName('ocupado')
+    const other = uniqueName('carpeta-ocupada')
     const compose = [
       'services:',
       '  web:',

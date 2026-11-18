@@ -1,5 +1,6 @@
 import type {
   PreparedProject,
+  PrepareOptions,
   ProjectSource,
   ProjectResources,
   ProjectStatus,
@@ -63,6 +64,23 @@ export interface ResourcesResponse {
   projects: Record<number, ProjectResources>
 }
 
+/**
+ * Un registro en curso, o uno que falló cuando ya nadie esperaba la respuesta (se cerró o recargó la
+ * pestaña). Solo vive en memoria.
+ */
+export interface RegistrationResponse {
+  key: string
+  name: string
+  team: string
+  sourceType: 'git' | 'zip'
+  stage: string
+  /** Porcentaje de la descarga del repositorio; null en las demás etapas. */
+  percent: number | null
+  /** Motivo de la falla; null mientras sigue en curso. */
+  error: string | null
+  elapsedSeconds: number
+}
+
 /** Lo que se volvió a encender al arrancar Dockyard. */
 export interface ResumeResult {
   started: string[]
@@ -92,7 +110,7 @@ export interface UpdateResponse {
 
 export interface CoreAdapter {
   normalizeProjectName(name: string): string
-  prepareProject(source: ProjectSource, name: string): Promise<PreparedProject>
+  prepareProject(source: ProjectSource, name: string, options?: PrepareOptions): Promise<PreparedProject>
   reviewProject(dir: string, name: string): Promise<string[]>
   updateProject(name: string): Promise<ProjectUpdate>
   replaceProjectZip(name: string, filePath: string): Promise<ZipReplacement>

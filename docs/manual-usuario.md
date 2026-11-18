@@ -20,6 +20,8 @@ En el panel **Registrar proyecto**, llena **Equipo** y **Nombre del proyecto**, 
 
 **Origen Archivo ZIP.** Elige el ZIP que te entregó el equipo, de 200 MB como máximo. Dockyard lo descomprime.
 
+Al presionar el botón, el formulario queda libre y el proyecto aparece arriba en la lista como **Registrando**, con lo que está haciendo y, al descargar de GitHub, el porcentaje. Puedes registrar otro mientras tanto, seguir usando Dockyard o cerrar la pestaña: el registro sigue. Cuando termina, aparece como un proyecto más. Si falla, el formulario vuelve a mostrar los datos con el motivo; si ya habías cerrado la pestaña, la fila dice **No se registró** con el motivo, y **Descartar** la quita.
+
 En los dos casos, el proyecto debe traer su archivo compose. Reparte entre los equipos la [Guía para estudiantes](guia-estudiantes.md) para evitar problemas. Toda la documentación se puede leer dentro de Dockyard, en la sección **Documentación**.
 
 ### Revisar antes de encender

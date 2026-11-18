@@ -39,7 +39,12 @@ const editBodySchema = Type.Object(
   { additionalProperties: false, minProperties: 1 },
 )
 
+const registrationParamsSchema = Type.Object({
+  key: Type.String({ pattern: '^[0-9a-f-]{36}$' }),
+})
+
 type ListQuery = Static<typeof listQuerySchema>
+type RegistrationParams = Static<typeof registrationParamsSchema>
 type EditBody = Static<typeof editBodySchema>
 type IdParams = Static<typeof idParamsSchema>
 type RepositoryBody = Static<typeof repositoryBodySchema>
@@ -163,7 +168,20 @@ export function projectRoutes(service: ProjectService): FastifyPluginAsync {
       async (request) => service.get(Number(request.params.id)),
     )
 
+    app.get('/registrations', async () => service.registrations())
+
+    app.delete<{ Params: RegistrationParams }>(
+      '/registrations/:key',
+      { schema: { params: registrationParamsSchema } },
+      async (request, reply) => {
+        service.dismissRegistration(request.params.key)
+        return reply.code(204).send()
+      },
+    )
+
     app.post('/projects', async (request, reply) => {
+      // Registrar sigue aunque se cierre la pestaña; si falla así, el motivo queda en /registrations.
+      const abandoned = () => request.raw.socket?.destroyed ?? false
       if (request.isMultipart()) {
         const temporaryDir = await mkdtemp(join(tmpdir(), 'dockyard-'))
         let project
@@ -174,6 +192,7 @@ export function projectRoutes(service: ProjectService): FastifyPluginAsync {
             name: input.name,
             source: { type: 'zip', filePath: input.filePath },
             sourceLabel: input.originalFilename,
+            abandoned,
           })
         } finally {
           await rm(temporaryDir, { recursive: true, force: true })
@@ -197,6 +216,7 @@ export function projectRoutes(service: ProjectService): FastifyPluginAsync {
         name,
         source: { type: 'git', url: repoUrl },
         sourceLabel: repoUrl,
+        abandoned,
       })
       return reply.code(201).send(project)
     })

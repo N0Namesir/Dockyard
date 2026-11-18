@@ -24,6 +24,18 @@ export interface Project {
   notes: string
 }
 
+/** Un registro en curso, o uno que falló sin una pestaña esperando la respuesta. */
+export interface Registration {
+  key: string
+  name: string
+  team: string
+  sourceType: 'git' | 'zip'
+  stage: string
+  percent: number | null
+  error: string | null
+  elapsedSeconds: number
+}
+
 export interface ProjectResources {
   cpuPercent: number
   memoryBytes: number

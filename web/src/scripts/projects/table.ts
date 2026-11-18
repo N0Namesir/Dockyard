@@ -2,15 +2,18 @@
 import { element, page } from './dom.ts'
 import { logsRow } from './rows/logs-row.ts'
 import { progressRow } from './rows/progress-row.ts'
+import { registrationRow } from './rows/registration-row.ts'
 import { projectRow } from './rows/project-row.ts'
 import { warningsRow } from './rows/warnings-row.ts'
 import { isStarting, state } from './state.ts'
-import type { RowHandlers } from './types.ts'
+import type { Registration, RowHandlers } from './types.ts'
 
 let handlers: RowHandlers | undefined
+let dismiss: ((registration: Registration) => void) | undefined
 
-export function setRowHandlers(value: RowHandlers): void {
+export function setRowHandlers(value: RowHandlers, dismissRegistration: (registration: Registration) => void): void {
   handlers = value
+  dismiss = dismissRegistration
 }
 
 function messageRow(text: string): HTMLTableRowElement {
@@ -43,7 +46,12 @@ export function render(): void {
     page.projectsBody.append(messageRow('No se pudo cargar la lista de proyectos.'))
     return
   }
+  // Los registros en curso van arriba y no dependen de la búsqueda: son pocos y duran poco.
+  for (const registration of state.registrations) {
+    page.projectsBody.append(registrationRow(registration, dismiss!))
+  }
   if (projects.length === 0) {
+    if (state.registrations.length > 0) return
     page.projectsBody.append(messageRow(page.searchInput.value.trim()
       ? 'No se encontraron proyectos con esa búsqueda.'
       : 'Todavía no hay proyectos registrados.'))

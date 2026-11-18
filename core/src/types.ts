@@ -44,6 +44,16 @@ export interface StartOptions {
   build?: boolean
 }
 
+/** Avance de prepareProject: etapa en español y, al descargar un repositorio, el porcentaje. */
+export interface PrepareProgress {
+  stage: string
+  percent: number | null
+}
+
+export interface PrepareOptions {
+  onProgress?: (progress: PrepareProgress) => void
+}
+
 export interface ProjectUpdate {
   /** Carpeta que contiene el archivo compose, que pudo cambiar. */
   dir: string

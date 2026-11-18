@@ -51,7 +51,7 @@ Respeta esas fronteras aunque el responsable sea el mismo: la API no ejecuta Doc
 
 ```ts
 normalizeProjectName(name: string): string
-prepareProject(source: ProjectSource, name: string): Promise<PreparedProject>   // { dir, name }
+prepareProject(source: ProjectSource, name: string, options?: PrepareOptions): Promise<PreparedProject>   // { dir, name }
 startProject(dir: string, name: string, options?: StartOptions): Promise<ProjectStatus>   // { state, ports, failedServices? }
 stopProject(dir: string, name: string): Promise<ProjectStatus>
 getProjectStatus(name: string): Promise<ProjectStatus>
@@ -66,7 +66,8 @@ reviewProject(dir: string, name: string): Promise<string[]>                     
 updateProject(name: string): Promise<ProjectUpdate>                             // { dir, changed, commit, summary }
 replaceProjectZip(name: string, filePath: string): Promise<ZipReplacement>     // { dir, leftover }: código nuevo desde un ZIP
 renameProject(name: string, newName: string): Promise<PreparedProject>         // nombre de compose y carpetas; apagado y sin volúmenes
-// StartOptions = { onProgress?, build? }
+// StartOptions = { onProgress?, build? }; PrepareOptions = { onProgress? }
+// PrepareProgress = { stage, percent }: etapa del registro y porcentaje de la descarga de git (o null)
 // StartProgress = { stage, lines }: etapa en español y últimas líneas de Docker
 ```
 
@@ -84,6 +85,7 @@ renameProject(name: string, newName: string): Promise<PreparedProject>         /
 - `removeProject` usa `down -v` y borra la carpeta. Si quedan archivos de root, lanza el comando `sudo` a ejecutar.
 - Un contenedor en estado `restarting` cuenta como encendido para poder apagarlo. Si tras `up -d` ninguno queda `running`, `startProject` los detiene y lanza su registro.
 - Si `prepareProject` falla a mitad de camino, borra la carpeta que creó. El ZIP lo borra la API, no el núcleo.
+- `prepareProject` avisa su etapa con `onProgress`; el porcentaje sale de `git clone --progress`. `run()` ejecuta git con `LC_ALL=C` para leer su salida en inglés.
 - El núcleo traduce la salida de Docker a etapas (`core/src/progress.ts`). La API guarda el avance solo en memoria y la interfaz solo lo muestra. Si Docker cambia su formato, deja de cambiar la etapa, pero encender sigue funcionando.
 - El repositorio de un proyecto de GitHub vive en `projects/.repos/<nombre>`, nunca dentro de su carpeta: los contenedores suelen montarla y un hook o una configuración plantados en `.git` se ejecutarían al actualizar. Git se llama siempre con `--git-dir` y `--work-tree`.
 - `getResources` expresa la CPU sobre toda la PC, no por núcleo, y tarda unos 2 s porque Docker toma una muestra. Devuelve todos los proyectos de compose; la API deja solo los registrados y comparte la muestra 5 s.
@@ -96,7 +98,9 @@ renameProject(name: string, newName: string): Promise<PreparedProject>         /
 
 ### Rutas de la API (contrato con `web/`)
 
-`GET /api/projects?q=`, `GET /api/projects/resources`, `POST /api/projects`, `GET /api/projects/:id`, `PATCH /api/projects/:id` (`team`, `name`, `notes`), `POST /api/projects/:id/start`, `POST /api/projects/:id/stop`, `POST /api/projects/stop-all`, `POST /api/projects/:id/update`, `POST /api/projects/:id/replace` (multipart, campo `file`), `GET /api/projects/:id/logs`, `GET /api/projects/:id/progress`, `DELETE /api/projects/:id`, `GET /api/version`.
+`GET /api/projects?q=`, `GET /api/projects/resources`, `POST /api/projects`, `GET /api/projects/:id`, `PATCH /api/projects/:id` (`team`, `name`, `notes`), `POST /api/projects/:id/start`, `POST /api/projects/:id/stop`, `POST /api/projects/stop-all`, `POST /api/projects/:id/update`, `POST /api/projects/:id/replace` (multipart, campo `file`), `GET /api/projects/:id/logs`, `GET /api/projects/:id/progress`, `DELETE /api/projects/:id`, `GET /api/registrations`, `DELETE /api/registrations/:key`, `GET /api/version`.
+
+`POST /api/projects` sigue respondiendo al terminar, pero el registro no se corta si se cierra la pestaña. Mientras corre, figura en `GET /api/registrations` con su etapa (solo en memoria). Si falla sin nadie esperando la respuesta, queda ahí con el motivo hasta que se descarta con `DELETE /api/registrations/:key`.
 
 Al arrancar, `server.ts` llama a `service.resume()`: vuelve a encender los proyectos con `keep_running = 1` que estén apagados (el docente los dejó encendidos y la PC o Docker se reiniciaron). Encender marca la columna y apagar la desmarca; ninguna ruta la cambia directamente.
 

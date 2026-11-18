@@ -5,7 +5,7 @@ import { assertProjectNameFree } from './docker.ts'
 import { assertNormalizedName, normalizeProjectName } from './name.ts'
 import { findComposeFile, projectRepoDir, projectsDir } from './paths.ts'
 import { CommandError, run } from './run.ts'
-import type { PreparedProject, ProjectSource, ProjectUpdate, ZipReplacement } from './types.ts'
+import type { PreparedProject, PrepareOptions, PrepareProgress, ProjectSource, ProjectUpdate, ZipReplacement } from './types.ts'
 
 const FETCH_TIMEOUT = 5 * 60_000
 /** Límites al descomprimir: el ZIP subido no pasa de 200 MB, pero puede ocupar mucho más al abrirse. */
@@ -16,9 +16,17 @@ const MAX_ZIP_ENTRIES = 100_000
  * Crea projects/<nombre>, obtiene el código desde un repositorio o un ZIP y devuelve la carpeta
  * que contiene el archivo compose. Si algo falla a mitad de camino, borra la carpeta que creó.
  */
-export async function prepareProject(source: ProjectSource, name: string): Promise<PreparedProject> {
+export async function prepareProject(source: ProjectSource, name: string, options: PrepareOptions = {}): Promise<PreparedProject> {
   const normalized = normalizeProjectName(name)
   validateSource(source)
+  // Solo avisa cuando algo cambia: git escribe su avance muchas veces por segundo.
+  let last = ''
+  const report = (progress: PrepareProgress) => {
+    const key = `${progress.stage}|${progress.percent}`
+    if (key === last) return
+    last = key
+    options.onProgress?.(progress)
+  }
 
   const root = projectsDir()
   await mkdir(root, { recursive: true })
@@ -34,10 +42,16 @@ export async function prepareProject(source: ProjectSource, name: string): Promi
     await assertProjectNameFree(normalized)
 
     if (source.type === 'git') {
-      await cloneRepo(source.url, target, projectRepoDir(normalized))
+      report({ stage: 'Conectando con GitHub', percent: null })
+      await cloneRepo(source.url, target, projectRepoDir(normalized), (line) => {
+        const progress = cloneProgressOf(line)
+        if (progress) report(progress)
+      })
     } else {
+      report({ stage: 'Descomprimiendo el ZIP', percent: null })
       await extractZip(source.filePath, target)
     }
+    report({ stage: 'Buscando el archivo compose', percent: null })
 
     const location = await findComposeFile(target)
     if (!location) {
@@ -72,13 +86,29 @@ function validateSource(source: ProjectSource): void {
   }
 }
 
+const CLONE_STAGES: [RegExp, string][] = [
+  [/Receiving objects:\s+(\d+)%/, 'Descargando el repositorio'],
+  [/Resolving deltas:\s+(\d+)%/, 'Procesando el repositorio'],
+  [/Updating files:\s+(\d+)%/, 'Copiando los archivos'],
+]
+
+/** Traduce una línea del avance de git clone a una etapa con porcentaje, o null si no es de avance. */
+export function cloneProgressOf(line: string): PrepareProgress | null {
+  for (const [pattern, stage] of CLONE_STAGES) {
+    const match = pattern.exec(line)
+    if (match) return { stage, percent: Number(match[1]) }
+  }
+  return null
+}
+
 /** Clona dejando el repositorio en gitDir, fuera de la carpeta del proyecto (ver projectRepoDir). */
-export async function cloneRepo(url: string, target: string, gitDir: string): Promise<void> {
+export async function cloneRepo(url: string, target: string, gitDir: string, onLine?: (line: string) => void): Promise<void> {
   await mkdir(dirname(gitDir), { recursive: true })
   await rm(gitDir, { recursive: true, force: true })
   try {
     // "--" evita que una URL que empiece con "-" se interprete como opción.
-    await run('git', ['clone', '--depth', '1', '--separate-git-dir', gitDir, '--', url, target], { timeoutMs: FETCH_TIMEOUT })
+    // --progress: sin una terminal, git solo informa su avance si se lo piden.
+    await run('git', ['clone', '--progress', '--depth', '1', '--separate-git-dir', gitDir, '--', url, target], { timeoutMs: FETCH_TIMEOUT, onLine })
     await rm(join(target, '.git'), { force: true })
   } catch (err) {
     if (err instanceof CommandError) {
@@ -86,7 +116,9 @@ export async function cloneRepo(url: string, target: string, gitDir: string): Pr
       if (/could not read Username|terminal prompts disabled|Authentication failed|not found/i.test(err.stderr)) {
         throw new Error('No se pudo clonar el repositorio. Verifica que la URL sea correcta y que el repositorio sea público: los repositorios privados no se admiten en esta versión.')
       }
-      throw new Error(`No se pudo clonar el repositorio: ${err.stderr.split('\n').slice(-3).join(' ')}`)
+      // Sin las líneas de avance, que con --progress llenan la salida de errores.
+      const detail = err.stderr.split(/[\r\n]+/).filter((line) => !/:\s+\d+%/.test(line)).slice(-3).join(' ')
+      throw new Error(`No se pudo clonar el repositorio: ${detail}`)
     }
     throw err
   }
