@@ -16,6 +16,7 @@ Esta política cubre a Dockyard, no a los proyectos alojados en ella.
 | Ficha del proyecto: nombre para mostrar, año, descripción e indicaciones del equipo | Base de datos en `data/` | Hasta cambiarlas o eliminar el proyecto |
 | **Datos de contacto de estudiantes** que escribas en la ficha: nombre y, si los pones, correo y teléfono | Base de datos en `data/` | Hasta quitarlos de la ficha o eliminar el proyecto |
 | Imagen del proyecto que subas (PNG, JPEG o WebP) | Carpeta `data/imagenes/` | Hasta quitarla o eliminar el proyecto |
+| Fichas importadas de proyectos de ZIP que esperan su archivo, con sus contactos, notas e imagen | Base de datos en `data/` | Hasta registrarlas con su ZIP o descartarlas en Configuración |
 | Si dejaste el proyecto encendido, para volver a encenderlo al reiniciar la PC | Base de datos en `data/` | Hasta eliminar el proyecto |
 | Ajustes de Configuración, como buscar versiones nuevas automáticamente | Base de datos en `data/` | Hasta cambiarlos |
 | Salida de la última actualización hecha desde Configuración | `data/actualizacion.log` y `data/actualizacion.estado` | Hasta la siguiente actualización desde Configuración |
@@ -28,6 +29,10 @@ Esta política cubre a Dockyard, no a los proyectos alojados en ella.
 Nada de esto se envía a los autores de Dockyard ni sale de la PC. La revisión al registrar también ocurre solo en la PC.
 
 Los contactos de la ficha son datos personales de los estudiantes. Son opcionales: guarda solo los que necesites para comunicarte con el equipo, y trátalos como cualquier otro dato del curso. Para el campo Equipo, usa un nombre como "Equipo 3" en lugar de nombres de estudiantes. Una imagen puede mostrar datos personales si es una captura de pantalla: revisa qué contiene antes de subirla.
+
+## La lista exportada
+
+**Exportar lista**, en Configuración, crea un archivo con las fichas de todos los proyectos, incluidos **los datos de contacto de los estudiantes**, tus notas y las imágenes. Ese archivo sale de Dockyard y queda en tus manos: Dockyard no lo envía a ningún lado, pero ya no controla dónde se guarda ni quién lo ve. Guárdalo en un lugar seguro, no lo compartas y bórralo cuando ya no lo necesites.
 
 ## Cuándo se conecta a internet
 

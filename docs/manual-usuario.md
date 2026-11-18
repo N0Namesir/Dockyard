@@ -119,6 +119,20 @@ En **Configuración**, la sección **Espacio en disco** muestra cuánto ocupan l
 
 Las imágenes que un proyecto descarga ya hechas (como `postgres` o `nginx`) no cuentan: pueden ser de varios proyectos o de otros programas de la PC.
 
+## Respaldo: pasar los proyectos a otra PC
+
+En **Configuración**, la sección **Respaldo** sirve para llevar la lista de proyectos a otra PC o recuperarla tras reinstalar Dockyard.
+
+**Exportar lista** descarga un archivo `dockyard-proyectos-<fecha>.json` con la ficha de cada proyecto: nombre, nombre para mostrar, equipo, año, origen (la URL de GitHub o el nombre del ZIP), descripción, indicaciones, contactos, tus notas y la imagen. No lleva el código ni los datos de Docker (como una base de datos), ni los avisos de la revisión, que se calculan de nuevo. **El archivo lleva los datos de contacto de los estudiantes**: guárdalo en un lugar seguro, no lo compartas y bórralo cuando ya no lo necesites.
+
+**Importar lista**: elige ese archivo. Antes de cambiar nada, Dockyard muestra qué pasará con cada proyecto:
+
+- **Se registra desde GitHub, con su ficha:** se descarga de nuevo, de a uno, como en **Varios**, y su avance se ve en Proyectos.
+- **Necesita su ZIP:** el código de un ZIP no viaja en la lista. Queda en **Esperan su ZIP**, debajo, con su ficha guardada; pulsa **Elegir ZIP y registrar** cuando tengas el archivo. **Descartar** borra la ficha importada (sigue en el archivo).
+- **Se omite:** ya hay un proyecto con ese nombre. Dockyard nunca sobrescribe un proyecto.
+
+Presiona **Importar** para aplicarlo. Puedes importar el mismo archivo otra vez sin que se repita nada.
+
 ## Instalar una versión nueva de Dockyard
 
 Cuando hay una versión nueva, aparece un aviso sobre la lista de proyectos. Solo avisa: Dockyard no cambia nada por su cuenta.

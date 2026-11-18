@@ -365,3 +365,42 @@ Entorno de la sesión: Node 24.22 (`/opt/node24`), Docker 29.10 levantado dentro
   - `PortInUse` (de `portsInUse`) ganó el campo `host`, para que la lista (`docker ps`) también sepa en qué dirección se publicó cada puerto.
 - **Pruebas:** `build`, `typecheck` y `npm test` bien (85 + 82; nuevas: las formas del mensaje de Docker con la salida real de Docker 29.10, qué puertos son solo de esta PC, el comprobador dentro y fuera del contenedor, y que la API le pasa esos puertos). `test:docker`: prueba nueva con un servidor de Node ocupando el puerto 8084 (mensaje en español, nada queda encendido) y, ya libre, `loopbackPorts: [8085]` igual por `getProjectStatus` y por `getProjectStatuses`. `test:ui` bien (33 y 1 omitida, con una nueva para el aviso).
 - **Pendientes y riesgos:** si Docker cambia el texto del error, vuelve a llegar el mensaje de Docker en inglés. La red del contenedor de Dockyard no se tocó, como pide el plan.
+
+### 7. Exportar e importar la lista de proyectos
+
+- **Estado:** terminada.
+- **Commit:** ver la lista de commits al final.
+- **Decisiones que se apartaron del plan:**
+  - La vista previa y la aplicación son dos rutas: `POST /api/import/preview` (no cambia nada) y `POST /api/import`, las dos con el mismo archivo. El plan nombraba solo `POST /api/import`.
+  - Para «se pueden registrar después con su archivo, conservando la ficha importada», las fichas de ZIP se guardan en una tabla nueva, `pending_imports`, y se registran con `POST /api/import/pending/:name` (multipart) o se descartan con `DELETE`. Así sobreviven a cerrar la pestaña y a reiniciar Dockyard. Están en Configuración > Respaldo, «Esperan su ZIP».
+  - El archivo lleva también `zipName` (el nombre del ZIP que se subió) como referencia para el docente.
+  - `POST /api/import*` acepta hasta 100 MB (`bodyLimit` por ruta), por las imágenes en base64; el resto de la API sigue con 1 MB.
+  - Además de los nombres que ya existen, se omiten los que se están registrando, los que ya esperan su ZIP y los repetidos dentro del archivo, para poder importar el mismo archivo dos veces sin duplicar nada.
+  - Una imagen que no es PNG, JPEG o WebP por su firma se descarta; el resto de la ficha sí se importa.
+  - Los esquemas compartidos de la ficha (año, nombre para mostrar, contactos y límites) pasaron a `api/src/routes/schemas.ts`.
+- **Pruebas:** `build`, `typecheck` y `npm test` bien (85 + 86; nuevas en `api/test/backup.test.ts`: exportar con cada campo y la imagen; vista previa sin cambios; aplicar con registro por la cola con toda la ficha, ZIP pendiente y omitidos; importar dos veces; registrar y descartar un pendiente; archivos inválidos; un cuerpo de más de 1 MB). `test:ui` bien (35 y 1 omitida; nuevas: exportar, vista previa, importar, registrar un pendiente eligiendo su ZIP, y un archivo que no es JSON).
+- **Pendientes y riesgos:** el archivo exportado lleva datos personales de estudiantes; la interfaz y `docs/privacidad.md` lo avisan, pero no se cifra.
+
+## Resumen final
+
+Las 7 funciones quedaron terminadas, cada una en su commit, en este orden:
+
+1. `1d6dd54` Reiniciar los datos de un proyecto sin eliminarlo
+2. `edb5964` Espacio en disco: ver lo que ocupa cada proyecto y liberar versiones viejas
+3. `a13f997` Ficha del proyecto: nombre para mostrar, año, descripción, contactos e imagen
+4. `1d93d51` Vista en cuadrícula o tabla y carpetas por año
+5. `601a296` Registrar varios proyectos a la vez
+6. `e74cce1` Mensajes claros sobre puertos
+7. El commit «Exportar e importar la lista de proyectos», el último de la rama (incluye este resumen).
+
+No se publicó ninguna versión ni se ejecutaron `npm version`, `install.sh`, `update.sh` ni `scripts/publicar-release.sh`.
+
+**Pruebas al final:** `npm run build`, `npm run typecheck` y `npm test` (85 del núcleo y 86 de la API) bien. `npm run test:ui -w web`: 35 bien y 1 omitida (la de capturas, que solo corre con `UI_SCREENSHOTS`), con Chromium 1243 en lugar del 1255 que pide el proyecto (ver «Entorno de la sesión» arriba). `npm run test:docker -w core`: ver la línea siguiente.
+
+**Conviene revisar primero:**
+
+1. **Ficha y migración de la base (función 3).** Agrega siete columnas a `projects` con migración; conviene probarla con la `data/app.db` real antes de publicar (respaldarla primero). También reemplaza el diálogo rápido de editar por la página `/proyecto/`.
+2. **Espacio en disco (función 2).** Revisar en la PC del usuario qué almacén de imágenes usa Docker (`docker info | grep -i storage`): con el de containerd no hay versiones viejas que liberar, y los 15,5 GB recuperables están sobre todo en la caché de construcción, que esta función no toca a propósito.
+3. **Cola de registros (funciones 5 y 7).** Vive en memoria: `update.sh` desde la terminal a mitad de una tanda pierde los que estaban en espera.
+4. **Carpetas por año (función 4).** Al abrir Proyectos ahora se ve el año más reciente, no todos; «Apagar todos» sigue apagando todo.
+5. **Privacidad.** Contactos de estudiantes en la base, imágenes en `data/imagenes/` y el archivo exportado: revisar el texto de `docs/privacidad.md`.

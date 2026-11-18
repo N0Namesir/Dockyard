@@ -127,6 +127,62 @@ import ConfirmDialog from '../components/ConfirmDialog.astro'
             <p class="text-sm text-slate-600">Liberar espacio borra solo las versiones viejas de las imágenes, que quedan al actualizar y reconstruir. Los datos (volúmenes de Docker) no se borran desde aquí: se borran con <strong>Reiniciar datos</strong> o <strong>Eliminar</strong>, en Proyectos.</p>
           </div>
         </section>
+
+        <section
+          id="backup"
+          aria-labelledby="backup-title"
+          class="col-span-12 min-w-0 rounded-lg border border-slate-200 bg-white shadow-sm lg:col-span-8"
+        >
+          <div class="border-b border-slate-200 p-5">
+            <h2 id="backup-title" class="text-lg font-bold text-slate-900">Respaldo</h2>
+            <p class="mt-1 text-sm text-slate-600">Para pasar los proyectos a otra PC o recuperarlos tras reinstalar. Solo viajan las fichas: el código de GitHub se vuelve a descargar, y los ZIP se eligen de nuevo.</p>
+          </div>
+
+          <div class="flex flex-col gap-8 p-5">
+            <div class="flex flex-col gap-3">
+              <h3 class="font-bold text-slate-900">Exportar</h3>
+              <a id="export-list" href="/api/export" download class="ui-button ui-button-primary self-start">Exportar lista</a>
+              <p class="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                El archivo lleva las fichas completas: <strong>los datos de contacto de los estudiantes</strong>, tus notas y las imágenes. Guárdalo en un lugar seguro, no lo compartas y bórralo cuando ya no lo necesites.
+              </p>
+            </div>
+
+            <div class="flex flex-col gap-3 border-t border-slate-200 pt-6">
+              <h3 class="font-bold text-slate-900">Importar</h3>
+              <label class="block">
+                <span class="mb-1.5 block text-sm font-semibold text-slate-700">Lista exportada por Dockyard (.json)</span>
+                <input
+                  id="import-file"
+                  type="file"
+                  accept=".json,application/json"
+                  class="block w-full cursor-pointer rounded-md border border-slate-300 text-sm text-slate-500 file:mr-3 file:border-0 file:bg-slate-100 file:px-3 file:py-2.5 file:font-semibold file:text-slate-700 hover:file:bg-slate-200"
+                />
+              </label>
+              <p class="text-sm text-slate-600">Primero ves qué pasará con cada proyecto. Nunca se sobrescribe uno que ya existe.</p>
+              <div id="import-preview-box" hidden class="overflow-x-auto">
+                <table aria-label="Vista previa de la importación" class="w-full border-collapse text-left text-sm">
+                  <thead class="bg-slate-50 text-slate-600">
+                    <tr>
+                      <th class="px-3 py-2 font-semibold">Proyecto</th>
+                      <th class="px-3 py-2 font-semibold">Equipo</th>
+                      <th class="px-3 py-2 font-semibold">Año</th>
+                      <th class="px-3 py-2 font-semibold">Qué pasará</th>
+                    </tr>
+                  </thead>
+                  <tbody id="import-preview" class="divide-y divide-slate-100"></tbody>
+                </table>
+              </div>
+              <button id="import-apply" type="button" hidden class="ui-button ui-button-primary self-start">Importar</button>
+              <p id="import-message" role="status" class="text-sm text-slate-700"></p>
+            </div>
+
+            <div id="pending-box" hidden class="flex flex-col gap-3 border-t border-slate-200 pt-6">
+              <h3 class="font-bold text-slate-900">Esperan su ZIP</h3>
+              <p class="text-sm text-slate-600">Proyectos importados que venían de un ZIP. Elige el ZIP de cada uno para registrarlo con su ficha.</p>
+              <ul id="pending-list" class="flex flex-col gap-3"></ul>
+            </div>
+          </div>
+        </section>
       </div>
     </main>
 
@@ -136,6 +192,7 @@ import ConfirmDialog from '../components/ConfirmDialog.astro'
     <script>
       import '../scripts/settings/main.ts'
       import '../scripts/settings/disk.ts'
+      import '../scripts/settings/backup.ts'
     </script>
   </body>
 </html>

@@ -10,16 +10,18 @@ import {
   type ProjectRepository,
 } from './db/projects.ts'
 import { errorMessage, HttpError } from './errors.ts'
+import { backupRoutes } from './routes/backup.ts'
 import { diskRoutes } from './routes/disk.ts'
 import { projectRoutes } from './routes/projects.ts'
 import { settingsRoutes } from './routes/settings.ts'
 import { versionRoutes } from './routes/version.ts'
+import { createBackupService } from './services/backup.ts'
 import { createDiskService } from './services/disk.ts'
 import { createImageStore } from './services/images.ts'
 import { createProjectService } from './services/projects.ts'
 import { createSelfUpdate } from './services/self-update.ts'
 import { createSettingsStore } from './services/settings.ts'
-import { createVersionChecker, type CheckVersion } from './services/version.ts'
+import { createVersionChecker, installedVersion, type CheckVersion } from './services/version.ts'
 import { createWebChecker, type CheckWeb } from './services/web-check.ts'
 import type { CoreAdapter } from './types.ts'
 
@@ -149,6 +151,7 @@ export async function buildApp(options: AppOptions = {}): Promise<FastifyInstanc
   const service = createProjectService(repository, core, options.checkWeb ?? createWebChecker(), images)
   await app.register(projectRoutes(service), { prefix: '/api' })
   await app.register(diskRoutes(createDiskService(repository, core, () => service.busy())), { prefix: '/api' })
+  await app.register(backupRoutes(createBackupService(repository, service, images, installedVersion)), { prefix: '/api' })
   const settings = createSettingsStore(repository)
   const checkVersion = options.checkVersion ?? createVersionChecker({
     enabled: () => settings.get().updateCheck,

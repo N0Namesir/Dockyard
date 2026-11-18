@@ -28,6 +28,12 @@ const schema = `
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
   ) STRICT;
+  -- Fichas importadas de proyectos de ZIP: esperan que el docente elija su archivo.
+  CREATE TABLE IF NOT EXISTS pending_imports (
+    name TEXT PRIMARY KEY,
+    data TEXT NOT NULL,
+    created_at TEXT NOT NULL
+  ) STRICT;
 `
 
 const COLUMNS = 'id, name, team, source_type, source, dir, created_at, warnings, needs_build, keep_running, notes, display_name, year, description, instructions, contacts, image, image_version'
@@ -75,6 +81,11 @@ export interface ProjectRepository {
   /** Si el docente lo dejó encendido: Dockyard lo vuelve a encender al arrancar. */
   setKeepRunning(id: number, keepRunning: boolean): void
   delete(id: number): void
+  /** Fichas importadas que esperan su ZIP, como JSON, la más antigua primero. */
+  listPending(): { name: string; data: string }[]
+  getPending(name: string): string | undefined
+  savePending(name: string, data: string): void
+  deletePending(name: string): void
   /** Ajuste de Configuración; undefined si el docente nunca lo cambió. */
   getSetting(key: string): string | undefined
   setSetting(key: string, value: string): void
@@ -194,6 +205,10 @@ export function createProjectRepository(
   const rename = db.prepare('UPDATE projects SET name = ?, dir = ?, needs_build = 1 WHERE id = ?')
   const keepRunning = db.prepare('UPDATE projects SET keep_running = ? WHERE id = ?')
   const remove = db.prepare('DELETE FROM projects WHERE id = ?')
+  const pendingAll = db.prepare('SELECT name, data FROM pending_imports ORDER BY created_at, name')
+  const pendingOne = db.prepare('SELECT data FROM pending_imports WHERE name = ?')
+  const pendingSave = db.prepare('INSERT INTO pending_imports (name, data, created_at) VALUES (?, ?, ?) ON CONFLICT (name) DO UPDATE SET data = excluded.data')
+  const pendingDelete = db.prepare('DELETE FROM pending_imports WHERE name = ?')
   const readSetting = db.prepare('SELECT value FROM settings WHERE key = ?')
   const writeSetting = db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value')
 
@@ -282,6 +297,22 @@ export function createProjectRepository(
 
     delete(id) {
       remove.run(id)
+    },
+
+    listPending() {
+      return (pendingAll.all() as unknown as { name: string; data: string }[]).map(({ name, data }) => ({ name, data }))
+    },
+
+    getPending(name) {
+      return (pendingOne.get(name) as { data: string } | undefined)?.data
+    },
+
+    savePending(name, data) {
+      pendingSave.run(name, data, new Date().toISOString())
+    },
+
+    deletePending(name) {
+      pendingDelete.run(name)
     },
 
     getSetting(key) {

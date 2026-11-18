@@ -10,26 +10,13 @@ import type { FastifyPluginAsync, FastifyRequest } from 'fastify'
 import { HttpError } from '../errors.ts'
 import { IMAGE_MAX_BYTES } from '../services/images.ts'
 import { DISPLAY_NAME_MAX_LENGTH, type ProjectService } from '../services/projects.ts'
+import { CONTACTS_MAX, contactSchema, DESCRIPTION_MAX_LENGTH, displayNameSchema, INSTRUCTIONS_MAX_LENGTH, NOTES_MAX_LENGTH, YEAR, yearSchema } from './schemas.ts'
 
 const listQuerySchema = Type.Object({
   q: Type.Optional(Type.String({ maxLength: 200 })),
   /** Carpeta: un año o «todos». */
   year: Type.Optional(Type.String({ pattern: '^(\\d{4}|todos)$' })),
 })
-
-const YEAR = { minimum: 2000, maximum: 2100 }
-const displayNameSchema = Type.String({ minLength: 1, maxLength: DISPLAY_NAME_MAX_LENGTH })
-const yearSchema = Type.Integer(YEAR)
-
-const contactSchema = Type.Object(
-  {
-    name: Type.String({ minLength: 1, maxLength: 80 }),
-    // Un correo simple, algo@algo.algo, o nada: un campo vacío no se guarda. La interfaz lo convierte en mailto:.
-    email: Type.Optional(Type.String({ maxLength: 254, pattern: '^\\s*([^\\s@]+@[^\\s@]+\\.[^\\s@]+)?\\s*$' })),
-    phone: Type.Optional(Type.String({ maxLength: 30 })),
-  },
-  { additionalProperties: false },
-)
 
 const idParamsSchema = Type.Object({
   id: Type.String({ pattern: '^[1-9][0-9]*$' }),
@@ -67,11 +54,6 @@ const batchBodySchema = Type.Object(
   { additionalProperties: false },
 )
 
-const NOTES_MAX_LENGTH = 2000
-const DESCRIPTION_MAX_LENGTH = 2000
-const INSTRUCTIONS_MAX_LENGTH = 4000
-const CONTACTS_MAX = 8
-
 const editBodySchema = Type.Object(
   {
     team: Type.Optional(Type.String({ minLength: 1, maxLength: 120 })),
@@ -108,14 +90,14 @@ interface MultipartProject {
   originalFilename: string
 }
 
-function requiredText(value: unknown, label: string): string {
+export function requiredText(value: unknown, label: string): string {
   if (typeof value !== 'string' || !value.trim()) {
     throw new HttpError(400, `Falta ${label}.`)
   }
   return value.trim()
 }
 
-function validateRepositoryUrl(value: string): string {
+export function validateRepositoryUrl(value: string): string {
   let url: URL
   try {
     url = new URL(value)
@@ -146,7 +128,7 @@ interface MultipartZip {
 }
 
 /** Lee un formulario con un archivo ZIP en el campo "file" y lo guarda en temporaryDir. */
-async function readMultipartZip(
+export async function readMultipartZip(
   request: FastifyRequest,
   temporaryDir: string,
 ): Promise<MultipartZip> {

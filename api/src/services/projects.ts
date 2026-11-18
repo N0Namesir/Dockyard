@@ -27,6 +27,10 @@ export interface RegisterProjectInput {
   displayName?: string
   /** Por defecto, el año actual. */
   year?: number
+  /** Resto de la ficha, al importar una lista: se guarda junto con el proyecto. */
+  details?: Omit<ProjectDetails, 'displayName' | 'year'> & { notes?: string }
+  /** Imagen de la ficha importada, ya comprobada como PNG, JPEG o WebP. */
+  image?: Uint8Array
   source: ProjectSource
   sourceLabel: string
   /** true si quien pidió el registro ya no espera la respuesta: una falla queda en la lista. */
@@ -339,6 +343,16 @@ export function createProjectService(
         displayName: (input.displayName?.trim() || input.name.trim()).slice(0, DISPLAY_NAME_MAX_LENGTH),
         year: input.year ?? new Date().getFullYear(),
       })
+      if (input.details) {
+        const { notes, ...details } = input.details
+        repository.setDetails(row.id, details)
+        if (notes !== undefined) repository.setNotes(row.id, notes)
+      }
+      if (input.image) {
+        // Una imagen que no se pudo guardar no deshace el registro: se sube de nuevo en la ficha.
+        await images.save(row.id, input.image).then((file) => repository.setImage(row.id, file), () => {})
+      }
+      row = repository.findById(row.id)!
     } catch (error) {
       // Si la pestaña sigue abierta, ella muestra el error; si no, queda en la lista.
       if (input.abandoned?.()) {
@@ -370,6 +384,15 @@ export function createProjectService(
     } finally {
       draining = false
     }
+  }
+
+  /** null si el nombre técnico está libre; si no, por qué no se puede usar. */
+  function nameUnavailable(name: string): string | null {
+    if (repository.findByName(name)) return 'Ya existe un proyecto con ese nombre.'
+    if ([...registrations.values()].some((other) => other.name === name && other.error === null)) {
+      return 'Se está registrando un proyecto con ese nombre.'
+    }
+    return null
   }
 
   function requireProject(id: number): ProjectRow {
@@ -440,6 +463,12 @@ export function createProjectService(
       })
       void drainQueue()
       return result
+    },
+
+    nameUnavailable,
+
+    normalizeName(name: string): string {
+      return core.normalizeProjectName(name)
     },
 
     /** Registros en curso y fallidos sin descartar, el más reciente primero. */
