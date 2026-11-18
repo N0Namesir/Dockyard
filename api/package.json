@@ -14,7 +14,7 @@
   },
   "dependencies": {
     "@dockyard/core": "^0.1.0",
-    "@fastify/multipart": "^9.4.0",
+    "@fastify/multipart": "^10.1.9",
     "@fastify/static": "^10.1.8",
     "@fastify/type-provider-typebox": "^6.3.0",
     "@sinclair/typebox": "^0.34.52",
