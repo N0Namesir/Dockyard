@@ -440,3 +440,12 @@ test('varios desde ZIP: una fila por archivo y se suben de a uno',async t=>{
   assert.equal(await rows.first().locator('p').last().innerText(),'Registrado')
   assert.match(await rows.last().locator('p').last().innerText(),/Ya existe/)
 })
+
+test('un puerto solo de 127.0.0.1 dice que no se puede comprobar, no que no responde',async t=>{
+  const {page,data}=await fixture(t)
+  data.projects[0].web={state:'unchecked'}
+  await page.evaluate(()=>document.dispatchEvent(new Event('visibilitychange')))
+  const row=page.locator('.project-row').first()
+  await row.getByText('No se puede comprobar desde Dockyard; ábrelo para verlo').waitFor()
+  assert.equal(await row.getByText('La web aún no responde').count(),0)
+})

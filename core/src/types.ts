@@ -9,6 +9,11 @@ export interface ProjectStatus {
   ports: number[]
   /** Servicios caídos o reiniciándose de un proyecto encendido. Solo aparece si hay alguno. */
   failedServices?: string[]
+  /**
+   * Puertos publicados solo en 127.0.0.1 (o ::1), como "127.0.0.1:8101:80": abren en el navegador
+   * de la PC, pero no desde un contenedor como el de Dockyard. Solo aparece si hay alguno.
+   */
+  loopbackPorts?: number[]
 }
 
 /** Avance de un encendido: una etapa para el docente y las últimas líneas de Docker. */

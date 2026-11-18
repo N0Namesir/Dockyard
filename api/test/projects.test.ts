@@ -1454,6 +1454,38 @@ test('el comprobador distingue respuesta, error del servidor y falta de respuest
   assert.deepEqual(await check(port), { state: 'no-response' })
 })
 
+test('un puerto solo de 127.0.0.1 no se comprueba desde el contenedor, pero sí fuera de él', async () => {
+  const server = createServer((_request, response) => response.end('hola'))
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+  const { port } = server.address() as AddressInfo
+  // En el contenedor, PROJECTS_HOST es host.docker.internal: no alcanza el 127.0.0.1 de la PC.
+  const inContainer = createWebChecker('host.docker.internal')
+  assert.deepEqual(await inContainer(port, { loopbackOnly: true }), { state: 'unchecked' })
+  // Sin contenedor (en desarrollo o con PM2), localhost sí es la PC.
+  assert.deepEqual(await createWebChecker('localhost')(port, { loopbackOnly: true }), { state: 'ok', httpStatus: 200 })
+  server.closeAllConnections()
+  await new Promise((resolve) => server.close(resolve))
+})
+
+test('la API le dice al comprobador qué puertos son solo de 127.0.0.1', async () => {
+  const { core } = fakeCore()
+  const seen: [number, boolean | undefined][] = []
+  const app = await testApp({
+    ...core,
+    async startProject() {
+      return { state: 'running', ports: [8101, 8102], loopbackPorts: [8101] }
+    },
+  }, async (port, options) => {
+    seen.push([port, options?.loopbackOnly])
+    return options?.loopbackOnly ? { state: 'unchecked' } : { state: 'ok', httpStatus: 200 }
+  })
+  await app.inject({ method: 'POST', url: '/api/projects', payload: REPO })
+  const started = (await app.inject({ method: 'POST', url: '/api/projects/1/start' })).json()
+  assert.deepEqual(started.web, { state: 'unchecked' })
+  assert.deepEqual(seen, [[8101, true]])
+  await app.close()
+})
+
 test('guarda los avisos de la revisión y los devuelve sin impedir encender', async () => {
   const fake = fakeCore()
   const app = await testApp({

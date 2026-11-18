@@ -167,7 +167,7 @@ export function createProjectService(
       && Date.now() - saved.at < WEB_CHECK_TTL_MS) {
       return saved.result
     }
-    const result = await checkWeb(port)
+    const result = await checkWeb(port, { loopbackOnly: status.loopbackPorts?.includes(port) ?? false })
     webChecks.set(row.id, { port, at: Date.now(), result })
     return result
   }

@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { after, describe, test } from 'node:test'
 import { diskUsageFrom, isOldVersion, projectImagesFrom } from '../src/disk.ts'
-import { parsePs, portsInUse, requestedContainerNames, requestedPorts, statusFromContainers, statusesFromContainers } from '../src/docker.ts'
+import { parsePs, portInUseMessage, portsInUse, requestedContainerNames, requestedPorts, statusFromContainers, statusesFromContainers } from '../src/docker.ts'
 import { assertNormalizedName, normalizeProjectName } from '../src/name.ts'
 import { findComposeFile, projectRepoDir, projectsDir } from '../src/paths.ts'
 import { cleanLine, createProgressTracker, stageOf } from '../src/progress.ts'
@@ -113,7 +113,7 @@ describe('statusesFromContainers', () => {
       {
         tienda: { state: 'running', ports: [8101], failedServices: ['api'] },
         blog: { state: 'stopped', ports: [] },
-        panel: { state: 'running', ports: [8201, 8202] },
+        panel: { state: 'running', ports: [8201, 8202], loopbackPorts: [8201, 8202] },
       },
     )
   })
@@ -175,13 +175,13 @@ describe('portsInUse', () => {
     ]
     const used = portsInUse(containers)
     assert.deepEqual(
-      used.map((u) => `${u.port}/${u.protocol} ${u.container} ${u.project}`),
+      used.map((u) => `${u.host} ${u.port}/${u.protocol} ${u.container} ${u.project}`),
       [
-        '8081/tcp prueba-estatico-web-1 prueba-estatico',
-        '8081/tcp prueba-estatico-web-1 prueba-estatico',
-        '8000/tcp suelto null',
-        '8001/tcp suelto null',
-        '8002/tcp suelto null',
+        '0.0.0.0 8081/tcp prueba-estatico-web-1 prueba-estatico',
+        '[::] 8081/tcp prueba-estatico-web-1 prueba-estatico',
+        '127.0.0.1 8000/tcp suelto null',
+        '127.0.0.1 8001/tcp suelto null',
+        '127.0.0.1 8002/tcp suelto null',
       ],
     )
   })
@@ -737,5 +737,28 @@ describe('espacio en disco', () => {
       new Map([['x', 'tienda']]),
     )
     assert.equal(isOldVersion(image!), false)
+  })
+})
+
+describe('puertos ocupados y publicados solo en esta PC', () => {
+  test('reconoce el puerto ocupado por un programa que no es Docker, en cada forma que lo escribe Docker', () => {
+    const outside = (port: number) => `El puerto ${port} ya lo usa otro programa de esta PC que no es un proyecto de Docker. Ciérralo o cambia el puerto en el compose del proyecto.`
+    // Salida real de Docker 29.10 con un programa escuchando en 8094.
+    assert.equal(portInUseMessage(' Container exp-web-1 Error response from daemon: failed to set up container networking: driver failed programming external connectivity on endpoint exp-web-1 (3fc6…): failed to bind host port 0.0.0.0:8094/tcp: address already in use\nError response from daemon: …'), outside(8094))
+    assert.equal(portInUseMessage('Error starting userland proxy: listen tcp4 0.0.0.0:3000: bind: address already in use'), outside(3000))
+    assert.equal(portInUseMessage('ports are not available: exposing port TCP [::]:5173 -> 0.0.0.0:0: listen tcp6 [::]:5173: bind: address already in use'), outside(5173))
+    assert.match(portInUseMessage('Bind for 0.0.0.0:8081 failed: port is already allocated')!, /^El puerto 8081 ya lo usa otro contenedor de Docker/)
+    assert.match(portInUseMessage('bind: address already in use')!, /^Un puerto del proyecto ya lo usa otro programa/)
+    assert.equal(portInUseMessage('pull access denied for nada'), null)
+  })
+
+  test('un puerto es solo de esta PC si todas sus publicaciones son en 127.0.0.1 o ::1', () => {
+    const status = statusFromContainers([
+      { State: 'running', Service: 'web', Publishers: [{ URL: '127.0.0.1', PublishedPort: 8101 }, { URL: '::1', PublishedPort: 8101 }] },
+      { State: 'running', Service: 'api', Publishers: [{ URL: '0.0.0.0', PublishedPort: 8102 }, { URL: '::', PublishedPort: 8102 }] },
+      { State: 'running', Service: 'mixto', Publishers: [{ URL: '127.0.0.1', PublishedPort: 8103 }, { URL: '0.0.0.0', PublishedPort: 8103 }] },
+    ])
+    assert.deepEqual(status, { state: 'running', ports: [8101, 8102, 8103], loopbackPorts: [8101] })
+    assert.equal(statusFromContainers([{ State: 'running', Publishers: [{ URL: '0.0.0.0', PublishedPort: 80 }] }]).loopbackPorts, undefined)
   })
 })

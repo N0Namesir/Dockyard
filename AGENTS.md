@@ -18,7 +18,7 @@ npm install                                   # Node 24 o superior
 npm run build                                 # compila core, api y web
 npm run typecheck
 npm test                                      # pruebas del núcleo y de la API, sin Docker
-npm run test:docker -w core                   # pruebas con Docker real (usan los puertos 8081-8083, ~1-2 min)
+npm run test:docker -w core                   # pruebas con Docker real (usan los puertos 8081-8085, ~1-2 min)
 node --test --test-name-pattern="choque" core/test/docker.test.ts   # una sola prueba
 npm run try -w core -- ejemplos/prueba-estatico   # recorrido manual (url https, .zip o carpeta)
 npm version 1.1.0                             # publica una versión: prueba, crea commit y etiqueta, los sube y crea el release en GitHub
@@ -52,7 +52,7 @@ Respeta esas fronteras aunque el responsable sea el mismo: la API no ejecuta Doc
 ```ts
 normalizeProjectName(name: string): string
 prepareProject(source: ProjectSource, name: string, options?: PrepareOptions): Promise<PreparedProject>   // { dir, name }
-startProject(dir: string, name: string, options?: StartOptions): Promise<ProjectStatus>   // { state, ports, failedServices? }
+startProject(dir: string, name: string, options?: StartOptions): Promise<ProjectStatus>   // { state, ports, failedServices?, loopbackPorts? }
 stopProject(dir: string, name: string): Promise<ProjectStatus>
 getProjectStatus(name: string): Promise<ProjectStatus>
 getProjectStatuses(): Promise<Record<string, ProjectStatus>>                    // todos los proyectos de compose con un solo `docker ps -a`
@@ -86,6 +86,8 @@ startSelfUpdate(): Promise<void>                                                
 - `prepareProject` rechaza, antes de extraerlo, un ZIP con rutas que salen de su carpeta, con más de 100 000 archivos o que ocuparía más de 3 GB.
 - `reviewProject` solo lee: nada del proyecto se ejecuta. Sus avisos dicen dónde está el problema y nunca incluyen el valor de una clave. No impiden encender. La API los guarda al registrar y la interfaz solo los muestra.
 - La comprobación de que la web responde (`web` en la respuesta) la hace la API en `api/src/services/web-check.ts`, porque el núcleo no usa HTTP.
+- `loopbackPorts` (opcional, como `failedServices`) nombra los puertos publicados solo en `127.0.0.1` o `::1`. Con ellos, la API no intenta la comprobación de la web si Dockyard corre en contenedor y responde `web: { state: 'unchecked' }`. No se cambia la red del contenedor de Dockyard para esto.
+- Si `up -d` falla por un puerto ocupado, `portInUseMessage` (`core/src/docker.ts`) traduce la salida de Docker a «El puerto N ya lo usa otro programa de esta PC que no es un proyecto de Docker…» y `startProject` detiene lo que alcanzó a arrancar.
 - `failedServices` nombra los servicios caídos (salida distinta de 0) o reiniciándose de un proyecto encendido, y solo aparece si hay alguno.
 - `resetProjectData` usa `down -v --remove-orphans` sin `--rmi`: el siguiente encendido no reconstruye y crea la base de nuevo. No toca las carpetas montadas desde el proyecto. La API solo lo hace con el proyecto apagado y sin otra operación en curso (409), y no cambia `keep_running` ni `needs_build`.
 - `removeProject` usa `down -v` y borra la carpeta. Si quedan archivos de root, lanza el comando `sudo` a ejecutar.
@@ -137,7 +139,7 @@ Al arrancar, `server.ts` llama a `service.resume()`: vuelve a encender los proye
 
 ## Pruebas
 
-Se usa `node:test`, sin dependencias. `api/test/projects.test.ts` cubre las rutas con un núcleo simulado. `core/test/unit.test.ts` cubre las funciones puras; `core/test/docker.test.ts` cubre los criterios de terminado de la ficha con Docker real, usando un `PROJECTS_DIR` temporal y nombres `dockyard-test-*` que elimina al terminar (`down -v`). Los proyectos de prueba están en `ejemplos/`: `prueba-estatico` (8081, monta `./html` con ruta relativa), `prueba-bd` (8082, con `.env.example`), `prueba-build` (8083) y `prueba-conflicto` (8081, para el choque de puertos).
+Se usa `node:test`, sin dependencias. `api/test/projects.test.ts` cubre las rutas con un núcleo simulado. `core/test/unit.test.ts` cubre las funciones puras; `core/test/docker.test.ts` cubre los criterios de terminado de la ficha con Docker real, usando un `PROJECTS_DIR` temporal y nombres `dockyard-test-*` que elimina al terminar (`down -v`). Las pruebas nuevas arman sus compose en una carpeta temporal y usan 8084 y 8085. Los proyectos de prueba están en `ejemplos/`: `prueba-estatico` (8081, monta `./html` con ruta relativa), `prueba-bd` (8082, con `.env.example`), `prueba-build` (8083) y `prueba-conflicto` (8081, para el choque de puertos).
 
 ## Convenciones
 

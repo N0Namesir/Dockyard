@@ -36,8 +36,10 @@ export function projectStatus(project: Project): HTMLElement {
         ? 'Web disponible'
         : web === 'error'
           ? `La web responde con error ${httpStatus}`
-          : 'La web aún no responde',
-      web === 'ok' ? 'text-emerald-800' : 'text-amber-800',
+          : web === 'unchecked'
+            ? 'No se puede comprobar desde Dockyard; ábrelo para verlo'
+            : 'La web aún no responde',
+      web === 'ok' ? 'text-emerald-800' : web === 'unchecked' ? 'text-slate-600' : 'text-amber-800',
     )
   }
   if (project.state === 'running') {

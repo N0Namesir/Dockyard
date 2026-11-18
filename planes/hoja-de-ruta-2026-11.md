@@ -353,3 +353,15 @@ Entorno de la sesión: Node 24.22 (`/opt/node24`), Docker 29.10 levantado dentro
   - Mientras se suben los ZIP, la pestaña pide confirmar antes de cerrarse (`beforeunload`), además del aviso escrito.
 - **Pruebas:** `build`, `typecheck` y `npm test` bien (83 + 80; nuevas en `api/test/batch.test.ts`: una tanda con líneas válidas e inválidas registra solo las válidas, en orden y de a una, con el núcleo simulado y midiendo cuántas corren a la vez; reserva de nombres y `busy()`; tandas inválidas). `test:ui` bien (32 y 1 omitida; nuevas: vista previa con cada tipo de error y envío de solo las válidas; varios ZIP subidos de a uno con una falla).
 - **Pendientes y riesgos:** la cola vive en memoria, como los registros: si Dockyard se reinicia a mitad (por ejemplo con `update.sh`), los que estaban en espera se pierden sin aviso y hay que volver a enviarlos. Actualizar desde la página no lo permite mientras hay una tanda, pero `update.sh` desde la terminal sí.
+
+### 6. Mensajes claros sobre puertos
+
+- **Estado:** terminada.
+- **Commit:** ver la lista de commits al final.
+- **Decisiones que se apartaron del plan:**
+  - Se comprobó con Docker 29.10 real qué escribe con un programa que no es Docker en el puerto: `failed to bind host port 0.0.0.0:8094/tcp: address already in use` (distinto de las versiones anteriores, `listen tcp4 …: bind: address already in use`). `portInUseMessage` reconoce las tres formas. Para `port is already allocated`, que Docker usa cuando el puerto lo tiene **otro contenedor** (por ejemplo, uno que lo tomó entre la revisión y el encendido), el mensaje dice «otro contenedor de Docker de esta PC» en vez de «otro programa que no es un proyecto de Docker», que sería falso.
+  - Tras ese error, `startProject` detiene los servicios que alcanzaron a arrancar, para que el proyecto no quede encendido a medias.
+  - El campo opcional nuevo de `ProjectStatus` es `loopbackPorts` (puertos publicados solo en `127.0.0.1` o `::1`), y el estado nuevo de la web es `unchecked`. `createWebChecker` decide si puede alcanzarlos según su `PROJECTS_HOST`: fuera del contenedor (`localhost`) sí los comprueba.
+  - `PortInUse` (de `portsInUse`) ganó el campo `host`, para que la lista (`docker ps`) también sepa en qué dirección se publicó cada puerto.
+- **Pruebas:** `build`, `typecheck` y `npm test` bien (85 + 82; nuevas: las formas del mensaje de Docker con la salida real de Docker 29.10, qué puertos son solo de esta PC, el comprobador dentro y fuera del contenedor, y que la API le pasa esos puertos). `test:docker`: prueba nueva con un servidor de Node ocupando el puerto 8084 (mensaje en español, nada queda encendido) y, ya libre, `loopbackPorts: [8085]` igual por `getProjectStatus` y por `getProjectStatuses`. `test:ui` bien (33 y 1 omitida, con una nueva para el aviso).
+- **Pendientes y riesgos:** si Docker cambia el texto del error, vuelve a llegar el mensaje de Docker en inglés. La red del contenedor de Dockyard no se tocó, como pide el plan.

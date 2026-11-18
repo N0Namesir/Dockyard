@@ -89,6 +89,7 @@ Debajo de **Encendido** también se indica si la página del proyecto contesta:
 - **Web disponible:** Dockyard recibió una respuesta. No revisa si cada función sirve, pero la página está arriba.
 - **La web aún no responde:** es normal unos segundos o minutos después de encender, mientras arranca. Si no cambia, usa **Ver registro**.
 - **La web responde con error:** el servidor contesta, pero falla. Suele ser un problema del proyecto, como una base de datos que no conecta.
+- **No se puede comprobar desde Dockyard; ábrelo para verlo:** el proyecto publica su puerto solo para esta PC (en su compose dice `127.0.0.1:` antes del puerto), y Dockyard, que corre en su propio contenedor, no alcanza a verlo. No es una falla: usa **Abrir**.
 
 Se comprueba solo el puerto que usa **Abrir**.
 
@@ -142,6 +143,7 @@ Sin internet simplemente no aparece el aviso. Para que Dockyard no consulte vers
 |---|---|---|
 | El puerto 8081 ya lo usa el proyecto … | Otro proyecto registrado y encendido usa el mismo puerto | Pulsa **Apagar … y encender este**: Dockyard pide confirmar, apaga el otro sin borrar nada y enciende este. O pide al equipo que cambie el puerto en su compose |
 | El puerto 8081 ya está en uso por el contenedor … | Algo que no está en Dockyard usa ese puerto | Apágalo fuera de Dockyard, o pide al equipo que cambie el puerto en su compose |
+| El puerto 8081 ya lo usa otro programa de esta PC que no es un proyecto de Docker | Un programa de la PC, como un servidor de desarrollo que dejaste abierto, ocupa ese puerto | Ciérralo, o pide al equipo que cambie el puerto en su compose |
 | El nombre de contenedor … ya lo usa … | Dos proyectos fijan el mismo `container_name` en su compose | Pide al equipo que lo quite de su compose |
 | El nombre … ya lo usa otro proyecto de Docker | Hay contenedores con ese nombre fuera de Dockyard | Usa otro nombre al registrar |
 | Dockyard solo acepta peticiones desde su propia página | Se intentó usar desde otra página o dirección | Abre http://localhost:4300 en esta PC |

@@ -15,7 +15,8 @@ export interface Project {
   url: string | null
   urls: string[]
   failedServices: string[]
-  web: { state: 'ok' | 'error' | 'no-response'; httpStatus?: number } | null
+  /** `unchecked`: el puerto es solo de 127.0.0.1 y Dockyard corre en contenedor, así que no lo alcanza. */
+  web: { state: 'ok' | 'error' | 'no-response' | 'unchecked'; httpStatus?: number } | null
   warnings: string[]
   progress: Progress | null
   sourceType: 'git' | 'zip'

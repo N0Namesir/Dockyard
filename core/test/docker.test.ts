@@ -2,7 +2,7 @@
 //
 //   npm run test:docker -w core
 //
-// Usan una carpeta temporal como PROJECTS_DIR, publican los puertos 8081 a 8083 y al terminar
+// Usan una carpeta temporal como PROJECTS_DIR, publican los puertos 8081 a 8085 y al terminar
 // eliminan los contenedores y volúmenes que crearon. La primera vez descargan imágenes.
 
 import assert from 'node:assert/strict'
@@ -155,6 +155,32 @@ describe('encender, consultar y apagar', () => {
     } finally {
       await stopProject(join(EJEMPLOS, 'prueba-estatico'), estatico)
     }
+  })
+
+  test('un puerto ocupado por un programa que no es Docker da un mensaje en español y no deja nada encendido', async () => {
+    const name = uniqueName('puerto-ocupado')
+    const dir = join(base, name)
+    await mkdir(dir)
+    await writeFile(
+      join(dir, 'compose.yaml'),
+      'services:\n  web:\n    image: busybox\n    command: ["sleep", "600"]\n    ports: ["8084:80"]\n  local:\n    image: busybox\n    command: ["sleep", "600"]\n    ports: ["127.0.0.1:8085:80"]\n',
+    )
+    const { createServer } = await import('node:net')
+    const program = createServer().listen(8084, '0.0.0.0')
+    await new Promise((resolve) => program.once('listening', resolve))
+    try {
+      await assert.rejects(startProject(dir, name), {
+        message: 'El puerto 8084 ya lo usa otro programa de esta PC que no es un proyecto de Docker. Ciérralo o cambia el puerto en el compose del proyecto.',
+      })
+      assert.equal((await getProjectStatus(name)).state, 'stopped')
+    } finally {
+      await new Promise((resolve) => program.close(resolve))
+    }
+    // Libre el puerto, enciende; el que se publica solo en 127.0.0.1 queda marcado.
+    const status = await startProject(dir, name)
+    assert.deepEqual(status, { state: 'running', ports: [8084, 8085], loopbackPorts: [8085] })
+    assert.deepEqual((await getProjectStatuses())[name], status)
+    await stopProject(dir, name)
   })
 
   test('prueba-build: construye su imagen desde cero y responde', { timeout: 600_000 }, async () => {
