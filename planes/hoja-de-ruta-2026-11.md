@@ -383,6 +383,8 @@ Entorno de la sesión: Node 24.22 (`/opt/node24`), Docker 29.10 levantado dentro
 
 ## Resumen final
 
+**Pull request:** https://github.com/N0Namesir/Dockyard/pull/2 (hacia `main`, sin fusionar).
+
 Las 7 funciones quedaron terminadas, cada una en su commit, en este orden:
 
 1. `1d6dd54` Reiniciar los datos de un proyecto sin eliminarlo
