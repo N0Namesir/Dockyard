@@ -318,7 +318,9 @@ body:has(dialog[open]) {
     margin: 0;
   }
 }
-.project-menu-content button {
+.project-menu-content :is(button, a) {
+  display: flex;
+  align-items: center;
   width: 100%;
   min-height: 44px;
   padding: .5rem .75rem;
@@ -327,7 +329,7 @@ body:has(dialog[open]) {
   text-decoration: none;
   border-radius: .25rem;
 }
-.project-menu-content button:hover:not(:disabled, [aria-disabled=true]) {
+.project-menu-content :is(button, a):hover:not(:disabled, [aria-disabled=true]) {
   background: var(--color-marca-fondo);
 }
 .project-menu-content button:is(:disabled, [aria-disabled=true]) {

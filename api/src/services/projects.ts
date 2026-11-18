@@ -1,8 +1,10 @@
 import { randomUUID } from 'node:crypto'
+import { join } from 'node:path'
 import type { ProjectResources, ProjectSource, ProjectStatus, ResourceUsage, StartProgress } from '../core.ts'
-import type { ProjectRepository } from '../db/projects.ts'
+import { defaultDataDir, type ProjectDetails, type ProjectRepository } from '../db/projects.ts'
 import { errorMessage, HttpError } from '../errors.ts'
 import type {
+  Contact,
   CoreAdapter,
   ProgressResponse,
   ProjectResponse,
@@ -14,11 +16,16 @@ import type {
   StopAllResponse,
   UpdateResponse,
 } from '../types.ts'
+import { createImageStore, type ImageStore } from './images.ts'
 import type { CheckWeb, WebCheck } from './web-check.ts'
 
 export interface RegisterProjectInput {
   team: string
   name: string
+  /** Por defecto, el nombre tal como lo escribió el docente. */
+  displayName?: string
+  /** Por defecto, el año actual. */
+  year?: number
   source: ProjectSource
   sourceLabel: string
   /** true si quien pidió el registro ya no espera la respuesta: una falla queda en la lista. */
@@ -81,13 +88,23 @@ function toResponse(
     progress,
     pendingBuild: row.needs_build === 1,
     notes: row.notes,
+    displayName: row.display_name,
+    year: row.year,
+    description: row.description,
+    instructions: row.instructions,
+    contacts: JSON.parse(row.contacts) as Contact[],
+    imageUrl: row.image ? `/api/projects/${row.id}/image?v=${row.image_version}` : null,
   }
 }
+
+/** Largo máximo del nombre para mostrar. */
+export const DISPLAY_NAME_MAX_LENGTH = 80
 
 export function createProjectService(
   repository: ProjectRepository,
   core: CoreAdapter,
   checkWeb: CheckWeb,
+  images: ImageStore = createImageStore(join(defaultDataDir(), 'imagenes')),
 ) {
   // Operaciones en curso: una petición repetida espera el mismo resultado en vez de lanzar otra.
   const inFlight = new Map<string, Promise<unknown>>()
@@ -249,6 +266,25 @@ export function createProjectService(
     )
   }
 
+  /**
+   * Un nombre técnico libre para un proyecto que choca con otro, como el de otro año:
+   * «tienda» → «tienda-2026», y si también existe, «tienda-2026-2».
+   */
+  function suggestName(name: string, year: number): string {
+    const taken = (candidate: string) => repository.findByName(candidate) !== undefined
+      || [...registrations.values()].some((other) => other.name === candidate)
+    const base = name.endsWith(`-${year}`) ? name : `${name}-${year}`
+    if (!taken(base)) return base
+    for (let n = 2; ; n++) {
+      if (!taken(`${base}-${n}`)) return `${base}-${n}`
+    }
+  }
+
+  function nameTaken(name: string, year: number): HttpError {
+    const suggestion = suggestName(name, year)
+    return new HttpError(409, `Ya existe un proyecto con el nombre “${name}”. Usa otro nombre, por ejemplo “${suggestion}”.`, { suggestion })
+  }
+
   function requireProject(id: number): ProjectRow {
     const project = repository.findById(id)
     if (!project) throw new HttpError(404, 'El proyecto solicitado no existe.')
@@ -264,12 +300,17 @@ export function createProjectService(
       return inFlight.size > 0 || [...registrations.values()].some((item) => item.error === null)
     },
 
-    async list(query?: string): Promise<ProjectResponse[]> {
-      const rows = repository.list(query)
+    /** Con year, solo los de ese año: la carpeta abierta. */
+    async list(query?: string, year?: number): Promise<ProjectResponse[]> {
+      const rows = repository.list(query, year)
       if (rows.length === 0) return []
       // Una sola consulta a Docker para toda la lista, no un proceso por proyecto.
       const statuses = await core.getProjectStatuses()
       return Promise.all(rows.map((row) => respond(row, statuses[row.name] ?? STOPPED)))
+    },
+
+    years(): { year: number; count: number }[] {
+      return repository.years()
     },
 
     async get(id: number): Promise<ProjectResponse> {
@@ -282,12 +323,8 @@ export function createProjectService(
      */
     async register(input: RegisterProjectInput): Promise<ProjectResponse> {
       const normalizedName = core.normalizeProjectName(input.name)
-      if (repository.findByName(normalizedName)) {
-        throw new HttpError(
-          409,
-          `Ya existe un proyecto con el nombre “${normalizedName}”. Usa otro nombre.`,
-        )
-      }
+      const year = input.year ?? new Date().getFullYear()
+      if (repository.findByName(normalizedName)) throw nameTaken(normalizedName, year)
       for (const [key, other] of registrations) {
         if (other.name !== normalizedName) continue
         if (other.error === null) {
@@ -326,6 +363,8 @@ export function createProjectService(
           source: input.sourceLabel,
           dir: prepared.dir,
           warnings,
+          displayName: (input.displayName?.trim() || input.name.trim()).slice(0, DISPLAY_NAME_MAX_LENGTH),
+          year,
         })
       } catch (error) {
         // Si la pestaña sigue abierta, ella muestra el error; si no, queda en la lista.
@@ -390,6 +429,7 @@ export function createProjectService(
         await core.removeProject(project.name)
         repository.delete(id)
         webChecks.delete(id)
+        await images.remove(id)
       })
     },
 
@@ -466,16 +506,14 @@ export function createProjectService(
      * Cambia el equipo, el nombre o las notas. El equipo y las notas son solo datos; el nombre también es el de compose y
      * el de la carpeta, así que lo cambia el núcleo, con el proyecto apagado.
      */
-    async edit(id: number, input: { team?: string; name?: string; notes?: string }): Promise<ProjectResponse> {
+    async edit(id: number, input: { team?: string; name?: string; notes?: string } & ProjectDetails): Promise<ProjectResponse> {
       const project = requireProject(id)
       const newName = input.name === undefined ? project.name : core.normalizeProjectName(input.name)
       if (newName !== project.name) {
         if (['start', 'stop', 'update', 'replace', 'remove', 'reset'].some((action) => inFlight.has(`${id}:${action}`))) {
           throw new HttpError(409, 'El proyecto se está encendiendo, apagando o actualizando. Espera a que termine.')
         }
-        if (repository.findByName(newName)) {
-          throw new HttpError(409, `Ya existe un proyecto con el nombre “${newName}”. Usa otro nombre.`)
-        }
+        if (repository.findByName(newName)) throw nameTaken(newName, input.year ?? project.year)
         await once(id, 'rename', async () => {
           const status = await core.getProjectStatus(project.name)
           if (status.state === 'running') {
@@ -488,7 +526,29 @@ export function createProjectService(
       }
       if (input.team !== undefined) repository.setTeam(id, input.team)
       if (input.notes !== undefined) repository.setNotes(id, input.notes)
+      const { displayName, year, description, instructions, contacts } = input
+      repository.setDetails(id, { displayName, year, description, instructions, contacts })
       return hydrate(requireProject(id))
+    },
+
+    /** Guarda la imagen del proyecto, que ya se comprobó que es PNG, JPEG o WebP. */
+    async setImage(id: number, bytes: Uint8Array): Promise<ProjectResponse> {
+      requireProject(id)
+      repository.setImage(id, await images.save(id, bytes))
+      return hydrate(requireProject(id))
+    },
+
+    async removeImage(id: number): Promise<ProjectResponse> {
+      requireProject(id)
+      await images.remove(id)
+      repository.setImage(id, null)
+      return hydrate(requireProject(id))
+    },
+
+    async image(id: number): Promise<{ bytes: Buffer; contentType: string }> {
+      const project = requireProject(id)
+      if (!project.image) throw new HttpError(404, 'El proyecto no tiene imagen.')
+      return images.read(project.image)
     },
 
     async stop(id: number): Promise<ProjectResponse> {

@@ -1,3 +1,4 @@
+import { avatar, displayNameOf } from '../avatar.ts'
 import { element } from '../dom.ts'
 import { fillResources } from '../resources.ts'
 import { isStarting, state } from '../state.ts'
@@ -7,13 +8,23 @@ import type { Project, RowHandlers } from '../types.ts'
 export function projectRow(project: Project, handlers: RowHandlers): HTMLTableRowElement {
   const row = element('tr', 'project-row text-slate-700 hover:bg-slate-50/70')
   const nameCell = element('td', 'px-5 py-4')
-  nameCell.append(element('p', 'font-bold text-slate-900', project.name))
+  const identity = element('div', 'flex items-start gap-3')
+  const text = element('div', 'min-w-0')
+  const link = element('a', 'font-bold text-slate-900 underline-offset-4 hover:text-marca-texto hover:underline', displayNameOf(project))
+  link.href = projectPageUrl(project)
+  link.dataset.action = 'details'
+  text.append(link)
+  if (project.displayName && project.displayName !== project.name) {
+    text.append(element('p', 'font-mono text-xs break-all text-slate-500', project.name))
+  }
   if (project.notes) {
-    // Las notas largas se cortan a tres líneas; completas, al dejar el cursor encima o en Editar.
+    // Las notas largas se cortan a tres líneas; completas, al dejar el cursor encima o en la ficha.
     const notes = element('p', 'mt-1 line-clamp-3 max-w-48 whitespace-pre-wrap break-words text-xs text-slate-600', project.notes)
     notes.title = project.notes
-    nameCell.append(notes)
+    text.append(notes)
   }
+  identity.append(avatar(project, 'size-9 shrink-0 rounded-md text-lg'), text)
+  nameCell.append(identity)
   row.append(nameCell)
   row.append(element('td', 'project-team px-5 py-4', project.team))
   row.append(stateCell(project), portsCell(project), actionsCell(project, handlers))
@@ -134,15 +145,10 @@ function actionsCell(project: Project, handlers: RowHandlers): HTMLTableCellElem
     isGit ? 'Apaga el proyecto para actualizarlo.' : 'Apaga el proyecto para reemplazar su ZIP.',
     () => (isGit ? handlers.updateProject(project) : handlers.replaceZip(project)),
   ))
-  const edit = element(
-    'button',
-    'text-slate-600 underline hover:text-marca-texto disabled:cursor-wait disabled:no-underline disabled:opacity-50',
-    pending === 'edit' ? 'Guardando…' : 'Editar',
-  )
-  edit.type = 'button'
+  // Editar lleva a la ficha, que es el único lugar donde se cambian sus datos.
+  const edit = element('a', 'text-slate-600 underline hover:text-marca-texto', 'Editar ficha')
+  edit.href = `${projectPageUrl(project)}#editar`
   edit.dataset.action = 'edit'
-  edit.disabled = isPending
-  edit.addEventListener('click', () => handlers.editProject(project))
   secondary.append(edit)
   const logs = element(
     'button',
@@ -241,6 +247,11 @@ function actionsCell(project: Project, handlers: RowHandlers): HTMLTableCellElem
   const cell = element('td', 'px-5 py-4')
   cell.append(stack)
   return cell
+}
+
+/** Página con la ficha del proyecto. */
+export function projectPageUrl(project: Project): string {
+  return `/proyecto/?id=${project.id}`
 }
 
 /**

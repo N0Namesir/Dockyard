@@ -28,7 +28,9 @@ La aplicación sigue necesitando el servicio local para consultar o cambiar proy
 
 ## Registrar un proyecto
 
-Pulsa **+ Registrar proyecto** para abrir el panel lateral. Llena **Equipo** y **Nombre del proyecto**, elige el **Origen** y presiona **Registrar proyecto**. Cada proyecto se registra una vez. Dockyard ajusta el nombre a un formato válido: por ejemplo, `Tienda Equipo 3` queda como `tienda-equipo-3`.
+Pulsa **+ Registrar proyecto** para abrir el panel lateral. Llena **Equipo**, **Nombre del proyecto** y **Año** (el actual, si no lo cambias), elige el **Origen** y presiona **Registrar proyecto**. Cada proyecto se registra una vez. El nombre se muestra tal como lo escribiste, pero Docker y la carpeta del proyecto usan un **nombre técnico** en minúsculas y con guiones: por ejemplo, `Tienda Equipo 3` queda como `tienda-equipo-3`.
+
+El nombre técnico no se puede repetir, ni entre años. Si el año pasado ya registraste una «Tienda», Dockyard avisa y ofrece **Usar el nombre «tienda-2026»** con un clic: el proyecto se sigue mostrando como «Tienda», y el año lo distingue.
 
 **Origen GitHub.** Pega la **URL del repositorio**, que debe empezar con `https://` y ser pública (por ejemplo, `https://github.com/equipo3/tienda`). Dockyard descarga el código.
 
@@ -48,16 +50,16 @@ Que no aparezcan avisos no garantiza que el proyecto sea seguro, así que regist
 
 ## Buscar, encender, apagar y abrir
 
-**Abrir** y **Encender/Apagar** están siempre a mano. En el botón de tres puntos (**⋯**, Más acciones) están **Actualizar**, **Reemplazar ZIP**, **Editar** y **Ver registro**, según el origen del proyecto, y al final, separadas, las que borran datos: **Reiniciar datos** y **Eliminar**. El menú se abre sobre la tabla sin mover los demás botones. Si una acción no se puede usar en ese momento, como Actualizar con el proyecto encendido, al pasar el puntero o intentar usarla aparece el motivo. En pantallas pequeñas cada proyecto se presenta en una fila apilada.
+**Abrir** y **Encender/Apagar** están siempre a mano. El nombre de cada proyecto lleva a su ficha. En el botón de tres puntos (**⋯**, Más acciones) están **Actualizar**, **Reemplazar ZIP**, **Editar ficha** y **Ver registro**, según el origen del proyecto, y al final, separadas, las que borran datos: **Reiniciar datos** y **Eliminar**. El menú se abre sobre la tabla sin mover los demás botones. Si una acción no se puede usar en ese momento, como Actualizar con el proyecto encendido, al pasar el puntero o intentar usarla aparece el motivo. En pantallas pequeñas cada proyecto se presenta en una fila apilada.
 
-- **Buscar:** escribe parte del nombre del proyecto o del equipo en **Buscar nombre o equipo**. No importan las mayúsculas ni las tildes.
+- **Buscar:** escribe parte del nombre del proyecto, del equipo o de su descripción en **Buscar nombre o equipo**. No importan las mayúsculas ni las tildes.
 - **Encender:** la primera vez puede tardar varios minutos, porque Docker descarga y construye las imágenes del proyecto. Mientras tanto, el botón dice **Encendiendo…** y debajo del proyecto se ve qué está haciendo Docker, cuánto lleva y sus últimas líneas. Puedes recargar la página sin interrumpirlo, pero si falla mientras tanto no verás el motivo: usa **Ver registro**. Las siguientes veces es rápido.
 - **Abrir:** cuando el proyecto está **Encendido**, este botón abre en otra pestaña la dirección donde funciona (por ejemplo, http://localhost:8081). Si no abre la página correcta, prueba con los números de la columna **Puertos**: cada uno es un enlace.
 - **Actualizar:** solo en proyectos de GitHub y con el proyecto apagado. Trae la última versión del repositorio y la revisa de nuevo, sin encenderla. Lee los avisos, si los hay, y usa **Encender**: esa vez reconstruye el proyecto con el código nuevo. Sus datos se conservan, así que una base de datos sigue con lo que tenía. Para los proyectos registrados desde un ZIP está **Reemplazar ZIP**.
 - **Reemplazar ZIP:** solo en proyectos registrados desde un ZIP y con el proyecto apagado. Sirve cuando el equipo entrega una versión corregida: eliges el ZIP nuevo, escribes el nombre del proyecto para confirmar, y su código se cambia por el del ZIP sin perder el nombre ni el equipo. Se revisa de nuevo y la siguiente vez que lo enciendas se reconstruye. Los datos que el proyecto guarda en volúmenes de Docker, como la mayoría de las bases de datos, se conservan; lo que guardó dentro de su propia carpeta se borra. Si el ZIP nuevo está dañado o no trae compose, el proyecto queda como estaba.
 - **Apagar:** detiene el proyecto sin borrar nada. Sus datos se conservan para la próxima vez.
 - **Apagar todos:** aparece sobre la lista cuando hay proyectos encendidos. Apaga todos los proyectos de Dockyard, también los que la búsqueda no muestra, sin borrar nada. Sirve al terminar la clase o cuando la PC se pone lenta. Pide confirmar, y al final dice cuántos apagó y si alguno falló. Los que se están encendiendo, actualizando o eliminando no se tocan.
-- **Editar:** corrige el equipo o el nombre sin eliminar el proyecto, y guarda **Notas**, por ejemplo qué falta revisar o una calificación. Las notas se ven debajo del nombre; si son largas, deja el cursor encima para leerlas completas. Para borrarlas, deja el campo vacío. El equipo se cambia siempre. El nombre solo con el proyecto apagado, y se ajusta a minúsculas y guiones como al registrar; la siguiente vez que lo enciendas se reconstruye. Si el proyecto ya guarda datos en volúmenes de Docker, como una base de datos que ya se encendió, el nombre no se puede cambiar, porque con otro nombre empezaría sin esos datos.
+- **Editar ficha:** abre la ficha del proyecto lista para editar (ver [La ficha del proyecto](#la-ficha-del-proyecto)).
 - **Ver registro:** muestra las últimas líneas que escribió el proyecto. Sirve para saber por qué falla y compartirlo con el equipo. Si el proyecto está encendido, se actualiza solo cada pocos segundos. Si subes a leer o seleccionas texto, se detiene para no moverte; baja hasta el final para que siga.
 - **Reiniciar datos:** solo con el proyecto apagado. Borra sus bases de datos y lo demás que guardó en volúmenes de Docker, pero conserva su código, su ficha y sus notas. Úsalo cuando el equipo corrige el `.sql` de su base (por ejemplo en `db/init/`) y quieres que se vuelva a cargar, o para empezar una revisión desde cero: al encenderlo, la base se crea de nuevo y carga su `.sql`. Es más rápido que eliminar y registrar de nuevo, porque no reconstruye las imágenes. Lo que el proyecto guarda en carpetas propias (como `./data`) no se toca, porque es parte de su código. Para confirmar hay que escribir el nombre del proyecto, porque no se puede deshacer.
 - **Eliminar:** borra el proyecto, su código y sus datos, y libera su nombre. Para confirmar hay que escribir el nombre del proyecto, porque no se puede deshacer.
@@ -73,6 +75,22 @@ Debajo de **Encendido** también se indica si la página del proyecto contesta:
 - **La web responde con error:** el servidor contesta, pero falla. Suele ser un problema del proyecto, como una base de datos que no conecta.
 
 Se comprueba solo el puerto que usa **Abrir**.
+
+## La ficha del proyecto
+
+Cada proyecto tiene una ficha: pulsa su nombre en la lista. Muestra su imagen, su nombre para mostrar, el nombre técnico (en pequeño), el equipo y el año, su estado con **Encender/Apagar** y **Abrir**, y lo que cuenta el equipo:
+
+- **Descripción:** qué hace el proyecto.
+- **Indicaciones del equipo:** cómo usarlo, por ejemplo los usuarios de prueba o las rutas importantes.
+- **Contactos:** hasta 8 estudiantes, con nombre y, si quieres, correo y teléfono. Pulsar el correo abre tu programa de correo.
+- **Notas del docente:** tus notas, por ejemplo qué falta revisar o una calificación. También se ven, cortas, debajo del nombre en la lista.
+- Los avisos de la revisión, si los hay, y el consumo de CPU y memoria si está encendido.
+
+**Editar ficha** abre un formulario en la misma página con todos los campos. Para borrar un texto, deja el campo vacío. Para la imagen, elige un PNG, JPEG o WebP de hasta 2 MB, como una captura de pantalla o el logo del proyecto, o pulsa **Quitar imagen**. Si no tiene imagen, se muestra la inicial de su nombre sobre un color.
+
+El **nombre técnico** solo cambia con el proyecto apagado, y se ajusta a minúsculas y guiones como al registrar; la siguiente vez que lo enciendas se reconstruye. Si el proyecto ya guarda datos en volúmenes de Docker, como una base de datos que ya se encendió, no se puede cambiar, porque con otro nombre empezaría sin esos datos. El nombre para mostrar, el equipo y lo demás se cambian siempre.
+
+Los contactos son datos personales de los estudiantes: se guardan solo en esta PC y se borran al eliminar el proyecto (ver [Privacidad](privacidad.md)).
 
 ## Espacio en disco
 
@@ -121,4 +139,4 @@ Sin internet simplemente no aparece el aviso. Para que Dockyard no consulte vers
 | Hay archivos de Dockyard modificados en esta PC | Alguien cambió archivos de Dockyard, así que `update.sh` no actualiza para no perderlos | Guárdalos aparte con `git stash` y vuelve a ejecutar `./update.sh` |
 | No se pudo descomprimir el archivo | El ZIP está dañado o no es un ZIP | Pide al equipo que lo vuelva a generar |
 | La actualización pisaría un archivo que cambió en esta PC | El proyecto escribe en su propia carpeta y la versión nueva cambia ese archivo | Elimina el proyecto y regístralo de nuevo. Se borran sus datos |
-| Ya existe un proyecto con ese nombre | Ya registraste un proyecto con ese nombre, o quedó su carpeta | Usa otro nombre, por ejemplo agregando el número de equipo |
+| Ya existe un proyecto con el nombre … | Ya registraste un proyecto con ese nombre técnico, quizá en otro año, o quedó su carpeta | Pulsa **Usar el nombre «…»** para usar el que propone Dockyard (con el año), o escribe otro |

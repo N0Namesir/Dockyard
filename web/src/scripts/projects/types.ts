@@ -22,6 +22,23 @@ export interface Project {
   pendingBuild: boolean
   /** Notas del docente; cadena vacía si no hay. */
   notes: string
+  /** Nombre para mostrar; el técnico (Docker y carpetas) es name. */
+  displayName: string
+  year: number
+  /** Lo que cuenta el equipo de su proyecto. */
+  description: string
+  /** Cómo usarlo: usuarios de prueba, rutas importantes. */
+  instructions: string
+  contacts: Contact[]
+  /** Dirección de la imagen con su versión, o null. */
+  imageUrl: string | null
+}
+
+/** Un estudiante del equipo. */
+export interface Contact {
+  name: string
+  email?: string
+  phone?: string
 }
 
 /** Un registro en curso, o uno que falló sin una pestaña esperando la respuesta. */
@@ -75,7 +92,7 @@ export interface ReplaceResult {
   leftover: string | null
 }
 
-export type ProjectAction = 'start' | 'stop' | 'remove' | 'update' | 'replace' | 'edit' | 'reset'
+export type ProjectAction = 'start' | 'stop' | 'remove' | 'update' | 'replace' | 'reset'
 
 /** Otro proyecto registrado que ocupa un puerto de este; la API lo manda al fallar el encendido. */
 export interface PortConflict {
@@ -89,7 +106,6 @@ export interface RowHandlers {
   changeState(project: Project): void
   updateProject(project: Project): void
   replaceZip(project: Project): void
-  editProject(project: Project): void
   removeProject(project: Project): void
   /** Borra sus volúmenes de Docker y conserva el código y la ficha. */
   resetData(project: Project): void

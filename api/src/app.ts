@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { join, resolve } from 'node:path'
 import multipart from '@fastify/multipart'
 import fastifyStatic from '@fastify/static'
 import Fastify, { type FastifyInstance } from 'fastify'
@@ -15,6 +15,7 @@ import { projectRoutes } from './routes/projects.ts'
 import { settingsRoutes } from './routes/settings.ts'
 import { versionRoutes } from './routes/version.ts'
 import { createDiskService } from './services/disk.ts'
+import { createImageStore } from './services/images.ts'
 import { createProjectService } from './services/projects.ts'
 import { createSelfUpdate } from './services/self-update.ts'
 import { createSettingsStore } from './services/settings.ts'
@@ -80,7 +81,7 @@ export interface AppOptions {
   core?: CoreAdapter
   checkWeb?: CheckWeb
   checkVersion?: CheckVersion
-  /** Donde update.sh deja el resultado de la última actualización desde la página. */
+  /** Donde están las imágenes de los proyectos y update.sh deja el resultado de la última actualización. */
   dataDir?: string
   logger?: boolean
   serveWeb?: boolean
@@ -143,7 +144,9 @@ export async function buildApp(options: AppOptions = {}): Promise<FastifyInstanc
     limits: { files: 1, fileSize: 200 * 1024 * 1024, fields: 10 },
   })
 
-  const service = createProjectService(repository, core, options.checkWeb ?? createWebChecker())
+  const dataDir = options.dataDir ?? defaultDataDir()
+  const images = createImageStore(join(dataDir, 'imagenes'))
+  const service = createProjectService(repository, core, options.checkWeb ?? createWebChecker(), images)
   await app.register(projectRoutes(service), { prefix: '/api' })
   await app.register(diskRoutes(createDiskService(repository, core, () => service.busy())), { prefix: '/api' })
   const settings = createSettingsStore(repository)
@@ -154,7 +157,7 @@ export async function buildApp(options: AppOptions = {}): Promise<FastifyInstanc
   await app.register(versionRoutes(checkVersion), { prefix: '/api' })
   const selfUpdate = createSelfUpdate({
     core,
-    dataDir: options.dataDir ?? defaultDataDir(),
+    dataDir,
     checkVersion,
     busy: () => service.busy(),
   })

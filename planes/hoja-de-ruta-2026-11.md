@@ -307,3 +307,19 @@ Entorno de la sesión: Node 24.22 (`/opt/node24`), Docker 29.10 levantado dentro
   - La API quedó en un servicio y unas rutas propias (`api/src/services/disk.ts`, `api/src/routes/disk.ts`) y la interfaz en `web/src/scripts/settings/disk.ts`.
 - **Pruebas:** `build`, `typecheck` y `npm test` bien (83 + 67, con 3 unitarias del núcleo y 5 de la API nuevas). `test:ui` de Configuración bien (6, con 2 nuevas). `test:docker`: la prueba nueva de `pruneProjectImages` (borra solo la versión vieja del proyecto pedido, no toca la del otro proyecto ni los volúmenes, y conserva la imagen actual tras reiniciar datos) pasa con el almacén clásico.
 - **Pendientes y riesgos:** no se libera la caché de construcción, que en la PC del usuario puede ser buena parte de los 15,5 GB recuperables; hacerlo exigiría `docker builder prune`, que es global. `docker system df -v` mide cada volumen y puede tardar con bases grandes (límite de 2 minutos).
+
+### 3. Ficha enriquecida del proyecto
+
+- **Estado:** terminada, sin el ícono automático (era opcional).
+- **Commit:** ver la lista de commits al final.
+- **Decisiones que se apartaron del plan:**
+  - Se agregó la columna `image_version` (entero que sube con cada cambio de imagen) para el parámetro de versión de `imageUrl`; el plan no la listaba. Así el archivo sigue siendo `data/imagenes/<id>.<ext>` y el navegador no muestra la imagen anterior.
+  - Al registrar, el nombre para mostrar por defecto es lo que escribió el docente en «Nombre del proyecto» («Tienda escolar»), no el nombre técnico normalizado («tienda-escolar»); en la migración sí es el nombre técnico, como pide el plan. El formulario de registro no tiene un campo aparte para el nombre para mostrar: se cambia después en la ficha.
+  - El formulario de registro ganó el campo **Año** (el actual por defecto, y se conserva entre registros seguidos). Al usar el nombre sugerido, lo escrito queda como nombre para mostrar.
+  - `PATCH /api/projects/:id` valida con `Value.Check`, que no quita claves desconocidas (no pasa por el esquema de Fastify), así que una clave desconocida ya responde 400; no hizo falta el truco de `PATCH /api/settings`.
+  - Un correo o teléfono vacío de un contacto se acepta y no se guarda, para que la interfaz pueda mandar filas a medio llenar.
+  - El teléfono de un contacto también es un enlace `tel:`.
+  - Para compartir el avatar entre páginas, los ayudantes `element` e `isSelectingIn` pasaron de `projects/dom.ts` a `projects/element.ts` (`dom.ts` los reexporta): `dom.ts` exige los elementos de la página de Proyectos al importarse.
+  - El encendido desde la ficha no muestra el avance de Docker línea por línea (eso sigue en la lista); muestra «Encendiendo…» y el error si falla.
+- **Pruebas:** `build`, `typecheck` y `npm test` bien (83 + 76; 9 pruebas nuevas de la API en `api/test/details.test.ts`: valores por defecto, sugerencia de nombre, validación de cada campo, búsqueda y años, firma de bytes, subir/servir/cambiar/borrar la imagen, rechazo de SVG y de más de 2 MB, borrado al eliminar y migración de una base anterior). `test:ui` bien (28 y 1 omitida; nuevas: `web/test/project.test.mjs` con 6 pruebas de la ficha, y 2 en `ui.test.mjs` para el enlace a la ficha y la sugerencia de nombre al registrar). No toca Docker.
+- **Pendientes y riesgos:** el ícono automático del proyecto (opcional) no se hizo. La ficha refresca su estado cada 15 s, no cada 2 s como la lista mientras enciende.

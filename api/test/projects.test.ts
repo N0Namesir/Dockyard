@@ -421,6 +421,12 @@ test('registra por GitHub, consulta, busca, enciende y apaga', async () => {
     pendingBuild: false,
     sourceType: 'git',
     notes: '',
+    displayName: 'Tienda Escolar',
+    year: new Date().getFullYear(),
+    description: '',
+    instructions: '',
+    contacts: [],
+    imageUrl: null,
   })
 
   const found = await app.inject({

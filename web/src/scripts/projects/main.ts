@@ -3,7 +3,6 @@
 // la conexión en RowHandlers (types.ts) y aquí.
 import { changeState, removeProject, replaceConflicting, resetData, updateProject } from './actions.ts'
 import { setupConfirmDialog } from './confirm-dialog.ts'
-import { editProject, setupEditDialog } from './edit-dialog.ts'
 import { setupDialogFocus } from './dialog-focus.ts'
 import { page } from './dom.ts'
 import { loadProjects } from './list.ts'
@@ -32,7 +31,6 @@ setRowHandlers({
   changeState: (project) => void changeState(project),
   updateProject: (project) => void updateProject(project),
   replaceZip: (project) => void replaceZip(project),
-  editProject: (project) => editProject(project),
   removeProject: (project) => void removeProject(project),
   resetData: (project) => void resetData(project),
   replaceConflicting: (project) => void replaceConflicting(project),
@@ -42,7 +40,6 @@ setRowHandlers({
 setupDialogFocus()
 setupRemoveDialog()
 setupConfirmDialog()
-setupEditDialog()
 page.stopAll.addEventListener('click', () => void stopAll())
 setupRegisterPanel()
 setupRegisterForm()

@@ -41,7 +41,7 @@ Monorepo con workspaces de npm (`core`, `api`, `web`) y un `tsconfig.base.json` 
 |---|---|---|---|
 | `core/` | 1: núcleo Docker y fuentes | 0V3R | Solo ejecuta `git`, `unzip` y `docker compose`. Nunca HTTP, SQLite ni UI |
 | `api/` | 2: API y datos | 0V3R (de Isaac) | Fastify 5 + TypeBox + SQLite (`node:sqlite`, con `better-sqlite3` como respaldo). Orquesta llamando a `core/`, nunca ejecuta Docker ni git |
-| `web/` | 3: interfaz | 0V3R (de Isaac) | Astro + Tailwind. Solo habla con la API, sin lógica de estados ni puertos. Publica `docs/*.md` en `/docs` al compilar. La lógica de cada página va en `web/src/scripts/<página>/` (`projects/`, `settings/`), un módulo por tarea; los `.astro` solo llevan HTML |
+| `web/` | 3: interfaz | 0V3R (de Isaac) | Astro + Tailwind. Solo habla con la API, sin lógica de estados ni puertos. Publica `docs/*.md` en `/docs` al compilar. La lógica de cada página va en `web/src/scripts/<página>/` (`projects/`, `project/` para la ficha, `settings/`), un módulo por tarea; los `.astro` solo llevan HTML |
 | `docs/`, `Dockerfile`, `docker-compose.yml`, `install.sh`, `update.sh`, `scripts/` | 4: infraestructura y documentación | 0V3R | No escribe lógica de otras áreas |
 | `projects/`, `data/` | — | — | Datos de ejecución, en `.gitignore` |
 
@@ -106,9 +106,11 @@ startSelfUpdate(): Promise<void>                                                
 
 ### Rutas de la API (contrato con `web/`)
 
-`GET /api/projects?q=`, `GET /api/projects/resources`, `POST /api/projects`, `GET /api/projects/:id`, `PATCH /api/projects/:id` (`team`, `name`, `notes`), `POST /api/projects/:id/start`, `POST /api/projects/:id/stop`, `POST /api/projects/stop-all`, `POST /api/projects/:id/update`, `POST /api/projects/:id/replace` (multipart, campo `file`), `POST /api/projects/:id/reset-data`, `GET /api/projects/:id/logs`, `GET /api/projects/:id/progress`, `DELETE /api/projects/:id`, `GET /api/registrations`, `DELETE /api/registrations/:key`, `GET /api/disk`, `POST /api/disk/clean`, `GET /api/version`, `POST /api/version/check`, `GET /api/settings`, `PATCH /api/settings` (`updateCheck`), `GET /api/update`, `POST /api/update`.
+`GET /api/projects?q=&year=`, `GET /api/projects/years`, `GET /api/projects/resources`, `POST /api/projects` (también `displayName`, `year`), `GET /api/projects/:id`, `PATCH /api/projects/:id` (`team`, `name`, `notes`, `displayName`, `year`, `description`, `instructions`, `contacts`), `PUT|GET|DELETE /api/projects/:id/image`, `POST /api/projects/:id/start`, `POST /api/projects/:id/stop`, `POST /api/projects/stop-all`, `POST /api/projects/:id/update`, `POST /api/projects/:id/replace` (multipart, campo `file`), `POST /api/projects/:id/reset-data`, `GET /api/projects/:id/logs`, `GET /api/projects/:id/progress`, `DELETE /api/projects/:id`, `GET /api/registrations`, `DELETE /api/registrations/:key`, `GET /api/disk`, `POST /api/disk/clean`, `GET /api/version`, `POST /api/version/check`, `GET /api/settings`, `PATCH /api/settings` (`updateCheck`), `GET /api/update`, `POST /api/update`.
 
 `POST /api/projects` sigue respondiendo al terminar, pero el registro no se corta si se cierra la pestaña. Mientras corre, figura en `GET /api/registrations` con su etapa (solo en memoria). Si falla sin nadie esperando la respuesta, queda ahí con el motivo hasta que se descarta con `DELETE /api/registrations/:key`.
+
+La ficha (`/proyecto/?id=`) es el único lugar que edita un proyecto. `name` es el nombre técnico, único en toda la base (Docker y las carpetas no distinguen años); `display_name` es el que se muestra. Si un nombre se repite, el 409 trae `suggestion` (`<nombre>-<año>`). La imagen se guarda en `data/imagenes/<id>.<tipo>`: solo PNG, JPEG o WebP de hasta 2 MB, reconocidos por su firma de bytes; nunca SVG, que se serviría con scripts desde el origen de la API. Se sirve con `nosniff` y se borra al eliminar el proyecto. Los contactos de estudiantes son datos personales: no salen de la PC (ver `docs/privacidad.md`).
 
 Configuración guarda sus ajustes en la tabla `settings`; `UPDATE_CHECK` solo es el valor inicial de `updateCheck`. `POST /api/update` se niega (409) sin versión nueva o con operaciones en curso (`service.busy()`), porque Dockyard se reinicia al actualizar.
 

@@ -13,6 +13,9 @@ Esta política cubre a Dockyard, no a los proyectos alojados en ella.
 | Nombre del proyecto, equipo, origen (URL del repositorio o nombre del ZIP), carpeta y fecha de registro | Base de datos en `data/` | Hasta eliminar el proyecto |
 | Avisos de la revisión al registrar, con nombres de archivos y de variables, nunca sus valores | Base de datos en `data/` | Hasta eliminar el proyecto |
 | Notas que escribas sobre el proyecto | Base de datos en `data/` | Hasta borrarlas o eliminar el proyecto |
+| Ficha del proyecto: nombre para mostrar, año, descripción e indicaciones del equipo | Base de datos en `data/` | Hasta cambiarlas o eliminar el proyecto |
+| **Datos de contacto de estudiantes** que escribas en la ficha: nombre y, si los pones, correo y teléfono | Base de datos en `data/` | Hasta quitarlos de la ficha o eliminar el proyecto |
+| Imagen del proyecto que subas (PNG, JPEG o WebP) | Carpeta `data/imagenes/` | Hasta quitarla o eliminar el proyecto |
 | Si dejaste el proyecto encendido, para volver a encenderlo al reiniciar la PC | Base de datos en `data/` | Hasta eliminar el proyecto |
 | Ajustes de Configuración, como buscar versiones nuevas automáticamente | Base de datos en `data/` | Hasta cambiarlos |
 | Salida de la última actualización hecha desde Configuración | `data/actualizacion.log` y `data/actualizacion.estado` | Hasta la siguiente actualización desde Configuración |
@@ -22,9 +25,9 @@ Esta política cubre a Dockyard, no a los proyectos alojados en ella.
 | Peticiones a la herramienta, con la ruta pedida y la dirección IP de origen | Registro del contenedor de Dockyard | Hasta que se recrea el contenedor |
 | Registros y datos de cada proyecto | Contenedores y volúmenes de Docker | Hasta eliminar el proyecto |
 
-Nada de esto se envía a los autores de Dockyard. La revisión al registrar también ocurre solo en la PC.
+Nada de esto se envía a los autores de Dockyard ni sale de la PC. La revisión al registrar también ocurre solo en la PC.
 
-Para el campo Equipo, usa un nombre como "Equipo 3" en lugar de nombres de estudiantes. Dockyard no necesita datos personales.
+Los contactos de la ficha son datos personales de los estudiantes. Son opcionales: guarda solo los que necesites para comunicarte con el equipo, y trátalos como cualquier otro dato del curso. Para el campo Equipo, usa un nombre como "Equipo 3" en lugar de nombres de estudiantes. Una imagen puede mostrar datos personales si es una captura de pantalla: revisa qué contiene antes de subirla.
 
 ## Cuándo se conecta a internet
 
@@ -44,7 +47,8 @@ Cada proyecto es un programa independiente. Puede pedir datos, guardarlos o cone
 
 ## Cómo borrar los datos
 
-- **Un proyecto:** usa Eliminar en la interfaz. Borra su registro, su código, sus contenedores y sus volúmenes.
+- **Un proyecto:** usa Eliminar en la interfaz. Borra su registro con su ficha y sus contactos, su imagen, su código, sus contenedores y sus volúmenes.
+- **Contactos o imagen de un proyecto:** en su ficha, **Editar ficha**: quita los contactos o pulsa **Quitar imagen** y guarda.
 - **Acceso instalado y caché de ayuda:** desinstala Dockyard desde el navegador y borra los datos del sitio de su dirección local. Esto no borra los proyectos de Docker ni la base de datos.
 - **Todo Dockyard:** elimina primero los proyectos, ejecuta `docker compose down` en la carpeta de Dockyard y borra esa carpeta, con `data/` y `projects/`.
 
