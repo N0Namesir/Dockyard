@@ -10,7 +10,7 @@ Abre en el navegador http://localhost:4300. Dockyard arranca sola al encender la
 
 Si la página no carga, abre una terminal en la carpeta de Dockyard y ejecuta `./update.sh`. Vuelve a levantar Dockyard, y si hay una versión nueva, la instala.
 
-Al reiniciar la PC, Dockyard vuelve solo, pero los proyectos quedan apagados y hay que encenderlos de nuevo. La excepción son los que declaran una política `restart` en su compose.
+Al reiniciar la PC, Dockyard vuelve solo y enciende de nuevo los proyectos que dejaste encendidos. Los que apagaste desde Dockyard siguen apagados. Mientras se encienden, la lista muestra su avance. Si alguno no logra encender, queda apagado: al presionar **Encender** verás la causa.
 
 ## Registrar un proyecto
 

@@ -10,6 +10,7 @@ import type { InjectOptions } from 'fastify'
 import { buildApp, isAllowedRequest } from '../src/app.ts'
 import type { ProjectSource, ProjectStatus } from '../src/core.ts'
 import { createProjectRepository } from '../src/db/projects.ts'
+import { createProjectService } from '../src/services/projects.ts'
 import { createVersionChecker } from '../src/services/version.ts'
 import { createWebChecker, type CheckWeb } from '../src/services/web-check.ts'
 import type { CoreAdapter } from '../src/types.ts'
@@ -701,6 +702,93 @@ test('apagar todos salta los proyectos que se están encendiendo', async () => {
   await app.close()
 })
 
+test('al arrancar vuelve a encender lo que el docente dejó encendido', async () => {
+  const { core } = fakeCore()
+  const repository = createProjectRepository(':memory:')
+  const service = createProjectService(repository, core, async () => ({ state: 'ok', httpStatus: 200 }))
+  const ids: Record<string, number> = {}
+  for (const name of ['encendido', 'apagado', 'falla', 'ya-corre', 'externo']) {
+    const project = await service.register({ team: 'E', name, source: { type: 'git', url: `https://github.com/e/${name}` }, sourceLabel: name })
+    ids[name] = project.id
+  }
+  for (const name of ['encendido', 'falla', 'ya-corre']) await service.start(ids[name]!)
+  await service.start(ids.apagado!)
+  await service.stop(ids.apagado!)
+  const keep = () => Object.fromEntries(repository.list().map((row) => [row.name, row.keep_running]))
+  assert.deepEqual(keep(), { externo: 0, 'ya-corre': 1, falla: 1, apagado: 0, encendido: 1 })
+
+  // Se reinicia la PC: todo queda apagado, salvo "ya-corre" y uno encendido fuera de Dockyard.
+  const started: string[] = []
+  const rebooted: CoreAdapter = {
+    ...core,
+    async getProjectStatuses() {
+      return {
+        'ya-corre': { state: 'running', ports: [8080] },
+        externo: { state: 'running', ports: [8090] },
+      }
+    },
+    async startProject(dir, name, options) {
+      started.push(name)
+      if (name === 'falla') throw new Error('El puerto 8080 ya está en uso.')
+      return core.startProject(dir, name, options)
+    },
+  }
+  const after = createProjectService(repository, rebooted, async () => ({ state: 'ok', httpStatus: 200 }))
+  const result = await after.resume()
+  assert.deepEqual(started.sort(), ['encendido', 'falla'])
+  assert.deepEqual(result.started, ['encendido'])
+  assert.deepEqual(result.failed, [{ name: 'falla', message: 'El puerto 8080 ya está en uso.' }])
+  // El que falló sigue marcado; el que ya corría se marca para el próximo reinicio.
+  assert.deepEqual(keep(), { externo: 1, 'ya-corre': 1, falla: 1, apagado: 0, encendido: 1 })
+
+  // Apagar todos también desmarca lo que apaga (aquí, los dos que Docker da por encendidos).
+  assert.deepEqual((await after.stopAll()).stopped.sort(), ['externo', 'ya-corre'])
+  assert.deepEqual(keep(), { externo: 0, 'ya-corre': 0, falla: 1, apagado: 0, encendido: 1 })
+  repository.close()
+})
+
+test('al escuchar vuelve a encender, y espera a Docker si aún no responde', async () => {
+  const { core } = fakeCore()
+  const repository = createProjectRepository(':memory:')
+  const first = createProjectService(repository, core, async () => ({ state: 'ok', httpStatus: 200 }))
+  const project = await first.register({ team: 'E', name: 'tienda', source: { type: 'git', url: 'https://github.com/e/t' }, sourceLabel: 't' })
+  await first.start(project.id)
+
+  let calls = 0
+  let resolveStarted: (name: string) => void = () => {}
+  const started = new Promise<string>((resolve) => { resolveStarted = resolve })
+  const app = await buildApp({
+    repository,
+    resumeProjects: true,
+    resumeRetryMs: 1,
+    checkWeb: async () => ({ state: 'ok', httpStatus: 200 }),
+    core: {
+      ...core,
+      async getProjectStatuses() {
+        if (++calls < 3) throw new Error('Docker no responde.')
+        return {}
+      },
+      async startProject(dir, name, options) {
+        resolveStarted(name)
+        return core.startProject(dir, name, options)
+      },
+    },
+  })
+  await app.listen({ host: '127.0.0.1', port: 0 })
+  assert.equal(await started, 'tienda')
+  assert.equal(calls, 3)
+  await app.close()
+})
+
+test('sin la opción, construir la app no enciende nada', async () => {
+  const { core } = fakeCore()
+  let starts = 0
+  const app = await testApp({ ...core, async startProject(dir, name, options) { starts++; return core.startProject(dir, name, options) } })
+  await app.listen({ host: '127.0.0.1', port: 0 })
+  await app.close()
+  assert.equal(starts, 0)
+})
+
 test('una petición repetida se une a la operación en curso', async () => {
   const fake = fakeCore()
   let calls = 0
@@ -1149,6 +1237,7 @@ test('una base creada antes de la revisión recibe la columna de avisos', async 
 
   const repository = createProjectRepository(path)
   assert.equal(repository.list()[0]?.warnings, '[]')
+  assert.equal(repository.list()[0]?.keep_running, 0)
   repository.close()
   await rm(dir, { recursive: true, force: true })
 })

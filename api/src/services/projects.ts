@@ -8,6 +8,7 @@ import type {
   ProjectRow,
   ReplaceResponse,
   ResourcesResponse,
+  ResumeResult,
   StopAllResponse,
   UpdateResponse,
 } from '../types.ts'
@@ -34,6 +35,9 @@ const RESOURCES_TTL_MS = 5_000
 
 /** Apagar todos va de a pocos: cada stop lanza un proceso de docker compose. */
 const STOP_ALL_CONCURRENCY = 4
+
+/** Al arrancar se encienden de a dos: cada uno puede construir imágenes y eso carga la PC. */
+const RESUME_CONCURRENCY = 2
 
 /** El puerto de "Abrir": el primero que parezca una página; si ninguno, el primero. */
 function mainPortOf(status: ProjectStatus): number | undefined {
@@ -138,9 +142,39 @@ export function createProjectService(
   const STOPPED: ProjectStatus = { state: 'stopped', ports: [] }
 
   function stopRow(row: ProjectRow): Promise<ProjectResponse> {
-    return once(row.id, 'stop', async () =>
-      respond(row, await core.stopProject(row.dir, row.name)),
-    )
+    return once(row.id, 'stop', async () => {
+      const status = await core.stopProject(row.dir, row.name)
+      repository.setKeepRunning(row.id, false)
+      return respond(row, status)
+    })
+  }
+
+  async function start(id: number): Promise<ProjectResponse> {
+    const project = requireProject(id)
+    if (inFlight.has(`${id}:update`) || inFlight.has(`${id}:replace`)) {
+      throw new HttpError(409, 'El proyecto se está actualizando. Espera a que termine.')
+    }
+    return once(id, 'start', async () => {
+      const start = { startedAt: Date.now(), current: { stage: '', lines: [] } as StartProgress }
+      starts.set(id, start)
+      let status: ProjectStatus
+      try {
+        status = await core.startProject(project.dir, project.name, {
+          build: project.needs_build === 1,
+          onProgress: (progress) => {
+            start.current = progress
+          },
+        })
+        repository.clearNeedsBuild(id)
+        repository.setKeepRunning(id, true)
+      } catch (error) {
+        throw portConflictOf(error, id) ?? error
+      } finally {
+        starts.delete(id)
+      }
+      webChecks.delete(id)
+      return respond(requireProject(id), status)
+    })
   }
 
   // Una sola tanda a la vez: una petición repetida espera el resultado de la que ya corre.
@@ -269,32 +303,7 @@ export function createProjectService(
       })
     },
 
-    async start(id: number): Promise<ProjectResponse> {
-      const project = requireProject(id)
-      if (inFlight.has(`${id}:update`) || inFlight.has(`${id}:replace`)) {
-        throw new HttpError(409, 'El proyecto se está actualizando. Espera a que termine.')
-      }
-      return once(id, 'start', async () => {
-        const start = { startedAt: Date.now(), current: { stage: '', lines: [] } as StartProgress }
-        starts.set(id, start)
-        let status: ProjectStatus
-        try {
-          status = await core.startProject(project.dir, project.name, {
-            build: project.needs_build === 1,
-            onProgress: (progress) => {
-              start.current = progress
-            },
-          })
-          repository.clearNeedsBuild(id)
-        } catch (error) {
-          throw portConflictOf(error, id) ?? error
-        } finally {
-          starts.delete(id)
-        }
-        webChecks.delete(id)
-        return respond(requireProject(id), status)
-      })
-    },
+    start,
 
     async update(id: number): Promise<UpdateResponse> {
       const project = requireProject(id)
@@ -344,6 +353,37 @@ export function createProjectService(
 
     async stop(id: number): Promise<ProjectResponse> {
       return stopRow(requireProject(id))
+    },
+
+    /**
+     * Al arrancar Dockyard: vuelve a encender los proyectos que el docente dejó encendidos y están
+     * apagados, como tras reiniciar la PC o el servicio de Docker. Los que encuentra encendidos
+     * quedan marcados, para que una base anterior a esta función empiece con lo que ya corre.
+     */
+    async resume(): Promise<ResumeResult> {
+      const statuses = await core.getProjectStatuses()
+      const queue: ProjectRow[] = []
+      for (const row of repository.list().reverse()) {
+        if (statuses[row.name]?.state === 'running') {
+          if (row.keep_running !== 1) repository.setKeepRunning(row.id, true)
+        } else if (row.keep_running === 1) {
+          queue.push(row)
+        }
+      }
+      const result: ResumeResult = { started: [], failed: [] }
+      async function worker(): Promise<void> {
+        for (let row = queue.shift(); row; row = queue.shift()) {
+          try {
+            await start(row.id)
+            result.started.push(row.name)
+          } catch (error) {
+            // Sigue marcado: el docente lo ve apagado y al encenderlo ve la causa.
+            result.failed.push({ name: row.name, message: errorMessage(error) })
+          }
+        }
+      }
+      await Promise.all(Array.from({ length: RESUME_CONCURRENCY }, worker))
+      return result
     },
 
     /** Apaga todos los proyectos registrados que estén encendidos, sin borrar nada. */

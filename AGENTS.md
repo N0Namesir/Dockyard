@@ -96,6 +96,8 @@ replaceProjectZip(name: string, filePath: string): Promise<ZipReplacement>     /
 
 `GET /api/projects?q=`, `GET /api/projects/resources`, `POST /api/projects`, `GET /api/projects/:id`, `POST /api/projects/:id/start`, `POST /api/projects/:id/stop`, `POST /api/projects/stop-all`, `POST /api/projects/:id/update`, `POST /api/projects/:id/replace` (multipart, campo `file`), `GET /api/projects/:id/logs`, `GET /api/projects/:id/progress`, `DELETE /api/projects/:id`, `GET /api/version`.
 
+Al arrancar, `server.ts` llama a `service.resume()`: vuelve a encender los proyectos con `keep_running = 1` que estén apagados (el docente los dejó encendidos y la PC o Docker se reiniciaron). Encender marca la columna y apagar la desmarca; ninguna ruta la cambia directamente.
+
 ## Despliegue
 
 - La herramienta corre en un contenedor que usa el Docker del anfitrión por `/var/run/docker.sock`. Los proyectos de estudiantes son contenedores hermanos, así que sus puertos se publican en la PC del docente.

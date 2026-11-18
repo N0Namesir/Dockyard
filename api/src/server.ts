@@ -3,7 +3,7 @@ import { buildApp } from './app.ts'
 const portValue = Number(process.env.PORT ?? 4300)
 const port = Number.isInteger(portValue) && portValue > 0 ? portValue : 4300
 const host = process.env.HOST || '127.0.0.1'
-const app = await buildApp({ logger: true, serveWeb: true })
+const app = await buildApp({ logger: true, serveWeb: true, resumeProjects: true })
 
 async function close(signal: string): Promise<void> {
   app.log.info({ signal }, 'Cerrando Dockyard')

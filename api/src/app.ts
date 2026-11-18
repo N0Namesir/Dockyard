@@ -44,6 +44,31 @@ export function isAllowedRequest(host: string | undefined, origin: string | unde
   }
 }
 
+async function resumeProjects(
+  app: FastifyInstance,
+  service: ReturnType<typeof createProjectService>,
+  retryMs: number,
+): Promise<void> {
+  for (let attempt = 1; attempt <= RESUME_ATTEMPTS; attempt++) {
+    try {
+      const { started, failed } = await service.resume()
+      if (started.length > 0) app.log.info(`Se volvieron a encender: ${started.join(', ')}`)
+      for (const { name, message } of failed) {
+        app.log.warn(`No se pudo volver a encender ${name}: ${message}`)
+      }
+      return
+    } catch (error) {
+      // Solo falla así si Docker no responde: un proyecto que no enciende va en failed.
+      if (attempt === RESUME_ATTEMPTS) {
+        app.log.warn(`No se volvieron a encender los proyectos: ${errorMessage(error)}`)
+        return
+      }
+      // unref: la espera no impide cerrar Dockyard.
+      await new Promise((resolve) => setTimeout(resolve, retryMs).unref())
+    }
+  }
+}
+
 export interface AppOptions {
   repository?: ProjectRepository
   core?: CoreAdapter
@@ -52,7 +77,14 @@ export interface AppOptions {
   logger?: boolean
   serveWeb?: boolean
   webRoot?: string
+  /** Al empezar a escuchar, vuelve a encender lo que el docente dejó encendido. Solo en server.ts. */
+  resumeProjects?: boolean
+  /** Espera entre intentos si Docker aún no responde al arrancar. */
+  resumeRetryMs?: number
 }
+
+/** Docker puede tardar en responder tras reiniciar la PC: se reintenta durante unos 2 minutos. */
+const RESUME_ATTEMPTS = 12
 
 export async function buildApp(options: AppOptions = {}): Promise<FastifyInstance> {
   const app = Fastify({ logger: options.logger ?? false })
@@ -109,6 +141,13 @@ export async function buildApp(options: AppOptions = {}): Promise<FastifyInstanc
     onError: (error) => app.log.warn(errorMessage(error)),
   })
   await app.register(versionRoutes(checkVersion), { prefix: '/api' })
+
+  if (options.resumeProjects) {
+    // Sin esperar: la página debe abrir aunque los proyectos tarden en encender.
+    app.addHook('onListen', async () => {
+      void resumeProjects(app, service, options.resumeRetryMs ?? 10_000)
+    })
+  }
 
   const webRoot = options.webRoot ?? resolve(import.meta.dirname, '../../web/dist')
   if ((options.serveWeb ?? false) && existsSync(webRoot)) {

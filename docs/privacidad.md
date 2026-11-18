@@ -12,6 +12,7 @@ Esta política cubre a Dockyard, no a los proyectos alojados en ella.
 |---|---|---|
 | Nombre del proyecto, equipo, origen (URL del repositorio o nombre del ZIP), carpeta y fecha de registro | Base de datos en `data/` | Hasta eliminar el proyecto |
 | Avisos de la revisión al registrar, con nombres de archivos y de variables, nunca sus valores | Base de datos en `data/` | Hasta eliminar el proyecto |
+| Si dejaste el proyecto encendido, para volver a encenderlo al reiniciar la PC | Base de datos en `data/` | Hasta eliminar el proyecto |
 | Código del proyecto | Carpeta `projects/` | Hasta eliminar el proyecto |
 | ZIP subido | Carpeta temporal | Se borra al terminar de prepararlo |
 | Peticiones a la herramienta, con la ruta pedida y la dirección IP de origen | Registro del contenedor de Dockyard | Hasta que se recrea el contenedor |

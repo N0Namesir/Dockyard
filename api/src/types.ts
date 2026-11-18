@@ -23,6 +23,8 @@ export interface ProjectRow {
   warnings: string
   /** 1 si se actualizó el código y falta reconstruir sus imágenes. */
   needs_build: number
+  /** 1 si el docente lo dejó encendido: al arrancar, Dockyard lo vuelve a encender si está apagado. */
+  keep_running: number
 }
 
 export interface ProgressResponse extends StartProgress {
@@ -55,6 +57,12 @@ export interface ResourcesResponse {
   total: { cpuPercent: number; memoryBytes: number }
   /** Por id de proyecto. Solo los registrados y encendidos. */
   projects: Record<number, ProjectResources>
+}
+
+/** Lo que se volvió a encender al arrancar Dockyard. */
+export interface ResumeResult {
+  started: string[]
+  failed: { name: string; message: string }[]
 }
 
 export interface StopAllResponse {
