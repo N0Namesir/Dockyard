@@ -117,6 +117,7 @@ Al arrancar, `server.ts` llama a `service.resume()`: vuelve a encender los proye
 - El puerto de la herramienta es poco común (por defecto `4300`, variable `TOOL_PORT`) para no chocar con 3000, 5173 u 8080.
 - `install.sh` (solo la primera vez: se niega si ya existe `.env`) y `update.sh` (todo lo demás) comparten `scripts/despliegue.sh`: generan `.env` (`PROJECTS_DIR`, `TOOL_PORT`, `UPDATE_CHECK`, `HOST_UID`, `HOST_GID`, `DOCKER_GID`) y ejecutan `docker compose up -d --build`. El contenedor corre con ese usuario y no como root; por eso los dos rechazan `sudo`.
 - `update.sh` exige una copia de git limpia en una rama que siga a GitHub, hace `git fetch` y `git merge --ff-only` (nunca mezcla) y luego se vuelve a ejecutar con `exec`, para que la reconstrucción la haga el `update.sh` de la versión descargada. Conserva `TOOL_PORT` y `UPDATE_CHECK` de `.env`.
+- Las dependencias de `web/` (Astro, Tailwind, fuentes) van en `devDependencies`: solo se usan al compilar, y `npm prune --omit=dev` las deja fuera de la imagen. La interfaz compilada la sirve la API con `@fastify/static`. Revisa con `npm audit --omit=dev` lo que llega a la PC del docente.
 - En desarrollo no se usa el contenedor: `npm run dev` contra el Docker local. Requiere `docker`, `docker compose`, `git` y `unzip`.
 - Plan B: correr con Node y PM2 directamente en la PC.
 
