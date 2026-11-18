@@ -3,6 +3,8 @@ import '../styles/global.css'
 import SiteHeader from '../components/SiteHeader.astro'
 import SiteFooter from '../components/SiteFooter.astro'
 import FaviconLinks from '../components/FaviconLinks.astro'
+import ArrowLeft from '@lucide/astro/icons/arrow-left'
+import X from '@lucide/astro/icons/x'
 
 const field = 'w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 placeholder:text-slate-500 focus:border-marca-tinta disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500'
 const label = 'mb-1.5 block text-sm font-semibold text-slate-700'
@@ -23,7 +25,7 @@ const hint = 'mt-1 block text-xs leading-5 text-slate-500'
     <SiteHeader current="projects" />
 
     <main id="contenido" tabindex="-1" class="mx-auto w-full max-w-7xl px-5 py-8 sm:px-8 lg:py-12">
-      <a href="/" class="text-sm font-semibold text-marca-texto underline underline-offset-4 hover:text-marca-tinta">← Volver a Proyectos</a>
+      <a href="/" class="inline-flex items-center gap-1.5 text-sm font-semibold text-marca-texto underline underline-offset-4 hover:text-marca-tinta"><ArrowLeft class="size-4 shrink-0" aria-hidden="true" />Volver a Proyectos</a>
 
       <p id="project-loading" role="status" class="mt-8 text-slate-600">Cargando el proyecto…</p>
       <p id="project-error" role="alert" class="mt-8 hidden rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"></p>
@@ -167,7 +169,7 @@ const hint = 'mt-1 block text-xs leading-5 text-slate-500'
           <input data-contact="phone" type="tel" maxlength="30" autocomplete="off" class={field} />
         </label>
         <div class="col-span-3 flex items-end sm:col-span-1">
-          <button data-contact="remove" type="button" class="ui-button w-full px-2" aria-label="Quitar contacto">✕</button>
+          <button data-contact="remove" type="button" class="ui-button w-full px-2" aria-label="Quitar contacto"><X class="mx-auto size-4" aria-hidden="true" /></button>
         </div>
       </li>
     </template>

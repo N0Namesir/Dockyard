@@ -1,5 +1,6 @@
 // Carpetas por año: una por año con proyectos y «Todos». La carpeta abierta va en la URL (?año=),
 // así recargar o compartir el enlace la conserva. La API filtra la lista; aquí solo se elige.
+import { createElement, Folder as FolderIcon, FolderOpen } from 'lucide'
 import { api } from './api.ts'
 import { element, page } from './dom.ts'
 import { state } from './state.ts'
@@ -59,9 +60,9 @@ function folderLink(folder: Folder, count: number, running: number): HTMLLIEleme
   const link = element('a', 'folder-link')
   link.href = `?${PARAM}=${folder}`
   if (folder === state.folder) link.setAttribute('aria-current', 'page')
-  const title = element('span')
-  const icon = element('span', '', '📁 ')
-  icon.setAttribute('aria-hidden', 'true')
+  const title = element('span', 'inline-flex items-center gap-1.5')
+  // La carpeta abierta se dibuja abierta. Lucide arma el SVG con nodos, sin innerHTML.
+  const icon = createElement(folder === state.folder ? FolderOpen : FolderIcon, { class: 'size-4 shrink-0', 'aria-hidden': 'true' })
   title.append(icon, `${folderName(folder)} · ${count}`)
   link.append(title)
   if (running > 0) link.append(element('span', 'text-xs font-normal text-emerald-800', `${running} ${running === 1 ? 'encendido' : 'encendidos'}`))
