@@ -184,7 +184,22 @@ function actionsCell(project: Project, handlers: RowHandlers): HTMLTableCellElem
   const stack = element('div', 'flex flex-col items-end gap-2')
   const menu = element('details', 'project-menu')
   menu.dataset.disclosure = 'actions'
-  const summary = element('summary', 'ui-button', 'Más acciones')
+  const summary = element('summary', 'ui-button')
+  summary.title = 'Más acciones'
+  const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+  icon.setAttribute('viewBox', '0 0 24 24')
+  icon.setAttribute('width', '24')
+  icon.setAttribute('height', '24')
+  icon.setAttribute('fill', 'currentColor')
+  icon.setAttribute('aria-hidden', 'true')
+  for (const cx of [5, 12, 19]) {
+    const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle')
+    dot.setAttribute('cx', String(cx))
+    dot.setAttribute('cy', '12')
+    dot.setAttribute('r', '2')
+    icon.append(dot)
+  }
+  summary.append(icon)
   summary.dataset.action = 'menu'
   summary.setAttribute('aria-label', `Más acciones de ${project.name}`)
   menu.append(summary, secondary)

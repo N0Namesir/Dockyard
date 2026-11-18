@@ -279,10 +279,12 @@ body:has(dialog[open]) {
   gap: .5rem;
 }
 .project-menu {
-  min-width: 8rem;
+  min-width: 44px;
   text-align: left;
 }
 .project-menu > summary {
+  width: 44px;
+  padding: 0;
   list-style: none;
 }
 .project-menu > summary::-webkit-details-marker {

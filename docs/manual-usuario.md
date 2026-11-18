@@ -34,7 +34,7 @@ Que no aparezcan avisos no garantiza que el proyecto sea seguro, así que regist
 
 ## Buscar, encender, apagar y abrir
 
-**Abrir** y **Encender/Apagar** están siempre a mano. En **Más acciones** están **Actualizar**, **Reemplazar ZIP**, **Editar**, **Ver registro** y **Eliminar**, según el origen del proyecto. En pantallas pequeñas cada proyecto se presenta en una fila apilada.
+**Abrir** y **Encender/Apagar** están siempre a mano. En el botón de tres puntos (**⋯**, Más acciones) están **Actualizar**, **Reemplazar ZIP**, **Editar**, **Ver registro** y **Eliminar**, según el origen del proyecto. En pantallas pequeñas cada proyecto se presenta en una fila apilada.
 
 - **Buscar:** escribe parte del nombre del proyecto o del equipo en **Buscar nombre o equipo**. No importan las mayúsculas ni las tildes.
 - **Encender:** la primera vez puede tardar varios minutos, porque Docker descarga y construye las imágenes del proyecto. Mientras tanto, el botón dice **Encendiendo…** y debajo del proyecto se ve qué está haciendo Docker, cuánto lleva y sus últimas líneas. Puedes recargar la página sin interrumpirlo, pero si falla mientras tanto no verás el motivo: usa **Ver registro**. Las siguientes veces es rápido.
