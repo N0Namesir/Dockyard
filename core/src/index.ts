@@ -8,5 +8,6 @@ export { startProject, stopProject, getProjectStatus, getProjectStatuses, getPro
 export { getResources } from './resources.ts'
 export { getLatestVersion, isNewerVersion } from './version.ts'
 export { projectsDir } from './paths.ts'
+export { getSelfUpdateStatus, startSelfUpdate, SELF_UPDATE_EXIT_CODE, SELF_UPDATE_LOG } from './self-update.ts'
 export { PortConflictError } from './types.ts'
 export type { ProjectState, ProjectStatus, ProjectSource, PreparedProject, PrepareOptions, PrepareProgress, ProjectResources, ProjectUpdate, ResourceUsage, ServiceResources, StartOptions, StartProgress, ZipReplacement } from './types.ts'

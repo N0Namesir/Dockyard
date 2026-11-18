@@ -1,9 +1,10 @@
 ---
 import InstallApp from './InstallApp.astro'
-const { current } = Astro.props as { current: 'projects' | 'docs' }
+const { current } = Astro.props as { current: 'projects' | 'docs' | 'settings' }
 const links = [
   { href: '/', label: 'Proyectos', id: 'projects' },
   { href: '/docs/', label: 'Documentación', id: 'docs' },
+  { href: '/configuracion/', label: 'Configuración', id: 'settings' },
 ]
 ---
 
@@ -16,7 +17,7 @@ const links = [
         <p class="mt-1 text-xs font-medium text-slate-300">Proyectos estudiantiles</p>
       </div>
     </a>
-    <nav aria-label="Principal" class="flex gap-1 text-sm font-semibold sm:mr-auto">
+    <nav aria-label="Principal" class="flex flex-wrap gap-1 text-sm font-semibold sm:mr-auto">
       {
         links.map((link) => (
           <a

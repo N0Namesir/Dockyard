@@ -6,12 +6,16 @@ import Fastify, { type FastifyInstance } from 'fastify'
 import * as realCore from './core.ts'
 import {
   createProjectRepository,
+  defaultDataDir,
   type ProjectRepository,
 } from './db/projects.ts'
 import { errorMessage, HttpError } from './errors.ts'
 import { projectRoutes } from './routes/projects.ts'
+import { settingsRoutes } from './routes/settings.ts'
 import { versionRoutes } from './routes/version.ts'
 import { createProjectService } from './services/projects.ts'
+import { createSelfUpdate } from './services/self-update.ts'
+import { createSettingsStore } from './services/settings.ts'
 import { createVersionChecker, type CheckVersion } from './services/version.ts'
 import { createWebChecker, type CheckWeb } from './services/web-check.ts'
 import type { CoreAdapter } from './types.ts'
@@ -74,6 +78,8 @@ export interface AppOptions {
   core?: CoreAdapter
   checkWeb?: CheckWeb
   checkVersion?: CheckVersion
+  /** Donde update.sh deja el resultado de la última actualización desde la página. */
+  dataDir?: string
   logger?: boolean
   serveWeb?: boolean
   webRoot?: string
@@ -137,10 +143,19 @@ export async function buildApp(options: AppOptions = {}): Promise<FastifyInstanc
 
   const service = createProjectService(repository, core, options.checkWeb ?? createWebChecker())
   await app.register(projectRoutes(service), { prefix: '/api' })
+  const settings = createSettingsStore(repository)
   const checkVersion = options.checkVersion ?? createVersionChecker({
+    enabled: () => settings.get().updateCheck,
     onError: (error) => app.log.warn(errorMessage(error)),
   })
   await app.register(versionRoutes(checkVersion), { prefix: '/api' })
+  const selfUpdate = createSelfUpdate({
+    core,
+    dataDir: options.dataDir ?? defaultDataDir(),
+    checkVersion,
+    busy: () => service.busy(),
+  })
+  await app.register(settingsRoutes(settings, selfUpdate), { prefix: '/api' })
 
   if (options.resumeProjects) {
     // Sin esperar: la página debe abrir aunque los proyectos tarden en encender.

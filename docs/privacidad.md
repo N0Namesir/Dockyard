@@ -14,6 +14,8 @@ Esta política cubre a Dockyard, no a los proyectos alojados en ella.
 | Avisos de la revisión al registrar, con nombres de archivos y de variables, nunca sus valores | Base de datos en `data/` | Hasta eliminar el proyecto |
 | Notas que escribas sobre el proyecto | Base de datos en `data/` | Hasta borrarlas o eliminar el proyecto |
 | Si dejaste el proyecto encendido, para volver a encenderlo al reiniciar la PC | Base de datos en `data/` | Hasta eliminar el proyecto |
+| Ajustes de Configuración, como buscar versiones nuevas automáticamente | Base de datos en `data/` | Hasta cambiarlos |
+| Salida de la última actualización hecha desde Configuración | `data/actualizacion.log` y `data/actualizacion.estado` | Hasta la siguiente actualización desde Configuración |
 | Página de ayuda cuando Dockyard no responde y sus dos imágenes | Caché del navegador, solo en esta PC | Hasta borrar los datos del sitio o sustituir esa versión de la caché |
 | Código del proyecto | Carpeta `projects/` | Hasta eliminar el proyecto |
 | ZIP subido | Carpeta temporal | Se borra al terminar de prepararlo |
@@ -31,7 +33,8 @@ Solo para obtener lo que hace falta, nunca para enviar información sobre su uso
 - **Al registrar o actualizar desde GitHub:** descarga el repositorio de la URL indicada.
 - **Al encender un proyecto:** Docker descarga las imágenes y dependencias que ese proyecto pide.
 - **Al instalar o compilar Dockyard:** se descargan Docker, Node y las dependencias.
-- **Para saber si hay una versión nueva:** mientras la página de Dockyard está abierta, Dockyard pregunta a GitHub qué versiones publicó su repositorio, como máximo cada 6 horas. No envía ningún dato sobre la PC, los proyectos ni su uso. Para desactivarlo, ejecuta `UPDATE_CHECK=off ./update.sh` en la carpeta de Dockyard.
+- **Para saber si hay una versión nueva:** mientras la página de Dockyard está abierta, Dockyard pregunta a GitHub qué versiones publicó su repositorio, como máximo cada 6 horas, y cuando presionas **Comprobar ahora** en Configuración. No envía ningún dato sobre la PC, los proyectos ni su uso. Para desactivar la consulta automática, desmarca **Buscar versiones nuevas automáticamente** en Configuración.
+- **Al actualizar Dockyard:** descarga la versión nueva desde GitHub, con **Actualizar ahora** o con `./update.sh`.
 
 Esos servicios (GitHub, Docker Hub, npm y otros) reciben lo normal en cualquier descarga, como la dirección IP, y aplican sus propias políticas. La telemetría de Astro, la herramienta con la que se compila la interfaz, está desactivada en los comandos del proyecto. La interfaz no carga fuentes, scripts ni imágenes de otros sitios.
 

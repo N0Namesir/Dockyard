@@ -41,7 +41,7 @@ Monorepo con workspaces de npm (`core`, `api`, `web`) y un `tsconfig.base.json` 
 |---|---|---|---|
 | `core/` | 1: núcleo Docker y fuentes | 0V3R | Solo ejecuta `git`, `unzip` y `docker compose`. Nunca HTTP, SQLite ni UI |
 | `api/` | 2: API y datos | 0V3R (de Isaac) | Fastify 5 + TypeBox + SQLite (`node:sqlite`, con `better-sqlite3` como respaldo). Orquesta llamando a `core/`, nunca ejecuta Docker ni git |
-| `web/` | 3: interfaz | 0V3R (de Isaac) | Astro + Tailwind. Solo habla con la API, sin lógica de estados ni puertos. Publica `docs/*.md` en `/docs` al compilar. La lógica de la página va en `web/src/scripts/projects/`, un módulo por tarea; los `.astro` solo llevan HTML |
+| `web/` | 3: interfaz | 0V3R (de Isaac) | Astro + Tailwind. Solo habla con la API, sin lógica de estados ni puertos. Publica `docs/*.md` en `/docs` al compilar. La lógica de cada página va en `web/src/scripts/<página>/` (`projects/`, `settings/`), un módulo por tarea; los `.astro` solo llevan HTML |
 | `docs/`, `Dockerfile`, `docker-compose.yml`, `install.sh`, `update.sh`, `scripts/` | 4: infraestructura y documentación | 0V3R | No escribe lógica de otras áreas |
 | `projects/`, `data/` | — | — | Datos de ejecución, en `.gitignore` |
 
@@ -66,6 +66,8 @@ reviewProject(dir: string, name: string): Promise<string[]>                     
 updateProject(name: string): Promise<ProjectUpdate>                             // { dir, changed, commit, summary }
 replaceProjectZip(name: string, filePath: string): Promise<ZipReplacement>     // { dir, leftover }: código nuevo desde un ZIP
 renameProject(name: string, newName: string): Promise<PreparedProject>         // nombre de compose y carpetas; apagado y sin volúmenes
+getSelfUpdateStatus(): Promise<{ supported, running }>                          // si Dockyard se puede actualizar desde la página
+startSelfUpdate(): Promise<void>                                                // lanza update.sh en el contenedor auxiliar dockyard-actualizacion
 // StartOptions = { onProgress?, build? }; PrepareOptions = { onProgress? }
 // PrepareProgress = { stage, percent }: etapa del registro y porcentaje de la descarga de git (o null)
 // StartProgress = { stage, lines }: etapa en español y últimas líneas de Docker
@@ -94,13 +96,16 @@ renameProject(name: string, newName: string): Promise<PreparedProject>         /
 - `replaceProjectZip` abre y revisa el ZIP nuevo en `projects/.reemplazos/<nombre>/nuevo` y solo entonces cambia la carpeta con `rename`: si el ZIP no sirve, el proyecto queda como estaba. Borra la versión anterior con lo que el proyecto guardó en su carpeta; los volúmenes de Docker no se tocan. Si la anterior tiene archivos de root, la deja en `.reemplazos/<nombre>/anterior` y la devuelve en `leftover`. La API solo reemplaza proyectos de ZIP apagados, repite la revisión y hace que el siguiente encendido use `--build`. En la interfaz pide escribir el nombre, como eliminar.
 - `renameProject` se niega con el proyecto encendido, con un nombre que ya usa otro proyecto de Docker o una carpeta, y si el proyecto tiene volúmenes (Docker no los renombra y se perderían sus datos). Borra contenedores, red e imágenes del nombre anterior sin `-v` y renombra `projects/<nombre>` y `projects/.repos/<nombre>`. La API marca reconstruir.
 - `startProject`, `stopProject` y `getProjectStatus` rechazan nombres sin normalizar (`assertNormalizedName`).
+- `startSelfUpdate` lee del contenedor de Dockyard (`docker inspect` de su nombre de máquina) la imagen, el usuario, los grupos y la carpeta de instalación (etiqueta `com.docker.compose.project.working_dir`), y lanza con ellos un contenedor auxiliar con `--network host` que ejecuta `./update.sh`. Deja la salida en `data/actualizacion.log` y el código en `data/actualizacion.estado`. El script del auxiliar es un texto fijo: la carpeta y el usuario van como argumentos de docker.
 - Los comandos de Docker pasan por el ayudante `docker()` de `core/src/docker.ts`, que traduce "Docker no responde" y "sin permiso". Los demás, por `run()` de `core/src/run.ts`.
 
 ### Rutas de la API (contrato con `web/`)
 
-`GET /api/projects?q=`, `GET /api/projects/resources`, `POST /api/projects`, `GET /api/projects/:id`, `PATCH /api/projects/:id` (`team`, `name`, `notes`), `POST /api/projects/:id/start`, `POST /api/projects/:id/stop`, `POST /api/projects/stop-all`, `POST /api/projects/:id/update`, `POST /api/projects/:id/replace` (multipart, campo `file`), `GET /api/projects/:id/logs`, `GET /api/projects/:id/progress`, `DELETE /api/projects/:id`, `GET /api/registrations`, `DELETE /api/registrations/:key`, `GET /api/version`.
+`GET /api/projects?q=`, `GET /api/projects/resources`, `POST /api/projects`, `GET /api/projects/:id`, `PATCH /api/projects/:id` (`team`, `name`, `notes`), `POST /api/projects/:id/start`, `POST /api/projects/:id/stop`, `POST /api/projects/stop-all`, `POST /api/projects/:id/update`, `POST /api/projects/:id/replace` (multipart, campo `file`), `GET /api/projects/:id/logs`, `GET /api/projects/:id/progress`, `DELETE /api/projects/:id`, `GET /api/registrations`, `DELETE /api/registrations/:key`, `GET /api/version`, `POST /api/version/check`, `GET /api/settings`, `PATCH /api/settings` (`updateCheck`), `GET /api/update`, `POST /api/update`.
 
 `POST /api/projects` sigue respondiendo al terminar, pero el registro no se corta si se cierra la pestaña. Mientras corre, figura en `GET /api/registrations` con su etapa (solo en memoria). Si falla sin nadie esperando la respuesta, queda ahí con el motivo hasta que se descarta con `DELETE /api/registrations/:key`.
+
+Configuración guarda sus ajustes en la tabla `settings`; `UPDATE_CHECK` solo es el valor inicial de `updateCheck`. `POST /api/update` se niega (409) sin versión nueva o con operaciones en curso (`service.busy()`), porque Dockyard se reinicia al actualizar.
 
 Al arrancar, `server.ts` llama a `service.resume()`: vuelve a encender los proyectos con `keep_running = 1` que estén apagados (el docente los dejó encendidos y la PC o Docker se reiniciaron). Encender marca la columna y apagar la desmarca; ninguna ruta la cambia directamente.
 

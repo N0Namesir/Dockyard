@@ -17,6 +17,10 @@ const schema = `
     keep_running INTEGER NOT NULL DEFAULT 0,
     notes TEXT NOT NULL DEFAULT ''
   ) STRICT;
+  CREATE TABLE IF NOT EXISTS settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+  ) STRICT;
 `
 
 const COLUMNS = 'id, name, team, source_type, source, dir, created_at, warnings, needs_build, keep_running, notes'
@@ -49,14 +53,21 @@ export interface ProjectRepository {
   /** Si el docente lo dejó encendido: Dockyard lo vuelve a encender al arrancar. */
   setKeepRunning(id: number, keepRunning: boolean): void
   delete(id: number): void
+  /** Ajuste de Configuración; undefined si el docente nunca lo cambió. */
+  getSetting(key: string): string | undefined
+  setSetting(key: string, value: string): void
   close(): void
 }
 
-export function defaultDatabasePath(): string {
-  const dataDir = process.env.DATA_DIR
+/** Carpeta de datos de Dockyard: la base y el registro de la última actualización. */
+export function defaultDataDir(): string {
+  return process.env.DATA_DIR
     ? resolve(process.env.DATA_DIR)
     : resolve(import.meta.dirname, '../../../data')
-  return resolve(dataDir, 'app.db')
+}
+
+export function defaultDatabasePath(): string {
+  return resolve(defaultDataDir(), 'app.db')
 }
 
 export function createProjectRepository(
@@ -121,6 +132,8 @@ export function createProjectRepository(
   const rename = db.prepare('UPDATE projects SET name = ?, dir = ?, needs_build = 1 WHERE id = ?')
   const keepRunning = db.prepare('UPDATE projects SET keep_running = ? WHERE id = ?')
   const remove = db.prepare('DELETE FROM projects WHERE id = ?')
+  const readSetting = db.prepare('SELECT value FROM settings WHERE key = ?')
+  const writeSetting = db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value')
 
   return {
     list(query) {
@@ -184,6 +197,15 @@ export function createProjectRepository(
 
     delete(id) {
       remove.run(id)
+    },
+
+    getSetting(key) {
+      const row = readSetting.get(key) as { value: string } | undefined
+      return row?.value
+    },
+
+    setSetting(key, value) {
+      writeSetting.run(key, value)
     },
 
     close() {

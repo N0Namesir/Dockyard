@@ -256,6 +256,14 @@ export function createProjectService(
   }
 
   return {
+    /**
+     * Lo que se cortaría si Dockyard se reiniciara ahora: encendidos, apagados, actualizaciones y
+     * registros en curso. Los proyectos encendidos no cuentan: siguen encendidos.
+     */
+    busy(): boolean {
+      return inFlight.size > 0 || [...registrations.values()].some((item) => item.error === null)
+    },
+
     async list(query?: string): Promise<ProjectResponse[]> {
       const rows = repository.list(query)
       if (rows.length === 0) return []

@@ -1,0 +1,139 @@
+import { test, before, after } from 'node:test'
+import assert from 'node:assert/strict'
+import { createServer } from 'node:http'
+import { readFile } from 'node:fs/promises'
+import { resolve, extname } from 'node:path'
+import { chromium } from 'playwright'
+
+// Solo se sirve el frontend compilado. Todas las rutas API están interceptadas.
+let browser, server, base
+const root = resolve(import.meta.dirname, '../dist')
+const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.woff2': 'font/woff2', '.webp': 'image/webp', '.webmanifest': 'application/manifest+json' }
+
+before(async () => {
+  server = createServer(async (req, res) => {
+    try {
+      const path = resolve(root, '.' + new URL(req.url, 'http://localhost').pathname.replace(/\/$/, '/index.html'))
+      if (!path.startsWith(root + '/')) { res.writeHead(403).end(); return }
+      const data = await readFile(path)
+      res.setHeader('Content-Type', types[extname(path)] ?? 'application/octet-stream')
+      res.end(data)
+    } catch { res.writeHead(404).end() }
+  })
+  await new Promise((done) => server.listen(0, '127.0.0.1', done))
+  base = `http://127.0.0.1:${server.address().port}`
+  browser = await chromium.launch({ headless: true })
+})
+after(async () => { await browser?.close(); await new Promise((done) => server?.close(done)) })
+
+async function fixture(t, state) {
+  const page = await browser.newPage({ viewport: { width: 1280, height: 1000 } })
+  t.after(() => page.close())
+  const errors = []
+  page.on('pageerror', (e) => errors.push(e.message))
+  t.after(() => assert.deepEqual(errors, []))
+  const calls = []
+  await page.route('**/api/**', async (route) => {
+    const req = route.request(), path = new URL(req.url()).pathname
+    calls.push(`${req.method()} ${path}`)
+    const json = (body, status = 200) => route.fulfill({ status, json: body })
+    if (state.down?.()) return route.abort('connectionrefused')
+    if (path === '/api/version' && req.method() === 'GET') return json(state.version)
+    if (path === '/api/version/check') { state.version = { ...state.version, ...state.onCheck }; return json(state.version) }
+    if (path === '/api/settings' && req.method() === 'GET') return json(state.settings)
+    if (path === '/api/settings') { state.settings = { ...state.settings, ...req.postDataJSON() }; return json(state.settings) }
+    if (path === '/api/update' && req.method() === 'GET') return json(state.update)
+    if (path === '/api/update') { state.update = { ...state.update, running: true }; state.onStart?.(); return json(state.update, 202) }
+    return json({ message: 'Ruta no prevista en prueba' }, 404)
+  })
+  await page.goto(base + '/configuracion/')
+  await page.locator('#version-current').filter({ hasText: 'v1.2.0' }).waitFor()
+  return { page, calls }
+}
+
+const VERSION = { current: '1.2.0', latest: 'v1.2.0', updateAvailable: false, checkedAt: '2026-11-18T05:00:00.000Z' }
+
+test('muestra las versiones, comprueba ahora y guarda la consulta automática', async (t) => {
+  const state = {
+    version: VERSION,
+    settings: { updateCheck: true },
+    update: { supported: true, running: false, last: null },
+    onCheck: { latest: 'v1.3.0', updateAvailable: true },
+  }
+  const { page, calls } = await fixture(t, state)
+  assert.equal(await page.locator('#version-latest').innerText(), 'v1.2.0')
+  assert.equal(await page.locator('#update-box').isHidden(), true)
+  assert.equal(await page.locator('header a[aria-current=page]').innerText(), 'Configuración')
+
+  await page.locator('#check-now').click()
+  await page.locator('#check-message').filter({ hasText: 'Hay una versión nueva.' }).waitFor()
+  await page.locator('#update-box').waitFor()
+  assert.equal(await page.locator('#update-version').innerText(), 'v1.3.0')
+  assert.equal(await page.locator('#update-notes').getAttribute('href'), 'https://github.com/N0Namesir/Dockyard/releases/tag/v1.3.0')
+
+  await page.locator('#update-check').uncheck()
+  await page.waitForFunction(() => !document.querySelector('#update-check').disabled)
+  assert.deepEqual(state.settings, { updateCheck: false })
+  assert.ok(calls.includes('PATCH /api/settings'))
+})
+
+test('actualizar: confirma, espera mientras Dockyard se reinicia y recarga con la versión nueva', async (t) => {
+  let restarting = 0
+  const state = {
+    version: { ...VERSION, latest: 'v1.3.0', updateAvailable: true },
+    settings: { updateCheck: true },
+    update: { supported: true, running: false, last: null },
+    // Tras empezar, la API deja de responder unas consultas y vuelve con la versión nueva.
+    onStart: () => { restarting = 2 },
+    down: () => restarting > 0 && restarting-- > 0,
+  }
+  const { page } = await fixture(t, state)
+  await page.locator('#update-now').click()
+  await page.locator('#confirm-dialog').waitFor()
+  assert.match(await page.locator('#confirm-dialog-title').innerText(), /v1\.3\.0/)
+  await page.locator('#confirm-dialog-confirm').click()
+  await page.locator('#update-running').waitFor()
+  assert.equal(await page.locator('#update-box').isHidden(), true)
+  assert.equal(await page.locator('#check-now').isDisabled(), true)
+
+  state.version = { current: '1.3.0', latest: 'v1.3.0', updateAvailable: false, checkedAt: VERSION.checkedAt }
+  state.update = { supported: true, running: false, last: { exitCode: 0, finishedAt: '2026-11-18T06:00:00.000Z', log: '✔ Dockyard 1.3.0 está disponible' } }
+  await page.locator('#update-running-text').filter({ hasText: 'se actualizó a la v1.3.0' }).waitFor({ timeout: 15_000 })
+  await page.waitForEvent('load', { timeout: 10_000 })
+  await page.locator('#version-current').filter({ hasText: 'v1.3.0' }).waitFor()
+  await page.locator('#update-result').filter({ hasText: 'terminó bien' }).waitFor()
+})
+
+test('actualizar: si update.sh falla, muestra la causa y Dockyard sigue igual', async (t) => {
+  const state = {
+    version: { ...VERSION, latest: 'v1.3.0', updateAvailable: true },
+    settings: { updateCheck: true },
+    update: { supported: true, running: false, last: null },
+    onStart: () => {
+      setTimeout(() => {
+        state.update = { supported: true, running: false, last: { exitCode: 1, finishedAt: '2026-11-18T06:00:00.000Z', log: 'Docker: 29\n✘ Hay archivos de Dockyard modificados en esta PC' } }
+      }, 500)
+    },
+  }
+  const { page } = await fixture(t, state)
+  await page.locator('#update-now').click()
+  await page.locator('#confirm-dialog-confirm').click()
+  await page.locator('#update-result').filter({ hasText: 'No se pudo actualizar' }).waitFor({ timeout: 15_000 })
+  assert.equal(await page.locator('#update-log-box').evaluate((e) => e.open), true)
+  assert.match(await page.locator('#update-log').innerText(), /archivos de Dockyard modificados/)
+  assert.equal(await page.locator('#update-running').isHidden(), true)
+  await page.locator('#update-box').waitFor()
+})
+
+test('sin instalación con install.sh, explica cómo actualizar desde la terminal', async (t) => {
+  const state = {
+    version: { ...VERSION, latest: 'v1.3.0', updateAvailable: true },
+    settings: { updateCheck: false },
+    update: { supported: false, running: false, last: null },
+  }
+  const { page } = await fixture(t, state)
+  await page.locator('#update-box').waitFor()
+  assert.equal(await page.locator('#update-now').isHidden(), true)
+  assert.match(await page.locator('#update-unsupported').innerText(), /\.\/update\.sh/)
+  assert.equal(await page.locator('#update-check').isChecked(), false)
+})

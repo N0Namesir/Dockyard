@@ -75,17 +75,21 @@ Se comprueba solo el puerto que usa **Abrir**.
 
 ## Instalar una versión nueva de Dockyard
 
-Cuando hay una versión nueva, aparece un aviso sobre la lista de proyectos. Solo avisa: Dockyard no cambia nada por su cuenta. Para instalarla, abre una terminal en la carpeta de Dockyard y ejecuta:
+Cuando hay una versión nueva, aparece un aviso sobre la lista de proyectos. Solo avisa: Dockyard no cambia nada por su cuenta.
+
+Para instalarla, abre **Configuración** en el menú. En **Actualizaciones** ves la versión instalada, la última publicada y cuándo se comprobó. **Comprobar ahora** pregunta a GitHub en ese momento, sin esperar al aviso. Si hay una versión nueva, **Ver qué cambió en GitHub** muestra sus cambios y **Actualizar ahora** la instala después de confirmar.
+
+Mientras se actualiza, Dockyard se reinicia y la página no responde, unos minutos a lo sumo. La página de Configuración espera y se recarga sola con la versión nueva. Tus proyectos registrados y sus datos se conservan, y los que estén encendidos siguen encendidos. Si algo falla, Dockyard sigue con la versión que tenía y Configuración muestra la causa. Dockyard no deja actualizar mientras un proyecto se está encendiendo, apagando o registrando, porque esa operación se cortaría.
+
+También puedes actualizar desde una terminal, en la carpeta de Dockyard:
 
 ```bash
 ./update.sh
 ```
 
-El script dice de qué versión a cuál pasaste. La página deja de responder mientras se reconstruye, unos minutos a lo sumo. Tus proyectos registrados y sus datos se conservan, y los que estén encendidos siguen encendidos. Si no hay internet, no cambia nada y Dockyard sigue con la versión que tenía.
+Es lo que hace **Actualizar ahora** por dentro, y sirve también si la página no carga. `./install.sh` es solo para la primera instalación: si lo ejecutas en una PC donde Dockyard ya está, te indica que uses `./update.sh`. Ninguno de los dos se ejecuta con `sudo`.
 
-Usa siempre `./update.sh` para actualizar. `./install.sh` es solo para la primera instalación: si lo ejecutas en una PC donde Dockyard ya está, te indica que uses `./update.sh`. Ninguno de los dos se ejecuta con `sudo`.
-
-Sin internet simplemente no aparece el aviso. Para que Dockyard no consulte versiones nuevas, ejecuta `UPDATE_CHECK=off ./update.sh`; se recuerda en las siguientes actualizaciones.
+Sin internet simplemente no aparece el aviso. Para que Dockyard no consulte versiones nuevas por su cuenta, desmarca **Buscar versiones nuevas automáticamente** en Configuración; **Comprobar ahora** sigue funcionando.
 
 ## Problemas frecuentes
 

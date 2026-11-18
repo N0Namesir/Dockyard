@@ -78,6 +78,12 @@ function fakeCore() {
       if (status) statuses.set(newName, status)
       return { dir: `/projects/${newName}`, name: newName }
     },
+    async getSelfUpdateStatus() {
+      return { supported: false, running: false }
+    },
+    async startSelfUpdate() {
+      throw new Error('No se actualiza en las pruebas.')
+    },
   }
 
   return { core, getReceivedSource: () => receivedSource }
@@ -1417,10 +1423,10 @@ test('la versión: avisa solo si la etiqueta es posterior a la instalada', async
   const check = (latest: string | null) =>
     createVersionChecker({ current: '1.0.0', enabled: true, fetchLatest: async () => latest })()
 
-  assert.deepEqual(await check('v1.1.0'), { current: '1.0.0', latest: 'v1.1.0', updateAvailable: true })
+  assert.deepEqual({ ...(await check('v1.1.0')), checkedAt: null }, { current: '1.0.0', latest: 'v1.1.0', updateAvailable: true, checkedAt: null })
   assert.equal((await check('v1.0.0')).updateAvailable, false)
   assert.equal((await check('v0.9.0')).updateAvailable, false)
-  assert.deepEqual(await check(null), { current: '1.0.0', latest: null, updateAvailable: false })
+  assert.deepEqual({ ...(await check(null)), checkedAt: null }, { current: '1.0.0', latest: null, updateAvailable: false, checkedAt: null })
 })
 
 test('la versión: consulta como máximo cada 6 horas, aunque la pidan muchas veces a la vez', async () => {
@@ -1481,7 +1487,7 @@ test('la versión: sin internet no falla, conserva el último dato y no insiste'
     enabled: true,
     fetchLatest: async () => { throw new Error('sin conexión') },
   })
-  assert.deepEqual(await offline(), { current: '1.0.0', latest: null, updateAvailable: false })
+  assert.deepEqual(await offline(), { current: '1.0.0', latest: null, updateAvailable: false, checkedAt: null })
 })
 
 test('la versión: UPDATE_CHECK=off no se conecta nunca', async () => {

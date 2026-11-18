@@ -122,6 +122,8 @@ export interface CoreAdapter {
   getResources(): Promise<ResourceUsage>
   removeProject(name: string): Promise<void>
   renameProject(name: string, newName: string): Promise<PreparedProject>
+  getSelfUpdateStatus(): Promise<{ supported: boolean; running: boolean }>
+  startSelfUpdate(): Promise<void>
 }
 
 export interface NewProjectRow {

@@ -52,6 +52,8 @@ export interface VersionInfo {
   current: string
   latest: string | null
   updateAvailable: boolean
+  /** Última consulta a GitHub que respondió; null si aún no hubo ninguna. */
+  checkedAt: string | null
 }
 
 export interface UpdateResult {

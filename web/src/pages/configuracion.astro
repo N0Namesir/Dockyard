@@ -1,0 +1,107 @@
+---
+import '../styles/global.css'
+import SiteHeader from '../components/SiteHeader.astro'
+import SiteFooter from '../components/SiteFooter.astro'
+import FaviconLinks from '../components/FaviconLinks.astro'
+import ConfirmDialog from '../components/ConfirmDialog.astro'
+---
+
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width" />
+    <meta name="description" content="Dockyard: configuración de esta instalación" />
+    <FaviconLinks />
+    <title>Dockyard · Configuración</title>
+  </head>
+  <body class="flex min-h-screen flex-col">
+    <a class="skip-link" href="#contenido">Saltar a la configuración</a>
+    <SiteHeader current="settings" />
+
+    <main id="contenido" tabindex="-1" class="mx-auto w-full max-w-7xl px-5 py-8 sm:px-8 lg:py-12">
+      <section class="page-heading">
+        <div>
+          <h1 class="text-3xl font-bold text-marca-tinta sm:text-4xl">Configuración</h1>
+          <p class="mt-3 leading-7 text-slate-600">Ajustes de Dockyard en esta PC. Se guardan aquí y no se envían a ningún lado.</p>
+        </div>
+      </section>
+
+      <div class="grid grid-cols-12 items-start gap-7">
+        <section
+          id="updates"
+          aria-labelledby="updates-title"
+          class="col-span-12 min-w-0 rounded-lg border border-slate-200 bg-white shadow-sm lg:col-span-8"
+        >
+          <div class="border-b border-slate-200 p-5">
+            <h2 id="updates-title" class="text-lg font-bold text-slate-900">Actualizaciones</h2>
+            <p class="mt-1 text-sm text-slate-600">Las versiones nuevas se publican en GitHub. Actualizar no apaga los proyectos encendidos.</p>
+          </div>
+
+          <div class="flex flex-col gap-6 p-5">
+            <dl class="grid grid-cols-12 gap-4 text-sm">
+              <div class="col-span-12 sm:col-span-4">
+                <dt class="text-slate-600">Versión instalada</dt>
+                <dd id="version-current" class="mt-1 text-lg font-bold text-slate-900">…</dd>
+              </div>
+              <div class="col-span-12 sm:col-span-4">
+                <dt class="text-slate-600">Última publicada</dt>
+                <dd id="version-latest" class="mt-1 text-lg font-bold text-slate-900">…</dd>
+              </div>
+              <div class="col-span-12 sm:col-span-4">
+                <dt class="text-slate-600">Comprobada</dt>
+                <dd id="version-checked" class="mt-1 text-slate-900">…</dd>
+              </div>
+            </dl>
+
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
+              <button id="check-now" type="button" class="ui-button">Comprobar ahora</button>
+              <p id="check-message" role="status" class="text-sm text-slate-700"></p>
+            </div>
+
+            <div id="update-box" hidden class="rounded-md border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+              <p class="font-bold">Hay una versión nueva: <span id="update-version"></span>.</p>
+              <p class="mt-1">
+                <a id="update-notes" class="underline" target="_blank" rel="noopener noreferrer">Ver qué cambió en GitHub</a>.
+                Dockyard se reinicia durante uno o dos minutos; los proyectos encendidos siguen encendidos.
+              </p>
+              <button id="update-now" type="button" class="ui-button ui-button-primary mt-4">Actualizar ahora</button>
+              <p id="update-unsupported" hidden class="mt-3">
+                Esta instalación no se puede actualizar desde aquí. Abre una terminal en la carpeta de Dockyard y ejecuta <code>./update.sh</code>.
+              </p>
+            </div>
+
+            <div id="update-running" hidden role="status" class="flex items-center gap-3 rounded-md border border-slate-200 bg-slate-50 p-4 text-sm text-slate-800">
+              <span class="size-4 shrink-0 animate-spin rounded-full border-2 border-slate-300 border-t-marca-tinta motion-reduce:animate-none" aria-hidden="true"></span>
+              <p id="update-running-text">Actualizando Dockyard… La página se recarga sola al terminar.</p>
+            </div>
+
+            <div id="update-result" hidden class="rounded-md border p-4 text-sm">
+              <p id="update-result-text"></p>
+              <details id="update-log-box" hidden class="mt-3">
+                <summary class="cursor-pointer font-semibold">Ver la salida de update.sh</summary>
+                <pre id="update-log" class="mt-2 max-h-80 overflow-auto whitespace-pre-wrap break-words rounded bg-slate-900 p-3 text-xs text-slate-100"></pre>
+              </details>
+            </div>
+
+            <label class="flex items-start gap-3 border-t border-slate-200 pt-5">
+              <input id="update-check" type="checkbox" class="mt-1 size-4 accent-marca-tinta" disabled />
+              <span>
+                <span class="block font-semibold text-slate-900">Buscar versiones nuevas automáticamente</span>
+                <span class="block text-sm text-slate-600">Dockyard pregunta a GitHub como máximo cada 6 horas y avisa en Proyectos. Apagado, solo pregunta cuando presionas Comprobar ahora.</span>
+              </span>
+            </label>
+            <p id="settings-error" role="alert" class="hidden text-sm text-red-700"></p>
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <ConfirmDialog />
+    <SiteFooter />
+
+    <script>
+      import '../scripts/settings/main.ts'
+    </script>
+  </body>
+</html>
