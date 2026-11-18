@@ -14,8 +14,8 @@
     "node": ">=24"
   },
   "scripts": {
-    "preversion": "test \"$(git branch --show-current)\" = main && npm run build && npm run typecheck && npm test",
-    "postversion": "git push origin main --follow-tags",
+    "preversion": "test \"$(git branch --show-current)\" = main && scripts/publicar-release.sh --revisar && npm run build && npm run typecheck && npm test",
+    "postversion": "git push origin main --follow-tags && scripts/publicar-release.sh",
     "dev": "npm run dev -w api & npm run dev -w web & wait",
     "build": "npm run build -w core && npm run build -w api && npm run build -w web",
     "start": "npm run start -w api",

@@ -111,9 +111,9 @@ En `main`, con el árbol limpio:
 npm version 1.1.0     # o patch, minor, major
 ```
 
-Ese comando comprueba que estás en `main`, compila y corre los tipos y las pruebas sin Docker. Si pasan, sube la versión en `package.json` y `package-lock.json`, crea el commit `Versión 1.1.0` y la etiqueta `v1.1.0`, y sube ambos a GitHub. El mensaje del commit sale de `.npmrc`. Las instalaciones que tengan la página abierta muestran el aviso en un máximo de 6 horas.
+Ese comando comprueba que estás en `main` y que `gh` tiene sesión en GitHub, compila y corre los tipos y las pruebas sin Docker. Si pasan, sube la versión en `package.json` y `package-lock.json`, crea el commit `Versión 1.1.0` y la etiqueta `v1.1.0`, sube ambos a GitHub y crea el release `Dockyard v1.1.0` con `scripts/publicar-release.sh`. Las notas del release son los títulos de los commits desde la versión anterior; si quieres redactarlas mejor, edítalas después en GitHub. El mensaje del commit sale de `.npmrc`. Las instalaciones que tengan la página abierta muestran el aviso en un máximo de 6 horas.
 
-No crees etiquetas a mano: sin el cambio en `package.json`, una instalación al día seguiría viendo el aviso. Una etiqueta como `v2.0.0-beta` se ignora. Si el `push` falla, el commit y la etiqueta quedan locales: corrige la causa y ejecuta `git push origin main --follow-tags`.
+No crees etiquetas a mano: sin el cambio en `package.json`, una instalación al día seguiría viendo el aviso. Una etiqueta como `v2.0.0-beta` se ignora. Si el `push` falla, el commit y la etiqueta quedan locales: corrige la causa y ejecuta `git push origin main --follow-tags`. Si lo que falla es el release, ejecuta `scripts/publicar-release.sh`.
 
 ## Cómo funcionan la API y la interfaz
 

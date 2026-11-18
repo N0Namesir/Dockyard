@@ -21,7 +21,7 @@ npm test                                      # pruebas del núcleo y de la API,
 npm run test:docker -w core                   # pruebas con Docker real (usan los puertos 8081-8083, ~1-2 min)
 node --test --test-name-pattern="choque" core/test/docker.test.ts   # una sola prueba
 npm run try -w core -- ejemplos/prueba-estatico   # recorrido manual (url https, .zip o carpeta)
-npm version 1.1.0                             # publica una versión: prueba, crea commit y etiqueta, y los sube
+npm version 1.1.0                             # publica una versión: prueba, crea commit y etiqueta, los sube y crea el release en GitHub
 node ejemplos/crear-zips.ts                   # genera las variantes de ZIP en ejemplos/zips/
 ./install.sh                                  # despliegue en contenedor, solo la primera vez
 ./update.sh                                   # actualiza una instalación (git pull + reconstruir); también la vuelve a levantar
@@ -134,5 +134,5 @@ Se usa `node:test`, sin dependencias. `api/test/projects.test.ts` cubre las ruta
 - Colores de la interfaz: usa los tokens `marca-*` de `web/src/styles/global.css`, no valores sueltos. El ámbar no se usa como texto sobre fondo claro; para eso está `marca-texto`.
 - `docs/privacidad.md` promete que Dockyard no recolecta datos. No agregues analítica, telemetría, cookies ni recursos de otros sitios (las fuentes van empaquetadas), y si cambia lo que se guarda, actualiza ese documento.
 - Flujo de git: una rama por persona y cambios pequeños. La rama principal es `main`.
-- Las versiones se publican solo con `npm version`, en `main`. Una etiqueta creada a mano no cambia `package.json` y el aviso de versión nueva no se iría al instalarla.
+- Las versiones se publican solo con `npm version`, en `main`; también crea el release en GitHub (`scripts/publicar-release.sh`, requiere `gh` con sesión). Una etiqueta creada a mano no cambia `package.json` y el aviso de versión nueva no se iría al instalarla.
 - Commits y PRs sin atribución de agentes: nada de `Co-Authored-By`, "Generated with …", enlaces de sesión ni líneas similares. Solo el mensaje del cambio. Antes de cada commit o push, revisa el mensaje (`git log -1 --format=%B`) y quita cualquier línea de ese tipo.
